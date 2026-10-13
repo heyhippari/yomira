@@ -411,18 +411,9 @@ END {
 	}
 
 
-	# Sort engines to place our headline engine at start...
-	# No technical reason, just historical convention
-	headline_engine = "scumm"
-	sorted_engines[++sorted] = headline_engine
-	for (e = 1; e <= engine_count; e++) {
-		if (engines[e] != headline_engine)
-			sorted_engines[++sorted] = engines[e]
-	}
-
 	# Prepare the information to be shown
 	for (e = 1; e <= engine_count; e++) {
-		engine = sorted_engines[e]
+		engine = engines[e]
 		if (get_engine_sub(engine) == "no") {
 			# It's a main engine
 			prepare_engine_build_strings(engine)
@@ -445,7 +436,7 @@ END {
 	if (print_enabled_engines) {
 		printf("") > "configure.engines"
 		for (e = 1; e <= engine_count; e++) {
-			engine = sorted_engines[e]
+			engine = engines[e]
 			if (get_engine_build(engine) != "no" && get_engine_sub(engine) == "no") {
 				line = engine
 				subeng_count = get_engine_subengines(engine, subengines)
@@ -504,7 +495,7 @@ END {
 	      "# This file is being included by \"Makefile.common\"") > engines_mk
 
 	for (e = 1; e <= engine_count; e++) {
-		engine = sorted_engines[e]
+		engine = engines[e]
 		j = toupper(engine)
 		if (get_engine_sub(engine) == "no") {
 			# main engine
@@ -536,7 +527,7 @@ END {
 	      "// This file is being included by \"base/plugins.cpp\"") > det_table
 
 	for (e = 1; e <= engine_count; e++) {
-		engine = sorted_engines[e]
+		engine = engines[e]
 		if (get_engine_sub(engine) == "no") {
 			j = toupper(engine)
 			detectEngine = j detectId
@@ -553,7 +544,7 @@ END {
 	      "// This file is being included by \"base/plugins.cpp\"") > plugins_table
 
 	for (e = 1; e <= engine_count; e++) {
-		engine = sorted_engines[e]
+		engine = engines[e]
 		if (get_engine_sub(engine) == "no") {
 			j = toupper(engine)
 			print("#if PLUGIN_ENABLED_STATIC(" j ")\n" \
