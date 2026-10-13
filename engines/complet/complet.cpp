@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 #include "common/config-manager.h"
 #include "common/debug.h"
 #include "common/events.h"
@@ -117,6 +138,9 @@ Common::Error CompletEngine::run() {
 		return Common::Error(Common::kReadingFailed, "Missing game data (gds/mpx folders)");
 
 	loadFont();
+#ifndef USE_MAD
+	warning("Complet: built without MP3 support, voices and digital music are silent");
+#endif
 
 	_scene.resize(kScreenWidth * kScreenHeight * 3);
 	memset(_scene.data(), 0, _scene.size());
@@ -152,8 +176,8 @@ bool CompletEngine::interrupted() {
 
 bool CompletEngine::initGame() {
 	const Common::FSNode gameDataDir(ConfMan.getPath("path"));
+	// The detector already added mpx/, where the detection file lives
 	SearchMan.addSubDirectoryMatching(gameDataDir, "gds");
-	SearchMan.addSubDirectoryMatching(gameDataDir, "mpx");
 	SearchMan.addSubDirectoryMatching(gameDataDir, "vmd");
 
 	return loadFrameImage();

@@ -1,3 +1,24 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 #include "common/memstream.h"
 #include "common/savefile.h"
 #include "common/system.h"
@@ -69,8 +90,12 @@ Common::Error CompletEngine::loadGameStream(Common::SeekableReadStream *stream) 
 		return Common::Error(Common::kReadingFailed, "Unsupported savegame");
 
 	uint32 textPos = stream->readUint32LE();
-	Common::Array<byte> state(stream->readUint32LE());
-	if (stream->read(state.data(), state.size()) != state.size() || stream->err())
+	uint32 size = stream->readUint32LE();
+	if (stream->err() || size > stream->size() - stream->pos())
+		return Common::kReadingFailed;
+
+	Common::Array<byte> state(size);
+	if (stream->read(state.data(), size) != size)
 		return Common::kReadingFailed;
 
 	// The interpreter may be deep inside a text; it unwinds before the state is applied
