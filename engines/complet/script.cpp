@@ -1,4 +1,5 @@
 #include "common/debug.h"
+#include "common/stream.h"
 #include "common/system.h"
 
 #include "complet/complet.h"
@@ -41,6 +42,94 @@ bool Script::loadScenario(const Common::String &name) {
 		_locals[name] = locals;
 	}
 	return true;
+}
+
+static void writeString(Common::WriteStream &stream, const Common::String &str) {
+	stream.writeUint16LE(str.size());
+	stream.writeString(str);
+}
+
+static Common::String readString(Common::ReadStream &stream) {
+	uint16 size = stream.readUint16LE();
+	return stream.readString(0, size);
+}
+
+void Script::saveState(Common::WriteStream &stream) const {
+	writeString(stream, _scenario.getName());
+	stream.writeUint32LE(_cur);
+	writeString(stream, _queued);
+	stream.write(_counters, sizeof(_counters));
+	for (int i = 0; i < kGlobalCount; i++)
+		stream.writeSint16LE(_globals[i]);
+
+	stream.writeUint16LE(_fired.size());
+	for (uint i = 0; i < _fired.size(); i++)
+		stream.writeUint16LE(_fired[i]);
+	stream.writeUint16LE(_deferred.size());
+	for (uint i = 0; i < _deferred.size(); i++)
+		stream.writeUint32LE(_deferred[i]);
+
+	stream.writeByte(_menus.size());
+	for (uint i = 0; i < _menus.size(); i++) {
+		stream.writeByte(_menus[i].size());
+		for (uint j = 0; j < _menus[i].size(); j++) {
+			writeString(stream, _menus[i][j].text);
+			stream.writeUint32LE(_menus[i][j].body);
+		}
+	}
+
+	stream.writeUint16LE(_locals.size());
+	for (const auto &it : _locals) {
+		writeString(stream, it._key);
+		stream.writeUint16LE(it._value.size());
+		for (uint i = 0; i < it._value.size(); i++)
+			stream.writeSint16LE(it._value[i]);
+	}
+}
+
+bool Script::loadState(Common::ReadStream &stream) {
+	Common::String name = readString(stream);
+	uint32 cur = stream.readUint32LE();
+	Common::String queued = readString(stream);
+	if (stream.err() || !loadScenario(name) || cur < Scenario::kCommandsOffset || cur >= _scenario.getSize())
+		return false;
+
+	_cur = cur;
+	_queued = queued;
+	stream.read(_counters, sizeof(_counters));
+	for (int i = 0; i < kGlobalCount; i++)
+		_globals[i] = stream.readSint16LE();
+
+	_fired.resize(stream.readUint16LE());
+	for (uint i = 0; i < _fired.size(); i++)
+		_fired[i] = stream.readUint16LE();
+	_deferred.resize(stream.readUint16LE());
+	for (uint i = 0; i < _deferred.size(); i++)
+		_deferred[i] = stream.readUint32LE();
+
+	_menus.resize(stream.readByte());
+	for (uint i = 0; i < _menus.size(); i++) {
+		_menus[i].resize(stream.readByte());
+		for (uint j = 0; j < _menus[i].size(); j++) {
+			_menus[i][j].text = readString(stream);
+			_menus[i][j].body = stream.readUint32LE();
+		}
+	}
+
+	_locals.clear();
+	uint16 count = stream.readUint16LE();
+	for (uint i = 0; i < count; i++) {
+		Common::String scenario = readString(stream);
+		Common::Array<int16> &locals = _locals[scenario];
+		locals.resize(stream.readUint16LE());
+		for (uint j = 0; j < locals.size(); j++)
+			locals[j] = stream.readSint16LE();
+	}
+	if (!_locals.contains(name))
+		_locals[name].resize(_scenario.getLocalCount());
+
+	_running = !stream.err();
+	return _running;
 }
 
 void Script::resetVariables() {
@@ -304,6 +393,13 @@ void Script::endPage() {
 void Script::step() {
 	if (!_running)
 		return;
+
+	// Savegames restart the command that shows the current text or menu
+	if (_cur < _scenario.getSize()) {
+		byte next = _scenario.getData()[_cur];
+		if ((next >= 4 && next <= 7) || next == 10 || next == 0xff)
+			_vm->markResumePoint();
+	}
 
 	byte op = readByte();
 	switch (op) {

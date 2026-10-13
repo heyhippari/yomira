@@ -3,9 +3,11 @@ MODULE := engines/complet
 MODULE_OBJS := \
 	audio.o \
 	complet.o \
+	console.o \
 	gallery.o \
 	gd.o \
 	metaengine.o \
+	saveload.o \
 	scenario.o \
 	script.o
 

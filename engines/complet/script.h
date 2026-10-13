@@ -8,6 +8,11 @@
 
 #include "complet/scenario.h"
 
+namespace Common {
+class ReadStream;
+class WriteStream;
+}
+
 namespace Complet {
 
 class CompletEngine;
@@ -37,6 +42,17 @@ public:
 	bool setFlag(int number);
 	bool getFlag(int number) const;
 
+	// Variables by index: scenario locals below 0x100, globals above
+	int16 getVariable(int index) { return getValue(-1 - index); }
+	void setVariable(int index, int16 value);
+
+	const Common::String &getScenarioName() const { return _scenario.getName(); }
+	const byte *getData() const { return _scenario.getData(); }
+
+	// Interpreter state, without the persistent flags
+	void saveState(Common::WriteStream &stream) const;
+	bool loadState(Common::ReadStream &stream);
+
 private:
 	enum {
 		kCounterCount = 0x400,
@@ -52,7 +68,6 @@ private:
 	int16 readSWord();
 
 	int16 getValue(int16 ref);
-	void setVariable(int index, int16 value);
 	bool evalCondition();
 	void skipAssignments();
 	void runAssignments();

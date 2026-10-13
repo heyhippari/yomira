@@ -41,6 +41,12 @@ void CompletEngine::recordSeenCg(const Common::String &name) {
 	}
 }
 
+void CompletEngine::unlockAllCgs() {
+	for (int i = 0; i < kCgCount; i++)
+		_seenCg[i] = true;
+	saveCommonData();
+}
+
 // Copies a rectangle of the frame image; source rows are bottom-up like the original's
 void CompletEngine::blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const {
 	const byte *frame = _frameImage.getPixels();
@@ -66,7 +72,8 @@ bool CompletEngine::waitAnyInput() {
 	Common::Event event;
 	while (!shouldQuit()) {
 		while (g_system->getEventManager()->pollEvent(event)) {
-			if (event.type == Common::EVENT_LBUTTONUP || event.type == Common::EVENT_RBUTTONUP || event.type == Common::EVENT_KEYDOWN)
+			if (event.type == Common::EVENT_LBUTTONUP || event.type == Common::EVENT_RBUTTONUP ||
+					event.type == Common::EVENT_KEYDOWN || event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START)
 				return true;
 		}
 		g_system->delayMillis(10);
@@ -195,31 +202,29 @@ bool CompletEngine::runGallery() {
 			case Common::EVENT_RBUTTONUP:
 				activated = cellAt(page, event.mouse);
 				break;
-			case Common::EVENT_KEYDOWN: {
+			case Common::EVENT_CUSTOM_ENGINE_ACTION_START: {
 				int onPage = MIN(count - page * kCellsPerPage, (int)kCellsPerPage);
-				switch (event.kbd.keycode) {
-				case Common::KEYCODE_LEFT:
+				switch (event.customType) {
+				case kActionLeft:
 					selected = onPage ? (selected <= 0 ? onPage - 1 : selected - 1) : -1;
 					break;
-				case Common::KEYCODE_RIGHT:
+				case kActionRight:
 					selected = onPage ? (selected + 1) % onPage : -1;
 					break;
-				case Common::KEYCODE_UP:
+				case kActionUp:
 					selected = onPage ? (selected < 0 ? 0 : (selected >= kCellColumns ? selected - kCellColumns : selected)) : -1;
 					break;
-				case Common::KEYCODE_DOWN:
+				case kActionDown:
 					selected = onPage ? (selected < 0 ? 0 : (selected + kCellColumns < onPage ? selected + kCellColumns : selected)) : -1;
 					break;
-				case Common::KEYCODE_RETURN:
-				case Common::KEYCODE_KP_ENTER:
-				case Common::KEYCODE_SPACE:
+				case kActionAdvance:
 					activated = selected;
 					break;
-				case Common::KEYCODE_PAGEUP:
-				case Common::KEYCODE_PAGEDOWN:
+				case kActionBacklog:
+				case kActionBacklogForward:
 					activated = kNextPageCell;
 					break;
-				case Common::KEYCODE_ESCAPE:
+				case kActionHide:
 					activated = kExitCell;
 					break;
 				default:
@@ -262,6 +267,9 @@ bool CompletEngine::runGallery() {
 
 	// The next transition starts from black
 	memset(_scene.data(), 0, _scene.size());
+	_sceneFull.clear();
+	_sceneBg.clear();
+	_sceneFg.clear();
 	_messageVisible = restoreMessage;
 	return ok;
 }

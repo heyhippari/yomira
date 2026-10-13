@@ -1,6 +1,14 @@
 #include "base/plugins.h"
+#include "common/debug-channels.h"
 #include "engines/advancedDetector.h"
 #include "complet/detection_tables.h"
+
+static const DebugChannelDef debugFlagList[] = {
+	{Complet::kDebugScript, "script", "Script commands"},
+	{Complet::kDebugGraphics, "graphics", "Graphics loading"},
+	{Complet::kDebugAudio, "audio", "Music and voices"},
+	DEBUG_CHANNEL_END
+};
 
 static const PlainGameDescriptor completGames[] = {
 	{"mamatuma", "Mama! Tsuma?"},
@@ -24,6 +32,10 @@ public:
 
 	const char *getOriginalCopyright() const override {
 		return "Complet's";
+	}
+
+	const DebugChannelDef *getDebugChannels() const override {
+		return debugFlagList;
 	}
 };
 

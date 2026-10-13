@@ -26,6 +26,21 @@ enum {
 	kCgCount = 124
 };
 
+enum CompletAction {
+	kActionNone,
+	kActionAdvance,
+	kActionSkip,
+	kActionHide,
+	kActionBacklog,
+	kActionBacklogForward,
+	kActionUp,
+	kActionDown,
+	kActionLeft,
+	kActionRight,
+	kActionQuickSave,
+	kActionQuickLoad
+};
+
 class CompletEngine : public Engine {
 public:
 	CompletEngine(OSystem *system);
@@ -33,11 +48,24 @@ public:
 
 	Common::Error run() override;
 	bool hasFeature(EngineFeature f) const override;
+	void applyGameSettings() override;
+
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
+
+	// Called before each command that may wait for the player; savegames restart from there
+	void markResumePoint();
 
 	// Runs a script text, including its % commands, until it has finished
 	void runText(Script &script, const byte *text);
 	// Shows the selection window; returns the chosen item, -2 to go back from a submenu or -1 on quit
 	int selectMenu(const Common::Array<MenuItem> &items, bool nested);
+
+	Script &getScript() { return _script; }
+	void unlockAllCgs();
+	void setPersistentFlag(int number);
 
 private:
 	struct MenuLayout {
@@ -56,6 +84,15 @@ private:
 	bool loadFrameImage();
 	void loadCommonData();
 	void saveCommonData();
+	// Games share the save directory, so the original "common" file gets the target as prefix
+	Common::String getCommonFileName() const { return _targetName + ".common"; }
+
+	bool interrupted();
+	bool applyPendingLoad();
+	void rebuildScene();
+	void quickSave();
+	void quickLoad();
+
 	void recordSeenCg(const Common::String &name);
 	bool runGallery();
 	void blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const;
@@ -72,13 +109,14 @@ private:
 	MessageButton messageButtonAt(const Common::Point &pos) const;
 
 	bool pollTextInput();
-	bool handleSkipKey(const Common::Event &event);
+	bool handleSkipAction(const Common::Event &event);
 	void hideMessageWindow();
 	bool waitTyping(uint32 ms);
 	bool waitTimed(uint32 ms);
 
 	void addBacklogChar(uint32 ch);
 	void addBacklogBreak();
+	void resetBacklog();
 	void showBacklog();
 	void drawBacklogPage(uint start, int pageNumber, int pageCount);
 
@@ -86,6 +124,7 @@ private:
 	bool showFullImage(const Common::String &name, bool fade);
 	void stageBackground(const Common::String &name);
 	bool showForeground(const Common::String &args);
+	void composeSprites(Common::Array<byte> &dst, const Common::String &args);
 	bool loadImage(const Common::String &name, Common::Array<byte> &out);
 	void overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite);
 	bool fadeTo(const Common::Array<byte> &target);
@@ -104,6 +143,10 @@ private:
 	Common::Array<byte> _bg;
 	Common::String _bgName;
 	bool _bgPending = false;
+	// What _scene shows: a full-screen image, or a background with sprites
+	Common::String _sceneFull;
+	Common::String _sceneBg;
+	Common::String _sceneFg;
 	const Graphics::Font *_font = nullptr;
 	bool _ownFont = false;
 
@@ -114,6 +157,11 @@ private:
 	bool _fastText = false;
 	// Held Ctrl skips text, waits and voices
 	bool _skipMode = false;
+	// Engine options
+	bool _autoMode = false;
+	bool _animateText = false;
+	// Characters printed since the last click, for the auto mode delay
+	uint _autoChars = 0;
 	Common::Array<Common::U32String> _messageLines;
 
 	// Message history, characters mixed with line and page markers
@@ -123,6 +171,21 @@ private:
 
 	const Common::Array<MenuItem> *_menu = nullptr;
 	int _hover = -1;
+
+	// Script and scene state from the last markResumePoint()
+	Common::Array<byte> _resumePoint;
+	// Offset in the scenario data of the text being shown, while in a text
+	uint32 _textPos = 0;
+	bool _inText = false;
+	// Set while waiting for a click or a menu choice, the points where saving is allowed
+	bool _inputWait = false;
+	// Loaded state applied once the interpreter has unwound
+	bool _loadPending = false;
+	Common::Array<byte> _pendingState;
+	uint32 _pendingTextPos = 0;
+	// After loading, the text is run silently up to this offset
+	bool _replaying = false;
+	uint32 _replayEnd = 0;
 
 	AudioPlayer _audio;
 	Script _script;

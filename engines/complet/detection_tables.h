@@ -3,7 +3,12 @@
 
 #include "engines/advancedDetector.h"
 
+#include "complet/detection.h"
+
 namespace Complet {
+
+// MP3 music and voices only, and the text is always shown
+#define COMPLET_GUIO GUIO7(GUIO_NOMIDI, GUIO_NOSFX, GUIO_NOSUBTITLES, GUIO_NOASPECT, GUIO_NOLANG, GAMEOPTION_AUTO_MODE, GAMEOPTION_TEXT_ANIMATION)
 
 static const ADGameDescription gameDescriptions[] = {
 	{
@@ -13,7 +18,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::JA_JPN,
 		Common::kPlatformWindows,
 		ADGF_NO_FLAGS,
-		GUIO0()
+		COMPLET_GUIO
 	},
 	{
 		"yagai",
@@ -22,7 +27,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::JA_JPN,
 		Common::kPlatformWindows,
 		ADGF_NO_FLAGS,
-		GUIO0()
+		COMPLET_GUIO
 	},
 	AD_TABLE_END_MARKER
 };

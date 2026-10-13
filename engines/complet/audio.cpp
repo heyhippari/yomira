@@ -5,6 +5,7 @@
 #include "common/memstream.h"
 
 #include "complet/audio.h"
+#include "complet/detection.h"
 
 namespace Complet {
 
@@ -20,6 +21,7 @@ AudioPlayer::~AudioPlayer() {
 }
 
 Audio::SeekableAudioStream *AudioPlayer::openStream(const Common::String &name) {
+	debugC(1, kDebugAudio, "Opening '%s.vmd'", name.c_str());
 #ifdef USE_MAD
 	Common::File file;
 	if (!file.open(Common::Path(name + ".vmd")))
@@ -53,6 +55,7 @@ void AudioPlayer::playMusic(const Common::String &name, bool loop) {
 	}
 
 	_musicName = name;
+	_musicLoop = loop;
 	Audio::AudioStream *source = loop ? Audio::makeLoopingAudioStream(stream, 0) : (Audio::AudioStream *)stream;
 	_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, source);
 }
@@ -76,6 +79,15 @@ void AudioPlayer::playVoice(const Common::String &name, bool loop) {
 
 void AudioPlayer::stopVoice() {
 	_mixer->stopHandle(_voiceHandle);
+}
+
+bool AudioPlayer::isVoicePlaying() const {
+	return _mixer->isSoundHandleActive(_voiceHandle);
+}
+
+Common::String AudioPlayer::getMusic(bool &loop) const {
+	loop = _musicLoop;
+	return _mixer->isSoundHandleActive(_musicHandle) ? _musicName : Common::String();
 }
 
 } // End of namespace Complet

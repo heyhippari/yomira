@@ -20,6 +20,10 @@ public:
 	void stopMusic();
 	void playVoice(const Common::String &name, bool loop);
 	void stopVoice();
+	bool isVoicePlaying() const;
+
+	// Name of the music still playing, empty if none
+	Common::String getMusic(bool &loop) const;
 
 private:
 	Audio::SeekableAudioStream *openStream(const Common::String &name);
@@ -28,6 +32,7 @@ private:
 	Audio::SoundHandle _musicHandle;
 	Audio::SoundHandle _voiceHandle;
 	Common::String _musicName;
+	bool _musicLoop = false;
 };
 
 } // End of namespace Complet
