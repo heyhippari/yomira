@@ -94,9 +94,12 @@ bool CompletEngine::waitAnyInput() {
 	while (!shouldQuit()) {
 		while (g_system->getEventManager()->pollEvent(event)) {
 			if (event.type == Common::EVENT_LBUTTONUP || event.type == Common::EVENT_RBUTTONUP ||
-					event.type == Common::EVENT_KEYDOWN || event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START)
+					event.type == Common::EVENT_KEYDOWN || event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
+				refreshCursor();
 				return true;
+			}
 		}
+		refreshCursor();
 		g_system->delayMillis(10);
 	}
 	return false;
@@ -259,6 +262,7 @@ bool CompletEngine::runGallery() {
 			}
 		}
 
+		refreshCursor();
 		if (activated == kExitCell) {
 			leave = true;
 		} else if (activated == kNextPageCell) {

@@ -128,9 +128,10 @@ private:
 	void drawMessage(Graphics::Surface &screen);
 	void drawMenu(Graphics::Surface &screen);
 	void drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance);
-	void drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy);
+	void drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey = false);
 	MenuLayout getMenuLayout() const;
 	MessageButton messageButtonAt(const Common::Point &pos) const;
+	void refreshCursor();
 
 	bool pollTextInput();
 	bool handleSkipAction(const Common::Event &event);
@@ -181,6 +182,7 @@ private:
 	bool _fastText = false;
 	// Held Ctrl skips text, waits and voices
 	bool _skipMode = false;
+	bool _cursorRefreshPending = false;
 	// Engine options
 	bool _autoMode = false;
 	bool _animateText = false;
@@ -203,6 +205,8 @@ private:
 	bool _inText = false;
 	// Set while waiting for a click or a menu choice, the points where saving is allowed
 	bool _inputWait = false;
+	// Frame of the click indicator while waiting for a click, -1 when hidden
+	int _indicatorFrame = -1;
 	// Loaded state applied once the interpreter has unwound
 	bool _loadPending = false;
 	Common::Array<byte> _pendingState;

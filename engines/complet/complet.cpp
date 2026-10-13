@@ -56,7 +56,9 @@ enum {
 	kMessageLineChars = 23,
 	kMessageCharAdvance = 28,
 	kMessageCharDelay = 16,
-	kAutoCharDelay = 128,
+	// The original's 16 ms timer moves the indicator every 8 ticks on NT
+	kIndicatorFrameDelay = 128,
+	kAutoCharDelay = kIndicatorFrameDelay,
 	kMessageBoxX = 16,
 	kMessageBoxY = 475,
 	kMessageBoxWidth = 768,
@@ -137,9 +139,19 @@ bool CompletEngine::notifyEvent(const Common::Event &event) {
 
 	if (show != CursorMan.isVisible()) {
 		CursorMan.showMouse(show);
-		g_system->updateScreen();
+		_cursorRefreshPending = true;
 	}
+	if (event.type == Common::EVENT_MOUSEMOVE)
+		_cursorRefreshPending = true;
 	return false;
+}
+
+void CompletEngine::refreshCursor() {
+	if (!_cursorRefreshPending)
+		return;
+
+	_cursorRefreshPending = false;
+	g_system->updateScreen();
 }
 
 void CompletEngine::initCursor() {
@@ -305,6 +317,7 @@ void CompletEngine::presentBuffer(const byte *bgr, int brightness) {
 
 	g_system->unlockScreen();
 	g_system->updateScreen();
+	_cursorRefreshPending = false;
 }
 
 void CompletEngine::present() {
@@ -325,23 +338,29 @@ void CompletEngine::present() {
 
 	g_system->unlockScreen();
 	g_system->updateScreen();
+	_cursorRefreshPending = false;
 }
 
 void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 	if (!_messageHidden)
 		drawMessage(screen);
+	// Animated "CLICK" (or "AUTO") marker from the top left of the frame image
+	if (_indicatorFrame >= 0 && !_messageHidden)
+		drawFrameRect(screen, (_indicatorFrame + (_autoMode ? 8 : 0)) * 32, 0, 32, 32, 0x2e7, kScreenHeight - 0x34, true);
 	if (_menu)
 		drawMenu(screen);
 }
 
-// Copies a rectangle of the frame image, given in top-down coordinates
-void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy) {
+// Copies a rectangle of the frame image, given in top-down coordinates; optionally black is transparent
+void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey) {
 	const byte *frame = _frameImage.getPixels();
 	for (int y = 0; y < h; y++) {
 		const byte *src = frame + ((kScreenHeight - 1 - (sy + y)) * kScreenWidth + sx) * 3;
 		uint32 *dst = (uint32 *)screen.getBasePtr(dx, dy + y);
-		for (int x = 0; x < w; x++, src += 3)
-			*dst++ = _format.RGBToColor(src[2], src[1], src[0]);
+		for (int x = 0; x < w; x++, src += 3, dst++) {
+			if (!blackKey || src[0] || src[1] || src[2])
+				*dst = _format.RGBToColor(src[2], src[1], src[0]);
+		}
 	}
 }
 
@@ -568,6 +587,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 			}
 		}
 
+		refreshCursor();
 		if (_hover != previous && !hidden)
 			present();
 		g_system->delayMillis(10);
@@ -598,6 +618,7 @@ bool CompletEngine::delay(uint32 ms) {
 	while (g_system->getMillis() < end) {
 		while (g_system->getEventManager()->pollEvent(event))
 			handleSkipAction(event);
+		refreshCursor();
 		if (interrupted())
 			return false;
 		g_system->delayMillis(5);
@@ -667,6 +688,7 @@ bool CompletEngine::pollTextInput() {
 			break;
 		}
 	}
+	refreshCursor();
 	return advance;
 }
 
@@ -686,6 +708,7 @@ void CompletEngine::hideMessageWindow() {
 			else if (event.type == Common::EVENT_WHEELUP || (action && event.customType == kActionBacklog))
 				showBacklog();
 		}
+		refreshCursor();
 		g_system->delayMillis(10);
 	}
 
@@ -729,9 +752,18 @@ bool CompletEngine::waitClick() {
 	while (!interrupted() && !advance) {
 		advance = pollTextInput() || _skipMode ||
 			(_autoMode && !_messageHidden && !_audio.isVoicePlaying() && g_system->getMillis() - start >= readTime);
+
+		// The first frame appears after one period, like the original timer
+		uint32 periods = (g_system->getMillis() - start) / kIndicatorFrameDelay;
+		int frame = periods ? periods % 8 : -1;
+		if (!advance && frame != _indicatorFrame) {
+			_indicatorFrame = frame;
+			present();
+		}
 		if (!advance)
 			g_system->delayMillis(10);
 	}
+	_indicatorFrame = -1;
 	_inputWait = false;
 	_fastText = false;
 	_autoChars = 0;
@@ -979,6 +1011,7 @@ void CompletEngine::showBacklog() {
 			}
 		}
 
+		refreshCursor();
 		if (back > 0 && back != previous)
 			drawBacklogPage(pages[pageCount - back], back, pageCount);
 		g_system->delayMillis(10);
