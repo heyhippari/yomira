@@ -24,6 +24,7 @@
 #include "common/system.h"
 
 #include "complet/complet.h"
+#include "complet/detection.h"
 #include "complet/script.h"
 
 namespace Complet {
@@ -44,6 +45,7 @@ bool Script::start(const Common::String &name) {
 }
 
 bool Script::loadScenario(const Common::String &name) {
+	debugC(1, kDebugScript, "Loading scenario '%s'", name.c_str());
 	Scenario scenario;
 	if (!scenario.load(name))
 		return false;
@@ -399,11 +401,14 @@ void Script::endPage() {
 	if (!_queued.empty()) {
 		Common::String name = _queued;
 		_queued.clear();
+		bool leavingTitle = _scenario.getName().equalsIgnoreCase("startup") && !name.equalsIgnoreCase("startup");
 		if (!loadScenario(name)) {
 			warning("Complet: cannot load scenario '%s'", name.c_str());
 			_running = false;
 			return;
 		}
+		if (leavingTitle)
+			_vm->leaveTitle();
 	} else {
 		_cur = Scenario::kCommandsOffset;
 	}

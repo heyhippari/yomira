@@ -90,10 +90,10 @@ Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
 
 	Keymap *keymap = new Keymap(Keymap::kKeymapTypeGame, "complet-default", _("Default keymappings"));
 
+	// The controller's A button advances instead, as a click at the pointer could hit a menu item or button
 	Action *act = new Action(kStandardActionLeftClick, _("Left click"));
 	act->setLeftClickEvent();
 	act->addDefaultInputMapping("MOUSE_LEFT");
-	act->addDefaultInputMapping("JOY_A");
 	keymap->addAction(act);
 
 	act = new Action(kStandardActionRightClick, _("Right click"));
@@ -105,10 +105,10 @@ Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
 		const char *id;
 		const char *description;
 		CompletAction action;
-		const char *mappings[3];
+		const char *mappings[4];
 	};
 	static const ActionDef kActions[] = {
-		{"ADVANCE", _s("Next message / Select"), kActionAdvance, {"RETURN", "SPACE", "KP_ENTER"}},
+		{"ADVANCE", _s("Next message / Select"), kActionAdvance, {"RETURN", "SPACE", "KP_ENTER", "JOY_A"}},
 		{"SKIP", _s("Skip messages (hold)"), kActionSkip, {"LCTRL", "RCTRL", "JOY_RIGHT_TRIGGER"}},
 		{"HIDE", _s("Hide message window / Back"), kActionHide, {"ESCAPE", "JOY_B", nullptr}},
 		{"BACKLOG", _s("Message history / Previous page"), kActionBacklog, {"PAGEUP", "JOY_LEFT_SHOULDER", nullptr}},

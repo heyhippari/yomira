@@ -77,6 +77,8 @@ bool MusicMidiPlayer::play(const Common::String &name, bool loop) {
 	parser->setMidiDriver(this);
 	parser->setTimerRate(_driver->getBaseTempo());
 	parser->property(MidiParser::mpCenterPitchWheelOnUnload, 1);
+	// The tracks hold notes with the sustain pedal, which All Notes Off alone does not release
+	parser->property(MidiParser::mpSendSustainOffOnNotesOff, 1);
 	_parser = parser;
 	_isLooping = loop;
 	_isPlaying = true;
@@ -177,6 +179,7 @@ void AudioPlayer::playMusic(const Common::String &name, bool loop) {
 }
 
 void AudioPlayer::stopMusic() {
+	debugC(1, kDebugAudio, "Stopping music '%s'", _musicName.c_str());
 	_mixer->stopHandle(_musicHandle);
 	if (_midi)
 		_midi->stop();

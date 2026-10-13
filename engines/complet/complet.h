@@ -89,6 +89,8 @@ public:
 	Script &getScript() { return _script; }
 	void unlockAllCgs();
 	void setPersistentFlag(int number);
+	// The retail scripts leave the title music playing into the story
+	void leaveTitle() { _audio.stopMusic(); }
 
 private:
 	struct MenuLayout {
