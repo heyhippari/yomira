@@ -9,7 +9,16 @@ static const ADGameDescription gameDescriptions[] = {
 	{
 		"mamatuma",
 		nullptr,
-		AD_ENTRY1s("c4.exe", "c83854796613f14e90797d66bf6abc8e", 229376),
+		AD_ENTRY1s("mpx/startup.mpx", "9de255cdc728753d982abb61ad6cc7e2", 2390),
+		Common::JA_JPN,
+		Common::kPlatformWindows,
+		ADGF_NO_FLAGS,
+		GUIO0()
+	},
+	{
+		"yagai",
+		nullptr,
+		AD_ENTRY1s("mpx/startup.mpx", "eae53720ffed59edbd447a6d16452cd4", 2691),
 		Common::JA_JPN,
 		Common::kPlatformWindows,
 		ADGF_NO_FLAGS,

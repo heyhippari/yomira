@@ -4,12 +4,14 @@
 
 static const PlainGameDescriptor completGames[] = {
 	{"mamatuma", "Mama! Tsuma?"},
+	{"yagai", "Yagai Gakushuu"},
 	{nullptr, nullptr}
 };
 
 class CompletMetaEngineDetection : public AdvancedMetaEngineDetection<ADGameDescription> {
 public:
 	CompletMetaEngineDetection() : AdvancedMetaEngineDetection(Complet::gameDescriptions, completGames) {
+		_flags = kADFlagMatchFullPaths;
 	}
 
 	const char *getName() const override {
