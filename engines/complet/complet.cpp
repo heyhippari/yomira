@@ -40,8 +40,27 @@ enum {
 	kMenuRadius = 16,
 
 	// Glyph sheet inside the frame image (GDS\MESFRAME.GD)
-	kGlyphSourceRow = 472
+	kGlyphSourceRow = 472,
+
+	// LOG, Q-SAVE and Q-LOAD buttons above the message window
+	kButtonTop = 0x1ce,
+	kButtonBottom = 0x1db,
+	kLogButtonLeft = 0x2a2,
+	kLogButtonRight = 0x2bb,
+	kSaveButtonLeft = 0x2bd,
+	kSaveButtonRight = 0x2e1,
+	kLoadButtonLeft = 0x2e3,
+	kLoadButtonRight = 0x308,
+
+	// Message history
+	kBacklogLineChars = 24,
+	kBacklogPageLines = 16,
+	kBacklogMaxSize = 0x2000,
+	kBacklogAdvance = 32
 };
+
+static const uint32 kBacklogLine = 0xfffffffe;
+static const uint32 kBacklogPage = 0xffffffff;
 
 static const char *const kFontFiles[] = {
 	"NotoSansCJK-Regular.ttc",
@@ -74,6 +93,7 @@ Common::Error CompletEngine::run() {
 	_scene.resize(kScreenWidth * kScreenHeight * 3);
 	memset(_scene.data(), 0, _scene.size());
 	_bg = _scene;
+	_backlog.push_back(kBacklogPage);
 	loadCommonData();
 	present();
 
@@ -197,9 +217,33 @@ void CompletEngine::present() {
 }
 
 void CompletEngine::drawOverlays(Graphics::Surface &screen) {
-	drawMessage(screen);
+	if (!_messageHidden)
+		drawMessage(screen);
 	if (_menu)
 		drawMenu(screen);
+}
+
+// Copies a rectangle of the frame image, given in top-down coordinates
+void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy) {
+	const byte *frame = _frameImage.getPixels();
+	for (int y = 0; y < h; y++) {
+		const byte *src = frame + ((kScreenHeight - 1 - (sy + y)) * kScreenWidth + sx) * 3;
+		uint32 *dst = (uint32 *)screen.getBasePtr(dx, dy + y);
+		for (int x = 0; x < w; x++, src += 3)
+			*dst++ = _format.RGBToColor(src[2], src[1], src[0]);
+	}
+}
+
+CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
+	if (!_messageVisible || _messageHidden || _menu || pos.y < kButtonTop || pos.y >= kButtonBottom)
+		return kButtonNone;
+	if (pos.x >= kLoadButtonLeft && pos.x < kLoadButtonRight)
+		return kButtonLoad;
+	if (pos.x >= kSaveButtonLeft && pos.x < kSaveButtonRight)
+		return kButtonSave;
+	if (pos.x >= kLogButtonLeft && pos.x < kLogButtonRight)
+		return kButtonLog;
+	return kButtonNone;
 }
 
 void CompletEngine::drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance) {
@@ -229,6 +273,12 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		int y = kMessageTop + i * kMessageLineHeight;
 		drawText(screen, _messageLines[i], kMessageLeft + 1, y + 1, shadow, kMessageCharAdvance);
 		drawText(screen, _messageLines[i], kMessageLeft, y, white, kMessageCharAdvance);
+	}
+
+	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
+	if (!_menu) {
+		drawFrameRect(screen, 0x200, 0, 0x4d, 0xf, kSaveButtonLeft - 1, kButtonTop - 1);
+		drawFrameRect(screen, 0x200, 0x10, 0x1b, 0xf, kLogButtonLeft - 1, kButtonTop - 1);
 	}
 }
 
@@ -294,7 +344,7 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	}
 }
 
-int CompletEngine::selectMenu(const Common::Array<MenuItem> &items) {
+int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {
 	_menu = &items;
 	_hover = -1;
 	_messageVisible = false;
@@ -312,30 +362,58 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items) {
 	_hover = rowAt(g_system->getEventManager()->getMousePos());
 	present();
 
+	// Right click or Escape goes back from a submenu and hides the top menu to show the artwork
+	bool hidden = false;
+	auto cancel = [&]() {
+		if (nested)
+			return -2;
+		hidden = !hidden;
+		_menu = hidden ? nullptr : &items;
+		present();
+		return -3;
+	};
+	auto backlog = [&]() {
+		_menu = nullptr;
+		showBacklog();
+		_menu = hidden ? nullptr : &items;
+		present();
+	};
+
 	int result = -3;
 	Common::Event event;
 	while (result == -3 && !shouldQuit()) {
 		int previous = _hover;
-		while (g_system->getEventManager()->pollEvent(event)) {
+		while (result == -3 && g_system->getEventManager()->pollEvent(event)) {
+			if (handleSkipKey(event))
+				continue;
+
 			switch (event.type) {
 			case Common::EVENT_MOUSEMOVE:
 				_hover = rowAt(event.mouse);
 				break;
 			case Common::EVENT_LBUTTONUP:
-				if (rowAt(event.mouse) >= 0)
+				if (!hidden && rowAt(event.mouse) >= 0)
 					result = rowAt(event.mouse);
 				break;
 			case Common::EVENT_RBUTTONUP:
-				result = -2;
+				result = cancel();
+				break;
+			case Common::EVENT_WHEELUP:
+				backlog();
 				break;
 			case Common::EVENT_KEYDOWN:
 				if (event.kbd.keycode == Common::KEYCODE_ESCAPE)
-					result = -2;
+					result = cancel();
+				else if (event.kbd.keycode == Common::KEYCODE_PAGEUP)
+					backlog();
+				else if (hidden)
+					break;
 				else if (event.kbd.keycode == Common::KEYCODE_UP)
 					_hover = _hover <= 0 ? layout.rows - 1 : _hover - 1;
 				else if (event.kbd.keycode == Common::KEYCODE_DOWN)
 					_hover = (_hover + 1) % layout.rows;
-				else if ((event.kbd.keycode == Common::KEYCODE_RETURN || event.kbd.keycode == Common::KEYCODE_KP_ENTER) && _hover >= 0)
+				else if ((event.kbd.keycode == Common::KEYCODE_RETURN || event.kbd.keycode == Common::KEYCODE_KP_ENTER ||
+						event.kbd.keycode == Common::KEYCODE_SPACE) && _hover >= 0)
 					result = _hover;
 				break;
 			default:
@@ -343,7 +421,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items) {
 			}
 		}
 
-		if (_hover != previous)
+		if (_hover != previous && !hidden)
 			present();
 		g_system->delayMillis(10);
 	}
@@ -354,13 +432,25 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items) {
 	return shouldQuit() ? -1 : result;
 }
 
+// Ctrl skips while held; returns true if the event was a Ctrl press or release
+bool CompletEngine::handleSkipKey(const Common::Event &event) {
+	if (event.type != Common::EVENT_KEYDOWN && event.type != Common::EVENT_KEYUP)
+		return false;
+	if (event.kbd.keycode != Common::KEYCODE_LCTRL && event.kbd.keycode != Common::KEYCODE_RCTRL)
+		return false;
+
+	if (!event.kbdRepeat)
+		_skipMode = event.type == Common::EVENT_KEYDOWN;
+	return true;
+}
+
 bool CompletEngine::delay(uint32 ms) {
 	uint32 end = g_system->getMillis() + ms;
 	Common::Event event;
 
 	while (g_system->getMillis() < end) {
-		while (g_system->getEventManager()->pollEvent(event)) {
-		}
+		while (g_system->getEventManager()->pollEvent(event))
+			handleSkipKey(event);
 		if (shouldQuit())
 			return false;
 		g_system->delayMillis(5);
@@ -368,16 +458,119 @@ bool CompletEngine::delay(uint32 ms) {
 	return !shouldQuit();
 }
 
-bool CompletEngine::waitClick() {
+// Handles the input available while text is shown; returns true when the player asks to go on
+bool CompletEngine::pollTextInput() {
+	bool advance = false;
 	Common::Event event;
 
+	while (g_system->getEventManager()->pollEvent(event)) {
+		if (handleSkipKey(event)) {
+			advance |= _skipMode;
+			continue;
+		}
+
+		switch (event.type) {
+		case Common::EVENT_LBUTTONUP:
+			switch (messageButtonAt(event.mouse)) {
+			case kButtonNone:
+				advance = true;
+				break;
+			case kButtonLog:
+				showBacklog();
+				break;
+			default:
+				// Quick save and load need the save system
+				break;
+			}
+			break;
+		case Common::EVENT_RBUTTONUP:
+			if (_skipMode)
+				_skipMode = false;
+			else
+				hideMessageWindow();
+			break;
+		case Common::EVENT_WHEELUP:
+			showBacklog();
+			break;
+		case Common::EVENT_KEYDOWN:
+			if (event.kbdRepeat)
+				break;
+			switch (event.kbd.keycode) {
+			case Common::KEYCODE_RETURN:
+			case Common::KEYCODE_KP_ENTER:
+			case Common::KEYCODE_SPACE:
+				advance = true;
+				break;
+			case Common::KEYCODE_ESCAPE:
+				hideMessageWindow();
+				break;
+			case Common::KEYCODE_PAGEUP:
+				showBacklog();
+				break;
+			default:
+				break;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	return advance;
+}
+
+// Keeps the message window hidden, and the script paused, until the next right click
+void CompletEngine::hideMessageWindow() {
+	_messageHidden = true;
+	present();
+
+	Common::Event event;
+	while (_messageHidden && !shouldQuit()) {
+		while (_messageHidden && g_system->getEventManager()->pollEvent(event)) {
+			if (handleSkipKey(event))
+				continue;
+			if (event.type == Common::EVENT_RBUTTONUP ||
+					(event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE))
+				_messageHidden = false;
+			else if (event.type == Common::EVENT_WHEELUP ||
+					(event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_PAGEUP))
+				showBacklog();
+		}
+		g_system->delayMillis(10);
+	}
+
+	_messageHidden = false;
+	present();
+}
+
+// Per-character delay; a click or key shows the rest of the text at once
+bool CompletEngine::waitTyping(uint32 ms) {
+	uint32 end = g_system->getMillis() + ms;
+	while (!shouldQuit() && !_fastText && !_skipMode && g_system->getMillis() < end) {
+		if (pollTextInput())
+			_fastText = true;
+		else
+			g_system->delayMillis(5);
+	}
+	return !shouldQuit();
+}
+
+// %w: clicks do not shorten it, but skipping does
+bool CompletEngine::waitTimed(uint32 ms) {
+	uint32 end = g_system->getMillis() + ms;
+	while (!shouldQuit() && !_skipMode && g_system->getMillis() < end) {
+		pollTextInput();
+		g_system->delayMillis(5);
+	}
+	return !shouldQuit();
+}
+
+bool CompletEngine::waitClick() {
+	present();
 	while (!shouldQuit()) {
-		while (g_system->getEventManager()->pollEvent(event)) {
-			if (event.type == Common::EVENT_LBUTTONUP)
-				return true;
-			if (event.type == Common::EVENT_KEYDOWN && (event.kbd.keycode == Common::KEYCODE_RETURN ||
-					event.kbd.keycode == Common::KEYCODE_KP_ENTER || event.kbd.keycode == Common::KEYCODE_SPACE))
-				return true;
+		bool advance = pollTextInput();
+		if (advance || _skipMode) {
+			_fastText = false;
+			return true;
 		}
 		g_system->delayMillis(10);
 	}
@@ -530,12 +723,133 @@ void CompletEngine::printChar(uint32 ch) {
 
 	_messageLines.back() += ch;
 	_messageVisible = true;
+	addBacklogChar(ch);
+	if (_fastText || _skipMode)
+		return;
 	present();
-	delay(kMessageCharDelay);
+	waitTyping(kMessageCharDelay);
+}
+
+void CompletEngine::addBacklogChar(uint32 ch) {
+	// Like the original, a line break is inserted before the 24th character after an explicit break
+	if (++_backlogLineChars >= kBacklogLineChars)
+		addBacklogBreak();
+	_backlog.push_back(ch);
+
+	// Drop the oldest pages, keeping a page marker at the start
+	if (_backlog.size() > kBacklogMaxSize) {
+		uint cut = kBacklogMaxSize / 2;
+		while (cut < _backlog.size() && _backlog[cut] != kBacklogPage)
+			cut++;
+		if (cut < _backlog.size())
+			_backlog.erase(_backlog.begin(), _backlog.begin() + cut);
+	}
+}
+
+void CompletEngine::addBacklogBreak() {
+	_backlogLineChars = 0;
+	if (++_backlogLines >= kBacklogPageLines) {
+		_backlogLines = 0;
+		_backlog.push_back(kBacklogPage);
+	} else {
+		_backlog.push_back(kBacklogLine);
+	}
+}
+
+// Mouse wheel or Page Up/Down browse the message history one page at a time
+void CompletEngine::showBacklog() {
+	if (_backlog.size() < 2)
+		return;
+
+	Common::Array<uint> pages;
+	for (uint i = 0; i < _backlog.size(); i++) {
+		if (_backlog[i] == kBacklogPage)
+			pages.push_back(i);
+	}
+	const int pageCount = pages.size();
+
+	int back = 1;
+	drawBacklogPage(pages[pageCount - back], back, pageCount);
+
+	Common::Event event;
+	while (back > 0 && !shouldQuit()) {
+		int previous = back;
+		while (back > 0 && g_system->getEventManager()->pollEvent(event)) {
+			if (handleSkipKey(event))
+				continue;
+			if (event.type == Common::EVENT_WHEELUP) {
+				if (back < pageCount)
+					back++;
+			} else if (event.type == Common::EVENT_WHEELDOWN) {
+				back--;
+			} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_PAGEUP) {
+				back = back < pageCount ? back + 1 : 1;
+			} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_PAGEDOWN) {
+				back--;
+			}
+		}
+
+		if (back > 0 && back != previous)
+			drawBacklogPage(pages[pageCount - back], back, pageCount);
+		g_system->delayMillis(10);
+	}
+
+	present();
+}
+
+void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
+	Graphics::Surface *screen = g_system->lockScreen();
+
+	screen->fillRect(Common::Rect(10, 10, 790, 590), _format.RGBToColor(0, 0, 0));
+	screen->fillRect(Common::Rect(11, 11, 789, 589), _format.RGBToColor(0x10, 0x30, 0x10));
+
+	// Page number as full-width digits followed by a full-width "p"
+	if (pageCount < 100) {
+		const uint32 color = _format.RGBToColor(0x7f, 0xff, 0xff);
+		_font->drawChar(screen, 0xff50, 0x2f6, 0x22a, color);
+		_font->drawChar(screen, 0xff10 + pageNumber % 10, 0x2da, 0x22c, color);
+		if (pageNumber > 9)
+			_font->drawChar(screen, 0xff10 + pageNumber / 10, 0x2ba, 0x22c, color);
+	}
+
+	// Full-width angle brackets and double angle quotes switch colours, as in the original
+	const uint32 colors[3] = {
+		_format.RGBToColor(0xff, 0xff, 0xe8),
+		_format.RGBToColor(0xff, 0x9e, 0xc2),
+		_format.RGBToColor(0x9e, 0xff, 0xc2)
+	};
+	int color = 0;
+	int x = 0, y = 0x18;
+	for (uint i = start + 1; i < _backlog.size() && _backlog[i] != kBacklogPage; i++) {
+		const uint32 ch = _backlog[i];
+		if (ch == kBacklogLine) {
+			x = 0;
+			y += 0x20;
+			continue;
+		}
+
+		if (ch == 0xff1e)
+			color = 1;
+		else if (ch == 0x226a)
+			color = 2;
+		_font->drawChar(screen, ch, x + 0x1b, y, colors[color]);
+		if (ch == 0xff1c || ch == 0x226b)
+			color = 0;
+
+		x += kBacklogAdvance;
+		if (x > 0x2fd) {
+			x = 0;
+			y += 0x20;
+		}
+	}
+
+	g_system->unlockScreen();
+	g_system->updateScreen();
 }
 
 void CompletEngine::runText(Script &script, const byte *text) {
 	clearMessage();
+	_fastText = false;
 
 	const byte *p = text;
 	while (*p && !shouldQuit() && script.isRunning()) {
@@ -550,6 +864,7 @@ void CompletEngine::runText(Script &script, const byte *text) {
 			printChar(ch[0]);
 		p += length;
 	}
+	present();
 }
 
 // Handles one "%X[,arg;]" command and returns the position after it
@@ -618,18 +933,22 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 		script.queueScenario(args);
 		break;
 	case 'k':
-		present();
+		addBacklogBreak();
 		waitClick();
 		clearMessage();
 		present();
 		break;
 	case 'r':
-		present();
-		waitClick();
+		addBacklogBreak();
+		// When skipping, the original clears the window instead of waiting
+		if (_skipMode)
+			clearMessage();
+		else
+			waitClick();
 		break;
 	case 'n':
+		addBacklogBreak();
 		if (_messageLines.size() >= kMessageMaxLines) {
-			present();
 			waitClick();
 			_messageLines.clear();
 		}
@@ -640,9 +959,10 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 		break;
 	case 'w':
 		present();
-		delay(atoi(args.c_str()) * 100);
+		waitTimed(atoi(args.c_str()) * 100);
 		break;
 	case 'y':
+		addBacklogBreak();
 		clearMessage();
 		present();
 		break;
@@ -657,8 +977,11 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 			_audio.playMusic(args, true);
 		break;
 	case 'v':
+		// Skipping silences voices
+		if (_skipMode)
+			_audio.stopVoice();
 		// For voices the '@' prefix means the opposite: loop
-		if (args.hasPrefix("@"))
+		else if (args.hasPrefix("@"))
 			_audio.playVoice(args.substr(1), true);
 		else
 			_audio.playVoice(args, false);

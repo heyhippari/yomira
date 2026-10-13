@@ -2,6 +2,7 @@
 #define ENGINES_COMPLET_COMPLET_H
 
 #include "common/array.h"
+#include "common/rect.h"
 #include "common/ustr.h"
 #include "engines/engine.h"
 #include "graphics/font.h"
@@ -10,6 +11,10 @@
 #include "complet/audio.h"
 #include "complet/gd.h"
 #include "complet/script.h"
+
+namespace Common {
+struct Event;
+}
 
 namespace Graphics {
 struct Surface;
@@ -31,12 +36,19 @@ public:
 
 	// Runs a script text, including its % commands, until it has finished
 	void runText(Script &script, const byte *text);
-	// Shows the selection window; returns the chosen item or -1 on quit
-	int selectMenu(const Common::Array<MenuItem> &items);
+	// Shows the selection window; returns the chosen item, -2 to go back from a submenu or -1 on quit
+	int selectMenu(const Common::Array<MenuItem> &items, bool nested);
 
 private:
 	struct MenuLayout {
 		int left, top, width, height, rows;
+	};
+
+	enum MessageButton {
+		kButtonNone,
+		kButtonLoad,
+		kButtonSave,
+		kButtonLog
 	};
 
 	bool initGame();
@@ -55,7 +67,20 @@ private:
 	void drawMessage(Graphics::Surface &screen);
 	void drawMenu(Graphics::Surface &screen);
 	void drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance);
+	void drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy);
 	MenuLayout getMenuLayout() const;
+	MessageButton messageButtonAt(const Common::Point &pos) const;
+
+	bool pollTextInput();
+	bool handleSkipKey(const Common::Event &event);
+	void hideMessageWindow();
+	bool waitTyping(uint32 ms);
+	bool waitTimed(uint32 ms);
+
+	void addBacklogChar(uint32 ch);
+	void addBacklogBreak();
+	void showBacklog();
+	void drawBacklogPage(uint start, int pageNumber, int pageCount);
 
 	bool showLogo();
 	bool showFullImage(const Common::String &name, bool fade);
@@ -83,7 +108,18 @@ private:
 	bool _ownFont = false;
 
 	bool _messageVisible = false;
+	// Right click hides the message window and pauses the script
+	bool _messageHidden = false;
+	// A click while typing shows the rest of the text at once
+	bool _fastText = false;
+	// Held Ctrl skips text, waits and voices
+	bool _skipMode = false;
 	Common::Array<Common::U32String> _messageLines;
+
+	// Message history, characters mixed with line and page markers
+	Common::Array<uint32> _backlog;
+	int _backlogLineChars = 0;
+	int _backlogLines = 0;
 
 	const Common::Array<MenuItem> *_menu = nullptr;
 	int _hover = -1;

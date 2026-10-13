@@ -392,7 +392,7 @@ void Script::step() {
 			break;
 		}
 		// Cancelling returns to the previous menu level
-		int selected = _vm->selectMenu(_menus.back());
+		int selected = _vm->selectMenu(_menus.back(), _menus.size() > 1);
 		if (selected == -2) {
 			if (_menus.size() > 1)
 				_menus.pop_back();
