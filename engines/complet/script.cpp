@@ -1,0 +1,414 @@
+#include "common/debug.h"
+#include "common/system.h"
+
+#include "complet/complet.h"
+#include "complet/script.h"
+
+namespace Complet {
+
+Script::Script(CompletEngine *vm) : _vm(vm) {
+	memset(_counters, 0, sizeof(_counters));
+	memset(_globals, 0, sizeof(_globals));
+	memset(_flags, 0, sizeof(_flags));
+}
+
+bool Script::start(const Common::String &name) {
+	if (!loadScenario(name))
+		return false;
+	_menus.clear();
+	newMenu();
+	_running = true;
+	return true;
+}
+
+bool Script::loadScenario(const Common::String &name) {
+	Scenario scenario;
+	if (!scenario.load(name))
+		return false;
+
+	_scenario = scenario;
+	_cur = Scenario::kCommandsOffset;
+	memset(_counters, 0, sizeof(_counters));
+	_fired.clear();
+	_deferred.clear();
+
+	// Local variables persist per scenario across visits
+	if (!_locals.contains(name)) {
+		Common::Array<int16> locals;
+		locals.resize(scenario.getLocalCount());
+		for (uint i = 0; i < locals.size(); i++)
+			locals[i] = 0;
+		_locals[name] = locals;
+	}
+	return true;
+}
+
+void Script::resetVariables() {
+	for (auto &it : _locals) {
+		for (uint i = 0; i < it._value.size(); i++)
+			it._value[i] = 0;
+	}
+	// The original clears the first 0xc0 global slots
+	for (int i = 0; i < 0xc0 && i < kGlobalCount - kLocalVarLimit; i++)
+		_globals[kLocalVarLimit + i] = 0;
+}
+
+bool Script::setFlag(int number) {
+	if (number < 0 || number >= kFlagCount || _flags[number])
+		return false;
+	_flags[number] = true;
+	return true;
+}
+
+bool Script::getFlag(int number) const {
+	return number >= 0 && number < kFlagCount && _flags[number];
+}
+
+void Script::newMenu() {
+	if (_menus.size() >= kMaxMenuDepth) {
+		warning("Complet: menu nesting too deep");
+		_running = false;
+		return;
+	}
+	_menus.push_back(Common::Array<MenuItem>());
+}
+
+byte Script::readByte() {
+	if (_cur >= _scenario.getSize()) {
+		warning("Complet: script read past end of '%s'", _scenario.getName().c_str());
+		_running = false;
+		return 0;
+	}
+	return _scenario.getData()[_cur++];
+}
+
+uint16 Script::readWord() {
+	uint16 lo = readByte();
+	return lo | (readByte() << 8);
+}
+
+int16 Script::readSWord() {
+	return (int16)readWord();
+}
+
+int8 &Script::counter(int16 index) {
+	static int8 dummy;
+	if (index < 0 || index >= kCounterCount) {
+		dummy = 0;
+		return dummy;
+	}
+	return _counters[index];
+}
+
+int16 Script::getValue(int16 ref) {
+	if (ref >= 0)
+		return ref;
+
+	int index = -1 - ref;
+	if (index < kLocalVarLimit) {
+		Common::Array<int16> &locals = _locals[_scenario.getName()];
+		return (uint)index < locals.size() ? locals[index] : 0;
+	}
+	if (index == 0x1ff)
+		return g_system->getMillis() % 0x7fff;
+	// Pointer selection result and tick counter
+	if (index == 0x1fd || index == 0x1fe)
+		return 0;
+	if (index >= kFlagBase && index < kFlagBase + kFlagCount)
+		return _flags[index - kFlagBase];
+	// Key states
+	if (index >= 0x1db)
+		return 0;
+	return index < kGlobalCount ? _globals[index] : 0;
+}
+
+void Script::setVariable(int index, int16 value) {
+	if (index < kLocalVarLimit) {
+		Common::Array<int16> &locals = _locals[_scenario.getName()];
+		if ((uint)index < locals.size())
+			locals[index] = value;
+	} else if (index < kGlobalCount) {
+		_globals[index] = value;
+	}
+}
+
+bool Script::evalCondition() {
+	if (_cur < _scenario.getSize() && _scenario.getData()[_cur] == 0) {
+		_cur++;
+		return true;
+	}
+
+	bool result = false;
+	int mode = 0;
+	while (_running) {
+		byte op = readByte();
+		if (!op)
+			break;
+		if (op == 8) {
+			mode = 1;
+			continue;
+		}
+		if (op == 9) {
+			mode = 2;
+			continue;
+		}
+
+		int16 a = getValue(readSWord());
+		int16 b = getValue(readSWord());
+		bool r = false;
+		switch (op) {
+		case 1: r = b <= a; break;
+		case 2: r = b < a; break;
+		case 3: r = a <= b; break;
+		case 4: r = a < b; break;
+		case 5: r = a == b; break;
+		case 6: r = a != b; break;
+		default:
+			warning("Complet: bad condition operator %d", op);
+			_running = false;
+			return false;
+		}
+
+		if (mode == 0)
+			result = r;
+		else if (mode == 1)
+			result = result && r;
+		else
+			result = result || r;
+		mode = 0;
+	}
+	return result;
+}
+
+void Script::skipAssignments() {
+	while (_running && readByte() != 0)
+		_cur += 4;
+}
+
+void Script::runAssignments() {
+	while (_running) {
+		byte op = readByte();
+		if (!op)
+			break;
+
+		int16 target = readSWord();
+		int16 value = getValue(readSWord());
+		if (target >= 0) {
+			warning("Complet: bad assignment target");
+			_running = false;
+			return;
+		}
+		int index = -1 - target;
+
+		switch (op) {
+		case 1:
+			setVariable(index, value);
+			break;
+		case 2:
+			setVariable(index, getValue(target) + value);
+			break;
+		case 3:
+			setVariable(index, getValue(target) - value);
+			break;
+		default:
+			warning("Complet: bad assignment operator %d", op);
+			_running = false;
+			return;
+		}
+	}
+}
+
+// Postfix expression ending in a store to a variable
+void Script::runExpression() {
+	int16 stack[32];
+	int sp = 32;
+
+	while (_running) {
+		int16 token = readSWord();
+		if (token < -0x206 || token > -0x201) {
+			if (sp == 0) {
+				warning("Complet: expression stack overflow");
+				_running = false;
+				return;
+			}
+			stack[--sp] = getValue(token);
+			continue;
+		}
+
+		if (token == -0x201) {
+			int target = readSWord();
+			if (sp < 32)
+				setVariable(target, stack[sp]);
+			return;
+		}
+
+		if (sp > 30) {
+			warning("Complet: expression stack underflow");
+			_running = false;
+			return;
+		}
+		int16 b = stack[sp++];
+		int16 a = stack[sp];
+		switch (token) {
+		case -0x206: a = b ? a % b : 0; break;
+		case -0x205: a = b ? a / b : 0; break;
+		case -0x204: a = a * b; break;
+		case -0x203: a = a - b; break;
+		case -0x202: a = a + b; break;
+		}
+		stack[sp] = a;
+	}
+}
+
+void Script::showText(uint16 offset) {
+	uint32 pos = _scenario.getTextOffset() + offset;
+	if (pos >= _scenario.getSize())
+		return;
+	_vm->runText(*this, _scenario.getData() + pos);
+}
+
+void Script::addMenuItem(uint16 textOffset) {
+	MenuItem item;
+	item.text = (const char *)(_scenario.getData() + _scenario.getTextOffset() + textOffset);
+	item.body = _cur;
+	if (!_menus.empty())
+		_menus.back().push_back(item);
+}
+
+void Script::endPage() {
+	for (uint i = 0; i < _deferred.size() && _running; i++) {
+		_cur = _deferred[i];
+		runAssignments();
+	}
+	for (uint i = 0; i < _fired.size(); i++)
+		counter(_fired[i])++;
+
+	_deferred.clear();
+	_fired.clear();
+	_menus.clear();
+
+	if (!_queued.empty()) {
+		Common::String name = _queued;
+		_queued.clear();
+		if (!loadScenario(name)) {
+			warning("Complet: cannot load scenario '%s'", name.c_str());
+			_running = false;
+			return;
+		}
+	} else {
+		_cur = Scenario::kCommandsOffset;
+	}
+	newMenu();
+}
+
+void Script::step() {
+	if (!_running)
+		return;
+
+	byte op = readByte();
+	switch (op) {
+	case 0:
+		break;
+	case 1:
+	case 3: {
+		// Menu entry: skipped over when the condition fails
+		uint16 next = readWord();
+		uint16 text = readWord();
+		if (evalCondition())
+			addMenuItem(text);
+		_cur = next;
+		break;
+	}
+	case 4:
+	case 5: {
+		int16 index = readSWord();
+		byte value = readByte();
+		uint16 text = readWord();
+		if (index < 0)
+			index = kCounterCount - 1;
+		if ((byte)counter(index) == value) {
+			showText(text);
+			if (op == 5)
+				runAssignments();
+			_fired.push_back(index);
+		} else if (op == 5) {
+			skipAssignments();
+		}
+		break;
+	}
+	case 6:
+	case 7: {
+		uint16 text = readWord();
+		bool matched = evalCondition();
+		const byte *data = _scenario.getData();
+		bool hasText = _scenario.getTextOffset() + text < _scenario.getSize() &&
+			data[_scenario.getTextOffset() + text];
+
+		if (!matched) {
+			skipAssignments();
+			// An IF6 block owns the page terminator that follows it
+			if (op == 6)
+				_cur++;
+		} else if (op == 6) {
+			_deferred.push_back(_cur);
+			if (hasText)
+				showText(text);
+			skipAssignments();
+		} else {
+			runAssignments();
+			if (hasText)
+				showText(text);
+		}
+		break;
+	}
+	case 8:
+		newMenu();
+		break;
+	case 9: {
+		int16 index = readWord();
+		byte limit = readByte();
+		if ((int8)limit <= counter(index))
+			counter(index) = 0;
+		break;
+	}
+	case 10: {
+		int16 index = readWord();
+		byte value = readByte();
+		uint16 text = readWord();
+		if ((byte)counter(index) == value)
+			showText(text);
+		break;
+	}
+	case 11:
+		runExpression();
+		break;
+	case 0xfe:
+		endPage();
+		break;
+	case 0xff: {
+		if (_menus.empty() || _menus.back().empty()) {
+			g_system->delayMillis(16);
+			_cur = Scenario::kCommandsOffset;
+			break;
+		}
+		// Cancelling returns to the previous menu level
+		int selected = _vm->selectMenu(_menus.back());
+		if (selected == -2) {
+			if (_menus.size() > 1)
+				_menus.pop_back();
+			_cur--;
+		} else if (selected < 0) {
+			_running = false;
+		} else {
+			_cur = _menus.back()[selected].body;
+		}
+		break;
+	}
+	default:
+		warning("Complet: unknown script opcode 0x%02x at 0x%x in '%s'", op, _cur - 1, _scenario.getName().c_str());
+		_running = false;
+		break;
+	}
+}
+
+} // End of namespace Complet

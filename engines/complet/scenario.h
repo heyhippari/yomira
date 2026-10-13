@@ -11,24 +11,31 @@ namespace Complet {
 //   0x00  magic
 //   0x04  u16 offset of the script text section
 //   0x06  u16 size of the script text section (XOR 0x24 encoded)
-//   0x08  u16 value kept by the original loader (unused by init)
-//   0x0a  u16 value kept by the original loader (unused by init)
-//   0x0c  u16 value kept by the original loader (unused by init)
-//   0x10  command table (up to the script text section)
+//   0x08  u16 number of scenario-local variables
+//   0x0a  u16 unused by the loader
+//   0x0c  u16 unused by the loader
+//   0x10  command stream (up to the script text section)
+// Command stream jump targets are file offsets; text references are
+// relative to the script text section.
 class Scenario {
 public:
+	enum {
+		kCommandsOffset = 0x10
+	};
+
 	bool load(const Common::String &name);
 
 	const Common::String &getName() const { return _name; }
-	const Common::Array<byte> &getCommands() const { return _commands; }
-	const Common::Array<byte> &getScriptText() const { return _scriptText; }
-	const Common::Array<Common::String> &getNames() const { return _names; }
+	const byte *getData() const { return _data.data(); }
+	uint32 getSize() const { return _data.size(); }
+	uint32 getTextOffset() const { return _textOffset; }
+	uint32 getLocalCount() const { return _localCount; }
 
 private:
 	Common::String _name;
-	Common::Array<byte> _commands;
-	Common::Array<byte> _scriptText;
-	Common::Array<Common::String> _names;
+	Common::Array<byte> _data;
+	uint32 _textOffset = 0;
+	uint32 _localCount = 0;
 };
 
 } // End of namespace Complet

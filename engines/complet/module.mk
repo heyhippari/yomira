@@ -1,10 +1,13 @@
 MODULE := engines/complet
 
 MODULE_OBJS := \
+	audio.o \
 	complet.o \
+	gallery.o \
 	gd.o \
 	metaengine.o \
-	scenario.o
+	scenario.o \
+	script.o
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_COMPLET), DYNAMIC_PLUGIN)

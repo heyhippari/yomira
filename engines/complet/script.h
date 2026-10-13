@@ -1,0 +1,88 @@
+#ifndef ENGINES_COMPLET_SCRIPT_H
+#define ENGINES_COMPLET_SCRIPT_H
+
+#include "common/array.h"
+#include "common/hash-str.h"
+#include "common/hashmap.h"
+#include "common/str.h"
+
+#include "complet/scenario.h"
+
+namespace Complet {
+
+class CompletEngine;
+
+struct MenuItem {
+	Common::String text;
+	// Command stream offset of the item's body
+	uint32 body;
+};
+
+// Interpreter for the MPX command stream
+class Script {
+public:
+	explicit Script(CompletEngine *vm);
+
+	bool start(const Common::String &name);
+	bool isRunning() const { return _running; }
+	void stop() { _running = false; }
+	void step();
+
+	// %j: scenario to switch to at the end of the current page
+	void queueScenario(const Common::String &name) { _queued = name; }
+	// %i
+	void resetVariables();
+
+	// Persistent flags set by %s and readable as variables 0x1dc and up
+	bool setFlag(int number);
+	bool getFlag(int number) const;
+
+private:
+	enum {
+		kCounterCount = 0x400,
+		kGlobalCount = 0x200,
+		kLocalVarLimit = 0x100,
+		kMaxMenuDepth = 8,
+		kFlagBase = 0x1dc,
+		kFlagCount = 32
+	};
+
+	byte readByte();
+	uint16 readWord();
+	int16 readSWord();
+
+	int16 getValue(int16 ref);
+	void setVariable(int index, int16 value);
+	bool evalCondition();
+	void skipAssignments();
+	void runAssignments();
+	void runExpression();
+	void showText(uint16 offset);
+	void endPage();
+	bool loadScenario(const Common::String &name);
+	void newMenu();
+	void addMenuItem(uint16 textOffset);
+	int8 &counter(int16 index);
+
+	CompletEngine *_vm;
+	Scenario _scenario;
+	bool _running = false;
+	uint32 _cur = 0;
+	Common::String _queued;
+
+	int8 _counters[kCounterCount];
+	// Counters bumped when the page ends
+	Common::Array<uint16> _fired;
+	// Assignment lists to run when the page ends
+	Common::Array<uint32> _deferred;
+	Common::Array<Common::Array<MenuItem> > _menus;
+
+	int16 _globals[kGlobalCount];
+	bool _flags[kFlagCount];
+	Common::HashMap<Common::String, Common::Array<int16>, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _locals;
+	Common::Array<int16> *_currentLocals = nullptr;
+};
+
+} // End of namespace Complet
+
+#endif // ENGINES_COMPLET_SCRIPT_H

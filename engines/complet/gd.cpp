@@ -15,11 +15,13 @@ class BitReader {
 public:
 	BitReader(const byte *data, uint32 size, uint32 pos) : _data(data), _size(size), _pos(pos) {}
 
-	bool overrun() const { return _pos >= _size; }
+	bool overrun() const { return _overrun; }
 
 	uint32 readBit() {
-		if (_pos >= _size)
+		if (_pos >= _size) {
+			_overrun = true;
 			return 0;
+		}
 		uint32 bit = (_data[_pos] & _mask) ? 1 : 0;
 		_mask >>= 1;
 		if (!_mask) {
@@ -41,6 +43,7 @@ private:
 	uint32 _size;
 	uint32 _pos;
 	uint32 _mask = 0x80;
+	bool _overrun = false;
 };
 
 } // End of anonymous namespace
@@ -54,6 +57,19 @@ bool GdImage::loadFromName(const Common::String &name) {
 	if (!file.open(Common::Path(name)))
 		return false;
 	return load(file);
+}
+
+// The header holds 59 preview rows; the original zero-fills the missing top row
+bool GdImage::loadThumbnail(const Common::String &name, Common::Array<byte> &out) {
+	Common::File file;
+	if (!file.open(Common::Path(name + ".gd")))
+		return false;
+
+	const uint32 kRowsBytes = 0x3750;
+	out.resize(kThumbWidth * kThumbHeight * 3);
+	memset(out.data(), 0, out.size());
+	file.seek(4);
+	return file.read(out.data(), kRowsBytes) == kRowsBytes;
 }
 
 bool GdImage::load(Common::SeekableReadStream &stream) {

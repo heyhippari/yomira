@@ -10,7 +10,9 @@ namespace Complet {
 
 enum {
 	kScreenWidth = 800,
-	kScreenHeight = 600
+	kScreenHeight = 600,
+	kThumbWidth = 80,
+	kThumbHeight = 60
 };
 
 // Decoder for the C4 engine's "GD3" images (GDS\*.GD)
@@ -23,6 +25,9 @@ public:
 
 	// 24bpp, B,G,R byte order, bottom-up rows, kScreenWidth x kScreenHeight
 	const byte *getPixels() const { return _pixels.data(); }
+
+	// The 80x60 preview stored in the file header, same pixel layout
+	static bool loadThumbnail(const Common::String &name, Common::Array<byte> &out);
 
 private:
 	bool decodeLz(const byte *data, uint32 size, uint32 pos);
