@@ -23,6 +23,7 @@
 #define ENGINES_COMPLET_COMPLET_H
 
 #include "common/array.h"
+#include "common/events.h"
 #include "common/rect.h"
 #include "common/ustr.h"
 #include "engines/engine.h"
@@ -32,10 +33,6 @@
 #include "complet/audio.h"
 #include "complet/gd.h"
 #include "complet/script.h"
-
-namespace Common {
-struct Event;
-}
 
 namespace Graphics {
 struct Surface;
@@ -62,7 +59,7 @@ enum CompletAction {
 	kActionQuickLoad
 };
 
-class CompletEngine : public Engine {
+class CompletEngine : public Engine, public Common::EventObserver {
 public:
 	CompletEngine(OSystem *system);
 	~CompletEngine() override;
@@ -72,6 +69,7 @@ public:
 	void applyGameSettings() override;
 	void syncSoundSettings() override;
 	void pauseEngineIntern(bool pause) override;
+	bool notifyEvent(const Common::Event &event) override;
 
 	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
 	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
@@ -105,6 +103,7 @@ private:
 	};
 
 	bool initGame();
+	void initCursor();
 	void loadFont();
 	bool loadFrameImage();
 	void loadCommonData();

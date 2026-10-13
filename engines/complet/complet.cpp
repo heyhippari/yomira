@@ -23,12 +23,15 @@
 #include "common/debug.h"
 #include "common/events.h"
 #include "common/file.h"
+#include "common/formats/winexe.h"
 #include "common/fs.h"
 #include "common/savefile.h"
 #include "common/system.h"
 #include "engines/util.h"
 #include "graphics/fontman.h"
 #include "graphics/fonts/ttf.h"
+#include "graphics/cursorman.h"
+#include "graphics/wincursor.h"
 #include "graphics/surface.h"
 
 #include "complet/complet.h"
@@ -97,6 +100,7 @@ CompletEngine::CompletEngine(OSystem *system) : Engine(system), _audio(_mixer), 
 }
 
 CompletEngine::~CompletEngine() {
+	g_system->getEventManager()->getEventDispatcher()->unregisterObserver(this);
 	if (_ownFont)
 		delete _font;
 }
@@ -122,6 +126,40 @@ void CompletEngine::pauseEngineIntern(bool pause) {
 	_audio.pause(pause);
 }
 
+// Like the original, the pointer hides on keyboard input and comes back when the mouse moves
+bool CompletEngine::notifyEvent(const Common::Event &event) {
+	bool show = CursorMan.isVisible();
+	if (event.type == Common::EVENT_MOUSEMOVE)
+		show = true;
+	else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START &&
+			event.customType != kActionQuickSave && event.customType != kActionQuickLoad)
+		show = false;
+
+	if (show != CursorMan.isVisible()) {
+		CursorMan.showMouse(show);
+		g_system->updateScreen();
+	}
+	return false;
+}
+
+void CompletEngine::initCursor() {
+	// The arrow cursor is resource 104 of the game executable
+	Common::WinResources *exe = Common::WinResources::createFromEXE("c4.exe");
+	Graphics::WinCursorGroup *group = exe ? Graphics::WinCursorGroup::createCursorGroup(exe, 104) : nullptr;
+	if (group && !group->cursors.empty()) {
+		CursorMan.replaceCursor(group->cursors[0].cursor);
+	} else {
+		Graphics::Cursor *cursor = Graphics::makeDefaultWinCursor();
+		CursorMan.replaceCursor(cursor);
+		delete cursor;
+	}
+	delete group;
+	delete exe;
+
+	CursorMan.showMouse(true);
+	g_system->getEventManager()->getEventDispatcher()->registerObserver(this, 1, false);
+}
+
 Common::Error CompletEngine::run() {
 	// The original uses a fixed 800x600 window with 24bpp BGR DIBs
 	_format = Graphics::PixelFormat::createFormatBGRA32();
@@ -138,6 +176,7 @@ Common::Error CompletEngine::run() {
 		return Common::Error(Common::kReadingFailed, "Missing game data (gds/mpx folders)");
 
 	loadFont();
+	initCursor();
 #ifndef USE_MAD
 	warning("Complet: built without MP3 support, voices and digital music are silent");
 #endif
