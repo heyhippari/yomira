@@ -49,6 +49,8 @@ public:
 	Common::Error run() override;
 	bool hasFeature(EngineFeature f) const override;
 	void applyGameSettings() override;
+	void syncSoundSettings() override;
+	void pauseEngineIntern(bool pause) override;
 
 	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
 	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;

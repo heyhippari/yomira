@@ -88,6 +88,17 @@ bool CompletEngine::hasFeature(EngineFeature f) const {
 void CompletEngine::applyGameSettings() {
 	_autoMode = ConfMan.getBool("auto_mode");
 	_animateText = ConfMan.getBool("text_animation");
+	_audio.setUseMidi(ConfMan.getBool("midi_music"));
+}
+
+void CompletEngine::syncSoundSettings() {
+	Engine::syncSoundSettings();
+	_audio.syncVolume();
+}
+
+void CompletEngine::pauseEngineIntern(bool pause) {
+	Engine::pauseEngineIntern(pause);
+	_audio.pause(pause);
 }
 
 Common::Error CompletEngine::run() {
@@ -98,6 +109,7 @@ Common::Error CompletEngine::run() {
 	setDebugger(new Console(this));
 	ConfMan.registerDefault("auto_mode", false);
 	ConfMan.registerDefault("text_animation", false);
+	ConfMan.registerDefault("midi_music", false);
 	syncSoundSettings();
 	applyGameSettings();
 
@@ -126,6 +138,10 @@ Common::Error CompletEngine::run() {
 			break;
 		_script.step();
 	}
+
+	// The game's own exit (%q) goes back to the launcher instead of closing ScummVM
+	if (!shouldQuit())
+		ConfMan.setBool("gui_return_to_launcher_at_exit", true, Common::ConfigManager::kTransientDomain);
 
 	return Common::kNoError;
 }
@@ -1078,7 +1094,7 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 		_messageLines.push_back(Common::U32String());
 		break;
 	case 'q':
-		quitGame();
+		script.stop();
 		break;
 	case 'w':
 		present();

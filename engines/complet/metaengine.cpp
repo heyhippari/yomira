@@ -31,6 +31,17 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 			0
 		}
 	},
+	{
+		GAMEOPTION_MIDI_MUSIC,
+		{
+			_s("Use MIDI music"),
+			_s("Play the MIDI versions of the music, which the original only used when digital playback was unavailable"),
+			"midi_music",
+			false,
+			0,
+			0
+		}
+	},
 	AD_EXTRA_GUI_OPTIONS_TERMINATOR
 };
 
