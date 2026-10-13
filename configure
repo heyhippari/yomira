@@ -141,6 +141,7 @@ _srcdir=`dirname $0`
 # Read list of engines
 _wip_engines=
 for i in $_srcdir/engines/*/configure.engine; do
+	test -f "$i" || continue
 	# shellcheck disable=SC1090 # 'source=./engines/*/configure.engine' not accepted yet?
 	. "$i"
 done
