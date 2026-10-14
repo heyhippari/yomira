@@ -60,6 +60,11 @@ enum CompletMessageLayout {
 	kMessageFramedDialogue
 };
 
+enum CompletMapLayout {
+	kCompletMapDefault,
+	kCompletMapMht
+};
+
 struct CompletGallery {
 	const char *const *names;
 	uint16 count;
@@ -77,6 +82,7 @@ struct CompletGameDescription {
 	uint16 waitUnitMillis;
 	bool midiOnly;
 	CompletGallery gallery;
+	CompletMapLayout mapLayout;
 
 	AD_GAME_DESCRIPTION_HELPERS(gameDescription)
 };

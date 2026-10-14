@@ -157,6 +157,9 @@ bool CompletEngine::runGroupedGallery(int group) {
 }
 
 bool CompletEngine::runMap() {
+	if (_mhtMap)
+		return runMhtMap();
+
 	struct MapRegion {
 		int left, top, right, bottom;
 		int previewX, previewY;
@@ -244,6 +247,93 @@ bool CompletEngine::runMap() {
 					memcpy(&view[((_screenHeight - 1 - row) * _screenWidth + pointer.x) * 3], src, 3);
 				}
 			}
+			presentBuffer(view.data());
+			redraw = false;
+		}
+		refreshCursor();
+		if (!accepted)
+			g_system->delayMillis(10);
+	}
+	if (accepted)
+		_script.setVariable(0x1fe, selected + 1);
+	_messageVisible = restoreMessage;
+	present();
+	return !interrupted();
+}
+
+bool CompletEngine::runMhtMap() {
+	struct MapRegion {
+		int left, top, right, bottom;
+	};
+	const MapRegion regions[] = {
+		{4, 16, 108, 66}, {105, 78, 184, 116}, {232, 213, 296, 254}, {302, 200, 362, 234},
+		{376, 122, 444, 174}, {512, 0, 630, 54}, {454, 160, 604, 190}, {536, 342, 638, 380}
+	};
+	auto regionAt = [&](const Common::Point &point) {
+		for (uint region = 0; region < ARRAYSIZE(regions); region++) {
+			const MapRegion &bounds = regions[region];
+			if (point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom)
+				return (int)region;
+		}
+		return -1;
+	};
+
+	const bool restoreMessage = _messageVisible;
+	_messageVisible = false;
+	_skipMode = false;
+	Common::Array<byte> mapImage;
+	Common::Array<byte> parts;
+	if (!loadImage("mhtmap", mapImage) || !loadImage("mhtparts", parts)) {
+		_messageVisible = restoreMessage;
+		return false;
+	}
+	_scene = mapImage;
+	_sceneFull = "mhtmap";
+	Common::Point pointer = g_system->getEventManager()->getMousePos();
+	int selected = regionAt(pointer);
+	bool redraw = true;
+	bool accepted = false;
+	auto drawPreview = [&](const Common::Array<byte> &source, int sourceX, int sourceY, Common::Array<byte> &view) {
+		for (int row = 0; row < 120; row++) {
+			const byte *src = &source[((sourceY + 119 - row) * _screenWidth + sourceX) * 3];
+			byte *dst = &view[((_screenHeight - 1 - 351 - row) * _screenWidth + 8) * 3];
+			memcpy(dst, src, 160 * 3);
+		}
+	};
+
+	while (!accepted && !interrupted()) {
+		Common::Event event;
+		while (!accepted && g_system->getEventManager()->pollEvent(event)) {
+			if (handleSkipAction(event))
+				continue;
+			if (event.type == Common::EVENT_MOUSEMOVE || event.type == Common::EVENT_LBUTTONUP) {
+				pointer = event.mouse;
+				selected = regionAt(pointer);
+				redraw = true;
+				accepted = event.type == Common::EVENT_LBUTTONUP && selected >= 0;
+			} else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
+				int direction = 0;
+				if (event.customType == kActionRight || event.customType == kActionDown)
+					direction = 1;
+				else if (event.customType == kActionLeft || event.customType == kActionUp)
+					direction = -1;
+				else if (event.customType == kActionAdvance)
+					accepted = selected >= 0;
+				if (direction) {
+					const int count = ARRAYSIZE(regions);
+					selected = selected < 0 ? (direction > 0 ? 0 : count - 1) : (selected + direction + count) % count;
+					const MapRegion &bounds = regions[selected];
+					pointer = Common::Point((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2);
+					redraw = true;
+				}
+			}
+		}
+		if (redraw && !accepted && !interrupted()) {
+			Common::Array<byte> view = mapImage;
+			if (selected >= 0)
+				drawPreview(parts, (selected % 4) * 160, (selected / 4) * 120, view);
+			else
+				drawPreview(mapImage, 8, 9, view);
 			presentBuffer(view.data());
 			redraw = false;
 		}

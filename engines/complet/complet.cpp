@@ -95,7 +95,9 @@ static const char *const kFontFiles[] = {
 };
 
 CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &description) :
-		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery), _xexLayout(description.xexLayout),
+		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery),
+		_mhtMap(description.mapLayout == kCompletMapMht),
+		_xexLayout(description.xexLayout),
 		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
 		_framedMessages(description.messageLayout == kMessageFramedDialogue), _waitUnitMillis(description.waitUnitMillis),
 		_midiOnly(description.midiOnly), _screenWidth(description.screenWidth), _screenHeight(description.screenHeight),
@@ -1354,7 +1356,7 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 	case 'e':
 		if (_replaying)
 			break;
-		if (atoi(args.c_str()) == 1 && _framedMessages)
+		if (atoi(args.c_str()) == 1 && (_framedMessages || _mhtMap))
 			runMap();
 		else if (atoi(args.c_str()) == 10)
 			showLogo();

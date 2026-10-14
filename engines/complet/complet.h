@@ -129,6 +129,7 @@ private:
 	bool runGallery();
 	bool runGroupedGallery(int group);
 	bool runMap();
+	bool runMhtMap();
 	void blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const;
 	bool waitAnyInput();
 
@@ -183,6 +184,7 @@ private:
 	bool _bgPending = false;
 	const CompletMenuStyle *_menuStyle = nullptr;
 	const CompletGallery *_gallery = nullptr;
+	bool _mhtMap = false;
 	bool _xexLayout = false;
 	bool _fullScreenMessages = false;
 	bool _framedMessages = false;

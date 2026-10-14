@@ -36,6 +36,7 @@ static const PlainGameDescriptor completGames[] = {
 	{"case266", "Case 266 ~266 Gou Jiken~"},
 	{"bokunohimitsutaiken", "Boku no Himitsu Taiken"},
 	{"koisuruscience", "Koi Suru Science"},
+	{"mottohimitsutaiken", "Motto! Himitsu Taiken"},
 	{"matty", "Matty"},
 	{"yagai", "Yagai Gakushuu"},
 	{"mamatuma", "Mama! Tsuma?"},
