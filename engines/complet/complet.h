@@ -56,7 +56,8 @@ enum CompletAction {
 	kActionLeft,
 	kActionRight,
 	kActionQuickSave,
-	kActionQuickLoad
+	kActionQuickLoad,
+	kActionAutoMode
 };
 
 class CompletEngine : public Engine, public Common::EventObserver {

@@ -113,7 +113,6 @@ bool CompletEngine::hasFeature(EngineFeature f) const {
 }
 
 void CompletEngine::applyGameSettings() {
-	_autoMode = ConfMan.getBool("auto_mode");
 	_animateText = ConfMan.getBool("text_animation");
 	_audio.setUseMidi(ConfMan.getBool("midi_music"));
 }
@@ -130,6 +129,13 @@ void CompletEngine::pauseEngineIntern(bool pause) {
 
 // Like the original, the pointer hides on keyboard input and comes back when the mouse moves
 bool CompletEngine::notifyEvent(const Common::Event &event) {
+	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionAutoMode) {
+		_autoMode = !_autoMode;
+		if (_indicatorFrame >= 0)
+			present();
+		return true;
+	}
+
 	bool show = CursorMan.isVisible();
 	if (event.type == Common::EVENT_MOUSEMOVE)
 		show = true;
@@ -181,7 +187,6 @@ Common::Error CompletEngine::run() {
 	initGraphics(_screenWidth, _screenHeight, &_format);
 
 	setDebugger(new Console(this));
-	ConfMan.registerDefault("auto_mode", false);
 	ConfMan.registerDefault("text_animation", false);
 	ConfMan.registerDefault("midi_music", false);
 	syncSoundSettings();

@@ -31,17 +31,6 @@
 
 static const ADExtraGuiOptionsMap optionsList[] = {
 	{
-		GAMEOPTION_AUTO_MODE,
-		{
-			_s("Auto mode"),
-			_s("Go to the next message once the voice has finished and the text had time to be read"),
-			"auto_mode",
-			false,
-			0,
-			0
-		}
-	},
-	{
 		GAMEOPTION_TEXT_ANIMATION,
 		{
 			_s("Animate text"),
@@ -110,6 +99,7 @@ Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
 	static const ActionDef kActions[] = {
 		{"ADVANCE", _s("Next message / Select"), kActionAdvance, {"RETURN", "SPACE", "KP_ENTER", "JOY_A"}},
 		{"SKIP", _s("Skip messages (hold)"), kActionSkip, {"LCTRL", "RCTRL", "JOY_RIGHT_TRIGGER"}},
+		{"AUTO", _s("Toggle auto mode"), kActionAutoMode, {"a", "JOY_LEFT_TRIGGER", nullptr}},
 		{"HIDE", _s("Hide message window / Back"), kActionHide, {"ESCAPE", "JOY_B", nullptr}},
 		{"BACKLOG", _s("Message history / Previous page"), kActionBacklog, {"PAGEUP", "JOY_LEFT_SHOULDER", nullptr}},
 		{"BACKLOGNEXT", _s("Next history page"), kActionBacklogForward, {"PAGEDOWN", "JOY_RIGHT_SHOULDER", nullptr}},
