@@ -41,7 +41,7 @@
 namespace Complet {
 
 enum {
-	kFontSize = 28,
+	kFontSize = 30,
 	kLogoFadeSteps = 32,
 	kLogoFadeDelay = 8,
 	kLogoHoldMs = 4000,
@@ -238,7 +238,7 @@ void CompletEngine::loadFont() {
 	for (uint i = 0; i < ARRAYSIZE(kFontFiles) && !_font; i++) {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 		if (stream)
-			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, kFontSize);
+			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, kFontSize, Graphics::kTTFSizeModeCell);
 	}
 
 	if (_font) {
@@ -462,7 +462,14 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (int i = 0; i < layout.rows; i++) {
 		Common::U32String text((*_menu)[i].text, Common::kWindows932);
-		int x = layout.left + layout.width / 2 - (int)text.size() * kMenuCharAdvance / 2;
+		int inkLeft = INT_MAX;
+		int inkRight = INT_MIN;
+		for (uint j = 0; j < text.size(); j++) {
+			const Common::Rect bounds = _font->getBoundingBox(text[j]);
+			inkLeft = MIN(inkLeft, (int)j * kMenuCharAdvance + bounds.left);
+			inkRight = MAX(inkRight, (int)j * kMenuCharAdvance + bounds.right);
+		}
+		int x = layout.left + layout.width / 2 - (inkLeft + inkRight) / 2;
 		int y = layout.top + 2 + i * kMenuRowHeight;
 
 		if (i == _hover) {
