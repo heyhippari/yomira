@@ -865,10 +865,10 @@ bool CompletEngine::loadImage(const Common::String &name, Common::Array<byte> &o
 	return true;
 }
 
-// Draws a sprite layer; pure green is the transparent colour
 void CompletEngine::overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite) {
+	const byte transparentGreen = _xexLayout ? 0 : 0xff;
 	for (uint i = 0; i + 2 < dst.size(); i += 3) {
-		if (sprite[i] != 0 || sprite[i + 1] != 0xff || sprite[i + 2] != 0)
+		if (sprite[i] != 0 || sprite[i + 1] != transparentGreen || sprite[i + 2] != 0)
 			memcpy(&dst[i], &sprite[i], 3);
 	}
 }
