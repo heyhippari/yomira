@@ -48,6 +48,10 @@ struct CompletMenuStyle {
 	bool showQuickSaveLoad;
 	bool outlinedMenu;
 	bool plainMenu;
+	uint16 menuFontSize;
+	uint16 menuFontWidth;
+	bool menuFontBold;
+	bool outlineSelectedText;
 };
 
 struct CompletGameDescription {

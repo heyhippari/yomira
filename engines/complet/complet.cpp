@@ -244,10 +244,12 @@ void CompletEngine::loadFont() {
 		if (_font && (_menuStyle->outlinedMenu || _menuStyle->plainMenu)) {
 			stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 			if (stream) {
-				if (_menuStyle->plainMenu)
-					_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 30, Graphics::kTTFSizeModeCharacter);
-				else
+				if (_menuStyle->plainMenu) {
+					const int xdpi = _menuStyle->menuFontWidth ? _menuStyle->menuFontWidth * 72 / _menuStyle->menuFontSize : 72;
+					_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _menuStyle->menuFontSize, Graphics::kTTFSizeModeCharacter, xdpi, 72);
+				} else {
 					_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 32, Graphics::kTTFSizeModeCell, 100, 72);
+				}
 			}
 		}
 	}
@@ -500,16 +502,26 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 		if (style.plainMenu) {
 			const Graphics::Font *font = _menuFont ? _menuFont : _font;
 			const int x = layout.left + layout.width / 2 - text.size() * charAdvance / 2;
-			const int y = layout.top + 2 + i * rowHeight - MAX(0, (font->getFontHeight() - 30) / 2);
+			const int y = layout.top + 2 + i * rowHeight - MAX(0, (font->getFontHeight() - style.menuFontSize) / 2);
 			const uint32 textColor = i == _hover ? style.hoverTextColor : style.idleTextColor;
 			const uint32 color = _format.RGBToColor((textColor >> 16) & 0xff, (textColor >> 8) & 0xff, textColor & 0xff);
 			const uint32 shadow = _format.RGBToColor((style.textShadowColor >> 16) & 0xff, (style.textShadowColor >> 8) & 0xff, style.textShadowColor & 0xff);
 			for (uint j = 0; j < text.size(); j++) {
 				const int glyphX = x + j * charAdvance;
-				if (i == _hover)
-					font->drawChar(&screen, text[j], glyphX + 1, y + 1, shadow);
-				font->drawChar(&screen, text[j], glyphX + 1, y, color);
-				font->drawChar(&screen, text[j], glyphX, y, color);
+				const int glyphY = y + (i == _hover && style.outlineSelectedText ? 1 : 0);
+				if (i == _hover) {
+					if (style.outlineSelectedText) {
+						for (int offsetY = -1; offsetY <= 1; offsetY++) {
+							font->drawChar(&screen, text[j], glyphX - 1, glyphY + offsetY, shadow);
+							font->drawChar(&screen, text[j], glyphX + 1, glyphY + offsetY, shadow);
+						}
+					} else {
+						font->drawChar(&screen, text[j], glyphX + 1, glyphY + 1, shadow);
+					}
+				}
+				if (style.menuFontBold)
+					font->drawChar(&screen, text[j], glyphX + 1, glyphY, color);
+				font->drawChar(&screen, text[j], glyphX, glyphY, color);
 			}
 			continue;
 		}
@@ -583,9 +595,14 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 		}
 	}
 
-	if (style.showQuickSaveLoad)
-		drawFrameRect(screen, scaleX(0x200), scaleY(1), scaleX(0x4d), scaleY(0xe),
-				layout.left + layout.width - scaleX(0x5d), layout.top + layout.rows * rowHeight + scaleY(2));
+	if (style.showQuickSaveLoad) {
+		if (_xexLayout)
+			drawFrameRect(screen, 121, 291, 75, 13,
+					layout.left + layout.width - 93, layout.top + layout.rows * rowHeight - 1);
+		else
+			drawFrameRect(screen, scaleX(0x200), scaleY(1), scaleX(0x4d), scaleY(0xe),
+					layout.left + layout.width - scaleX(0x5d), layout.top + layout.rows * rowHeight + scaleY(2));
+	}
 }
 
 int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {
@@ -629,7 +646,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 			return kButtonNone;
 		int x = pos.x - layout.left - layout.width;
 		int y = pos.y - layout.top - layout.rows * scaleY(_menuStyle->rowHeight);
-		if (y < scaleY(2) || y >= scaleY(0x10))
+		if (y < (_xexLayout ? -1 : scaleY(2)) || y >= (_xexLayout ? 12 : scaleY(0x10)))
 			return kButtonNone;
 		if (x > -scaleX(0x5d) && x < -scaleX(0x39))
 			return kButtonSave;
