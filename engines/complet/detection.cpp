@@ -32,12 +32,13 @@ static const DebugChannelDef debugFlagList[] = {
 };
 
 static const PlainGameDescriptor completGames[] = {
-	{"mamatuma", "Mama! Tsuma?"},
-	{"matty", "Matty"},
-	{"yagai", "Yagai Gakushuu"},
-	{"koisuruscience", "Koi Suru Science"},
 	{"collection", "Collection ~Shuushuu Sareta Akumu~"},
 	{"case266", "Case 266 ~266 Gou Jiken~"},
+	{"bokunohimitsutaiken", "Boku no Himitsu Taiken"},
+	{"koisuruscience", "Koi Suru Science"},
+	{"matty", "Matty"},
+	{"yagai", "Yagai Gakushuu"},
+	{"mamatuma", "Mama! Tsuma?"},
 	{nullptr, nullptr}
 };
 

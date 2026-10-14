@@ -114,27 +114,51 @@ static const CompletGallery kCollectionGallery = {
 static const CompletGameDescription gameDescriptions[] = {
 	{
 		{
-			"mamatuma",
+			"collection",
 			nullptr,
-			AD_ENTRY1s("mpx/startup.mpx", "9de255cdc728753d982abb61ad6cc7e2", 2390),
+			AD_ENTRY1s("mpx/startup.mpx", "2dd5b65ed0e30b913a725d5a4fcd2356", 2225),
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
+		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery
 	},
 	{
 		{
-			"mamatuma",
-			"Updated",
-			AD_ENTRY1s("mpx/startup.mpx", "05b01d4bec391bfc0ee93465a4954cb5", 2453),
+			"case266",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "a3395e80f6ac700372f223d32744b5e6", 1666),
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
+		640, 480, true, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery
+	},
+	{
+		{
+			"bokunohimitsutaiken",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "f63e47a50859b39bee96367e8605c207", 2155),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO2(COMPLET_GUIO, GUIO_MIDIGM)
+		},
+		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery
+	},
+	{
+		{
+			"koisuruscience",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "d5aa4f549eb99b106efc3ce304252251", 1957),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO2(COMPLET_GUIO, GUIO_NOMIDI)
+		},
+		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -176,39 +200,27 @@ static const CompletGameDescription gameDescriptions[] = {
 	},
 	{
 		{
-			"koisuruscience",
+			"mamatuma",
 			nullptr,
-			AD_ENTRY1s("mpx/startup.mpx", "d5aa4f549eb99b106efc3ce304252251", 1957),
+			AD_ENTRY1s("mpx/startup.mpx", "9de255cdc728753d982abb61ad6cc7e2", 2390),
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO2(COMPLET_GUIO, GUIO_NOMIDI)
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
-			"collection",
-			nullptr,
-			AD_ENTRY1s("mpx/startup.mpx", "2dd5b65ed0e30b913a725d5a4fcd2356", 2225),
+			"mamatuma",
+			"Updated",
+			AD_ENTRY1s("mpx/startup.mpx", "05b01d4bec391bfc0ee93465a4954cb5", 2453),
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery
-	},
-	{
-		{
-			"case266",
-			nullptr,
-			AD_ENTRY1s("mpx/startup.mpx", "a3395e80f6ac700372f223d32744b5e6", 1666),
-			Common::JA_JPN,
-			Common::kPlatformWindows,
-			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
-		},
-		640, 480, true, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		AD_TABLE_END_MARKER,
