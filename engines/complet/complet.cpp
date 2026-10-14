@@ -96,7 +96,8 @@ static const char *const kFontFiles[] = {
 
 CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &description) :
 		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery), _xexLayout(description.xexLayout),
-		_fullScreenMessages(description.messageLayout == kMessageFullScreen), _waitUnitMillis(description.waitUnitMillis),
+		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
+		_framedMessages(description.messageLayout == kMessageFramedDialogue), _waitUnitMillis(description.waitUnitMillis),
 		_midiOnly(description.midiOnly), _screenWidth(description.screenWidth), _screenHeight(description.screenHeight),
 		_audio(_mixer), _script(this) {
 }
@@ -376,6 +377,19 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 			const int columns = _messageLines.empty() ? 0 : _messageLines.back().size();
 			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
 					26 + columns * 28, 25 + line * 24, _format.RGBToColor(0xff, 0xff, 0xff));
+		} else if (_framedMessages) {
+			const byte level = (_indicatorFrame % 8 + 1) * 31;
+			byte red = 0, green = 0, blue = 0;
+			switch (_indicatorFrame / 8) {
+			case 0: red = 248; blue = level; break;
+			case 1: red = 248 - level; blue = 248; break;
+			case 2: green = level; blue = 248; break;
+			case 3: green = 248; blue = 248 - level; break;
+			case 4: red = level; green = 248; break;
+			default: red = 248; green = 248 - level; break;
+			}
+			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
+					580, 446, _format.RGBToColor(red, green, blue));
 		} else if (_xexLayout) {
 			drawFrameRect(screen, 0x40 + _indicatorFrame * 0x1a, _autoMode ? 0x0c : 0,
 					0x1a, 0x0c, 0x24c, 0x1e0 - 0x22);
@@ -439,13 +453,16 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		}
 	}
 
-	const uint32 shadow = _fullScreenMessages ? _format.RGBToColor(0x18, 0x18, 0x30) : _format.RGBToColor(0x3f, 0x3f, 0x7f);
+	if (_framedMessages)
+		drawFrameRect(screen, 0, 318, 640, 162, 0, 318, true);
+
+	const uint32 shadow = (_fullScreenMessages || _framedMessages) ? _format.RGBToColor(0x18, 0x18, 0x30) : _format.RGBToColor(0x3f, 0x3f, 0x7f);
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (uint i = 0; i < _messageLines.size(); i++) {
 		int y = _fullScreenMessages ? 23 + i * 24 : (_xexLayout ? 0x14e + i * kMessageLineHeight : scaleY(kMessageTop + i * kMessageLineHeight));
 		int x = _fullScreenMessages ? 24 : (_xexLayout ? 0x1e : scaleX(kMessageLeft));
 		int advance = _xexLayout ? kMessageCharAdvance : scaleX(kMessageCharAdvance);
-		if (_fullScreenMessages) {
+		if (_fullScreenMessages || _framedMessages) {
 			for (int offsetY = -1; offsetY < 2; offsetY++) {
 				for (int offsetX = -1; offsetX < 3; offsetX++)
 					drawText(screen, _messageLines[i], x + offsetX, y + offsetY, shadow, advance);
@@ -913,8 +930,8 @@ bool CompletEngine::waitClick() {
 			(_autoMode && !_messageHidden && !_audio.isVoicePlaying() && g_system->getMillis() - start >= readTime);
 
 		// The first frame appears after one period, like the original timer
-		uint32 periods = (g_system->getMillis() - start) / kIndicatorFrameDelay;
-		int frame = periods ? periods % 8 : -1;
+		uint32 periods = (g_system->getMillis() - start) / (_framedMessages ? 30 : kIndicatorFrameDelay);
+		int frame = periods ? periods % (_framedMessages ? 48 : 8) : -1;
 		if (!advance && frame != _indicatorFrame) {
 			_indicatorFrame = frame;
 			present();
@@ -1087,7 +1104,7 @@ int CompletEngine::messageLineChars() const {
 }
 
 int CompletEngine::messageMaxLines() const {
-	return _fullScreenMessages ? 18 : kMessageMaxLines;
+	return _fullScreenMessages ? 18 : (_framedMessages ? 5 : kMessageMaxLines);
 }
 
 void CompletEngine::newMessageLine() {
@@ -1100,7 +1117,7 @@ void CompletEngine::newMessageLine() {
 		_readingSpeaker = false;
 	}
 	_messageLines.push_back(Common::U32String());
-	if (_fullScreenMessages) {
+	if (_fullScreenMessages || _framedMessages) {
 		for (uint column = 0; column < _messageIndent; column++)
 			_messageLines.back() += 0x3000;
 	}
@@ -1118,10 +1135,10 @@ void CompletEngine::printChar(uint32 ch) {
 			return;
 	}
 
-	if (_fullScreenMessages && ch == '_')
+	if ((_fullScreenMessages || _framedMessages) && ch == '_')
 		ch = 0x3000;
 	_messageLines.back() += ch;
-	if (_fullScreenMessages) {
+	if (_fullScreenMessages || _framedMessages) {
 		if (ch == 0x3010) {
 			_readingSpeaker = true;
 			_messageIndent = 0;
@@ -1337,7 +1354,9 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 	case 'e':
 		if (_replaying)
 			break;
-		if (atoi(args.c_str()) == 10)
+		if (atoi(args.c_str()) == 1 && _framedMessages)
+			runMap();
+		else if (atoi(args.c_str()) == 10)
 			showLogo();
 		else if (atoi(args.c_str()) == 11)
 			runGallery();

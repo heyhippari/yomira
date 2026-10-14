@@ -156,6 +156,108 @@ bool CompletEngine::runGroupedGallery(int group) {
 	return !interrupted();
 }
 
+bool CompletEngine::runMap() {
+	struct MapRegion {
+		int left, top, right, bottom;
+		int previewX, previewY;
+	};
+	const MapRegion regions[] = {
+		{44, 112, 76, 164, 240, 180},
+		{76, 372, 139, 418, 240, 180},
+		{410, 386, 492, 424, 240, 180},
+		{370, 57, 450, 114, 190, 180},
+		{138, 90, 228, 138, 240, 180},
+		{170, 241, 262, 310, 280, 110},
+		{342, 166, 489, 249, 150, 20},
+		{490, 166, 639, 249, 170, 20},
+		{342, 250, 489, 328, 150, 40},
+		{490, 250, 639, 328, 170, 40},
+		{171, 361, 259, 414, 300, 180},
+		{323, 134, 353, 161, 150, 240}
+	};
+	auto regionAt = [&](const Common::Point &point) {
+		for (uint region = 0; region < ARRAYSIZE(regions); region++) {
+			const MapRegion &bounds = regions[region];
+			if (point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom)
+				return (int)region;
+		}
+		return -1;
+	};
+
+	const bool restoreMessage = _messageVisible;
+	_messageVisible = false;
+	_skipMode = false;
+	Common::Array<byte> previews;
+	if (!loadImage("pt01", previews) || !showFullImage("map", true)) {
+		_messageVisible = restoreMessage;
+		return false;
+	}
+	Common::Point pointer = g_system->getEventManager()->getMousePos();
+	int selected = regionAt(pointer);
+	bool redraw = true;
+	bool accepted = false;
+	while (!accepted && !interrupted()) {
+		Common::Event event;
+		while (!accepted && g_system->getEventManager()->pollEvent(event)) {
+			if (handleSkipAction(event))
+				continue;
+			if (event.type == Common::EVENT_MOUSEMOVE || event.type == Common::EVENT_LBUTTONUP) {
+				pointer = event.mouse;
+				selected = regionAt(pointer);
+				redraw = true;
+				accepted = event.type == Common::EVENT_LBUTTONUP && selected >= 0;
+			} else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
+				int direction = 0;
+				if (event.customType == kActionRight || event.customType == kActionDown)
+					direction = 1;
+				else if (event.customType == kActionLeft || event.customType == kActionUp)
+					direction = -1;
+				else if (event.customType == kActionAdvance)
+					accepted = selected >= 0;
+				if (direction) {
+					const int count = ARRAYSIZE(regions);
+					selected = selected < 0 ? (direction > 0 ? 0 : count - 1) : (selected + direction + count) % count;
+					const MapRegion &bounds = regions[selected];
+					pointer = Common::Point((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2);
+					redraw = true;
+				}
+			}
+		}
+		if (redraw && !accepted && !interrupted()) {
+			Common::Array<byte> view = _scene;
+			if (selected >= 0) {
+				const MapRegion &region = regions[selected];
+				const int sourceX = (selected % 4) * 160;
+				const int sourceY = (selected / 4) * 120;
+				for (int row = 0; row < 120; row++) {
+					const byte *src = &previews[((_screenHeight - 1 - sourceY - row) * _screenWidth + sourceX) * 3];
+					byte *dst = &view[((_screenHeight - 1 - region.previewY - row) * _screenWidth + region.previewX) * 3];
+					memcpy(dst, src, 160 * 3);
+				}
+			}
+			const byte *frame = _frameImage.getPixels();
+			if (pointer.y >= 0 && pointer.y < _screenHeight)
+				memcpy(&view[(_screenHeight - 1 - pointer.y) * _screenWidth * 3], frame + 240 * _screenWidth * 3, _screenWidth * 3);
+			if (pointer.x >= 0 && pointer.x < _screenWidth) {
+				for (int row = 0; row < _screenHeight; row++) {
+					const byte *src = frame + ((399 - row % 160) * _screenWidth + 320) * 3;
+					memcpy(&view[((_screenHeight - 1 - row) * _screenWidth + pointer.x) * 3], src, 3);
+				}
+			}
+			presentBuffer(view.data());
+			redraw = false;
+		}
+		refreshCursor();
+		if (!accepted)
+			g_system->delayMillis(10);
+	}
+	if (accepted)
+		_script.setVariable(0x1fe, selected + 1);
+	_messageVisible = restoreMessage;
+	present();
+	return !interrupted();
+}
+
 bool CompletEngine::runGallery() {
 	const int thumbWidth = _screenWidth / kCellColumns;
 	const int thumbHeight = _screenHeight / kCellColumns;

@@ -91,6 +91,21 @@ static const char *const kCollectionCgNames[] = {
 };
 
 static const uint16 kCollectionCgGroupEnds[] = {24, 47, 69, 98, 125, 143, 154};
+static const char *const kCase266CgNames[] = {
+	"CG01", "CG02", "CG03", "CG04", "CG05", "CG06", "CG07", "CG07N", "CG08", "CG09",
+	"CG10", "CG11", "CG12", "CG13", "CG14", "CG15", "CG16", "CG17", "CG18", "CG19",
+	"CG20", "CG20R", "CG21", "CG22", "CG23", "CG24", "CG25", "CG26", "CG27", "CG28",
+	"CG29", "CG30", "CG31", "CG32", "CG33", "CG34", "CG35", "CG36", "CG37", "CG38",
+	"CG39", "CG40", "CG41", "CG42", "CG43", "CG44", "CG45", "CG45R", "CG46", "CG47",
+	"CG48", "CG49", "CG50", "CG51", "CG52", "CG53", "CG54", "CG55", "CG56", "CG57",
+	"CG58", "CG59", "CG60", "CG61", "CG62", "CG63", "CG64", "CG65", "CG66", "CG67",
+	"CG68", "CG100", "CG101", "CG102", "CG103", "CG104", "CG105"
+};
+
+static const uint16 kCase266CgGroupEnds[] = {76};
+static const CompletGallery kCase266Gallery = {
+	kCase266CgNames, ARRAYSIZE(kCase266CgNames), kCase266CgGroupEnds, ARRAYSIZE(kCase266CgGroupEnds)
+};
 static const CompletGallery kC4Gallery = {kC4CgNames, ARRAYSIZE(kC4CgNames), nullptr, 0};
 static const CompletGallery kCollectionGallery = {
 	kCollectionCgNames, ARRAYSIZE(kCollectionCgNames), kCollectionCgGroupEnds, ARRAYSIZE(kCollectionCgGroupEnds)
@@ -182,6 +197,18 @@ static const CompletGameDescription gameDescriptions[] = {
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
 		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery
+	},
+	{
+		{
+			"case266",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "a3395e80f6ac700372f223d32744b5e6", 1666),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
+		},
+		640, 480, true, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery
 	},
 	{
 		AD_TABLE_END_MARKER,

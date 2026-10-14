@@ -56,7 +56,8 @@ struct CompletMenuStyle {
 
 enum CompletMessageLayout {
 	kMessageDialogue,
-	kMessageFullScreen
+	kMessageFullScreen,
+	kMessageFramedDialogue
 };
 
 struct CompletGallery {

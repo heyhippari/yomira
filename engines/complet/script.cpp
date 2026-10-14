@@ -222,8 +222,9 @@ int16 Script::getValue(int16 ref) {
 	}
 	if (index == 0x1ff)
 		return g_system->getMillis() % 0x7fff;
-	// Pointer selection result and tick counter
-	if (index == 0x1fd || index == 0x1fe)
+	if (index == 0x1fe)
+		return _globals[index];
+	if (index == 0x1fd)
 		return 0;
 	if (index >= kFlagBase && index < kFlagBase + kFlagCount)
 		return _flags[index - kFlagBase];

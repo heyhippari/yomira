@@ -128,6 +128,7 @@ private:
 	void recordSeenCg(const Common::String &name);
 	bool runGallery();
 	bool runGroupedGallery(int group);
+	bool runMap();
 	void blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const;
 	bool waitAnyInput();
 
@@ -184,6 +185,7 @@ private:
 	const CompletGallery *_gallery = nullptr;
 	bool _xexLayout = false;
 	bool _fullScreenMessages = false;
+	bool _framedMessages = false;
 	uint16 _waitUnitMillis = 100;
 	bool _midiOnly = false;
 	bool _blackKeySprites = false;
