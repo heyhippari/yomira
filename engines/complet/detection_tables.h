@@ -92,7 +92,21 @@ static const CompletGameDescription gameDescriptions[] = {
 		{
 			"matty",
 			nullptr,
-			AD_ENTRY1s("mpx/startup.mpx", "c4b0060e5952f95c75c058835297fd4c", 3562),
+			AD_ENTRY2s("mpx/startup.mpx", "c4b0060e5952f95c75c058835297fd4c", 3562,
+					   "mpx/e-home.mpx", "7f61e282ce09ae8b6bfa65fde129db38", 7469),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+		},
+		640, 480, true, kXexMenuStyle
+	},
+	{
+		{
+			"matty",
+			"Updated",
+			AD_ENTRY2s("mpx/startup.mpx", "c4b0060e5952f95c75c058835297fd4c", 3562,
+					   "mpx/e-home.mpx", "d0773d14d5c3b460b93a904856f3ff5d", 8377),
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
