@@ -36,25 +36,28 @@ enum {
 	kThumbHeight = 60
 };
 
-// Decoder for the C4 engine's "GD3" images (GDS\*.GD)
+// Decoder for the C4 engine's GD2/GD3 images (GDS\*.GD)
 class GdImage {
 public:
 	GdImage();
 
 	bool load(Common::SeekableReadStream &stream);
 	bool loadFromName(const Common::String &name);
+	bool isGd2() const { return _isGd2; }
 
 	// 24bpp, B,G,R byte order, bottom-up rows, kScreenWidth x kScreenHeight
 	const byte *getPixels() const { return _pixels.data(); }
 
-	// The 80x60 preview stored in the file header, same pixel layout
+	// An 80x60 preview, same pixel layout
 	static bool loadThumbnail(const Common::String &name, Common::Array<byte> &out);
 
 private:
-	bool decodeLz(const byte *data, uint32 size, uint32 pos);
-	bool decodePredictive(const byte *data, uint32 size, uint32 pos);
+	bool decodeLz(const byte *data, uint32 size, uint32 pos, Common::Array<byte> &pixels);
+	bool decodePredictive(const byte *data, uint32 size, uint32 pos, uint32 width, uint32 height,
+			Common::Array<byte> &pixels);
 
 	Common::Array<byte> _pixels;
+	bool _isGd2 = false;
 };
 
 } // End of namespace Complet

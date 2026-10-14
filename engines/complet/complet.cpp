@@ -155,8 +155,10 @@ void CompletEngine::refreshCursor() {
 }
 
 void CompletEngine::initCursor() {
-	// The arrow cursor is resource 104 of the game executable
+	// Both engine executables store the arrow cursor as resource 104
 	Common::WinResources *exe = Common::WinResources::createFromEXE("c4.exe");
+	if (!exe)
+		exe = Common::WinResources::createFromEXE("xex.exe");
 	Graphics::WinCursorGroup *group = exe ? Graphics::WinCursorGroup::createCursorGroup(exe, 104) : nullptr;
 	if (group && !group->cursors.empty()) {
 		CursorMan.replaceCursor(group->cursors[0].cursor);
@@ -252,7 +254,9 @@ void CompletEngine::loadFont() {
 
 bool CompletEngine::loadFrameImage() {
 	// MESFRAME.GD holds the message frame and glyph sheet, NULL.GD is the fallback
-	return _frameImage.loadFromName("mesframe.gd") || _frameImage.loadFromName("null.gd");
+	const bool loaded = _frameImage.loadFromName("mesframe.gd") || _frameImage.loadFromName("null.gd");
+	_xexLayout = loaded && _frameImage.isGd2();
+	return loaded;
 }
 
 enum {
@@ -344,9 +348,22 @@ void CompletEngine::present() {
 void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 	if (!_messageHidden)
 		drawMessage(screen);
-	// Animated "CLICK" (or "AUTO") marker from the top left of the frame image
-	if (_indicatorFrame >= 0 && !_messageHidden)
-		drawFrameRect(screen, (_indicatorFrame + (_autoMode ? 8 : 0)) * 32, 0, 32, 32, 0x2e7, kScreenHeight - 0x34, true);
+	if (_indicatorFrame >= 0 && !_messageHidden) {
+		if (_xexLayout) {
+			const int nativeX = 0x40 + _indicatorFrame * 0x1a;
+			const int sourceX = nativeX * kScreenWidth / 640;
+			const int sourceRight = (nativeX + 0x1a) * kScreenWidth / 640;
+			const int sourceY = _autoMode ? 0x0c : 0;
+			const int destX = 0x244 * kScreenWidth / 640;
+			const int destY = (0x1e0 - 0x22) * kScreenHeight / 480;
+			drawFrameRect(screen, sourceX, sourceY, sourceRight - sourceX, 0x0c * kScreenHeight / 480,
+					destX, destY, true);
+		} else {
+			// Animated "CLICK" (or "AUTO") marker from the top left of the C4 frame image
+			drawFrameRect(screen, (_indicatorFrame + (_autoMode ? 8 : 0)) * 32, 0, 32, 32,
+					0x2e7, kScreenHeight - 0x34, true);
+		}
+	}
 	if (_menu)
 		drawMenu(screen);
 }
@@ -406,7 +423,7 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	}
 
 	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
-	if (!_menu) {
+	if (!_menu && !_xexLayout) {
 		drawFrameRect(screen, 0x200, 0, 0x4d, 0xf, kSaveButtonLeft - 1, kButtonTop - 1);
 		drawFrameRect(screen, 0x200, 0x10, 0x1b, 0xf, kLogButtonLeft - 1, kButtonTop - 1);
 	}
@@ -481,7 +498,8 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	}
 
 	// Q-SAVE and Q-LOAD below the bottom right of the window
-	drawFrameRect(screen, 0x200, 1, 0x4d, 0xe, layout.left + layout.width - 0x5d, layout.top + layout.rows * kMenuRowHeight + 2);
+	if (!_xexLayout)
+		drawFrameRect(screen, 0x200, 1, 0x4d, 0xe, layout.left + layout.width - 0x5d, layout.top + layout.rows * kMenuRowHeight + 2);
 }
 
 int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {

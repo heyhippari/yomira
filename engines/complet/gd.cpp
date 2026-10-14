@@ -29,7 +29,10 @@ namespace {
 
 const uint32 kPixelCount = kScreenWidth * kScreenHeight;
 const uint32 kBufferSize = kPixelCount * 3;
+const uint32 kGd2DataOffset = 0x2346;
 const uint32 kGd3DataOffset = 0x3756;
+const uint32 kGd2Width = 640;
+const uint32 kGd2Height = 480;
 
 // MSB-first bit reader
 class BitReader {
@@ -86,6 +89,27 @@ bool GdImage::loadThumbnail(const Common::String &name, Common::Array<byte> &out
 	if (!file.open(Common::Path(name + ".gd")))
 		return false;
 
+	byte magic[3];
+	if (file.read(magic, sizeof(magic)) != sizeof(magic))
+		return false;
+	if (memcmp(magic, "GD3", sizeof(magic))) {
+		if (!file.seek(0))
+			return false;
+		GdImage image;
+		if (!image.load(file))
+			return false;
+
+		out.resize(kThumbWidth * kThumbHeight * 3);
+		const byte *pixels = image.getPixels();
+		for (uint y = 0; y < kThumbHeight; y++) {
+			const byte *src = pixels + (y * 10 * kScreenWidth) * 3;
+			byte *dst = out.data() + y * kThumbWidth * 3;
+			for (uint x = 0; x < kThumbWidth; x++)
+				memcpy(dst + x * 3, src + x * 10 * 3, 3);
+		}
+		return true;
+	}
+
 	const uint32 kRowsBytes = 0x3750;
 	out.resize(kThumbWidth * kThumbHeight * 3);
 	memset(out.data(), 0, out.size());
@@ -100,37 +124,69 @@ bool GdImage::load(Common::SeekableReadStream &stream) {
 	if (stream.read(data.data(), size) != size)
 		return false;
 
-	// Only the "GD3" flavour has a fixed header; the type byte precedes the payload
-	uint32 pos = (size > 3 && data[0] == 'G' && data[1] == 'D' && data[2] == '3') ? kGd3DataOffset : 2;
+	uint32 pos = 2;
+	bool gd3 = size >= 3 && !memcmp(data.data(), "GD3", 3);
+	bool gd2 = size >= 3 && !memcmp(data.data(), "GD2", 3);
+	const uint32 width = gd2 ? kGd2Width : (uint32)kScreenWidth;
+	const uint32 height = gd2 ? kGd2Height : (uint32)kScreenHeight;
+	if (gd3)
+		pos = kGd3DataOffset;
+	else if (gd2)
+		pos = kGd2DataOffset;
 	if (pos > size)
 		return false;
 
+	Common::Array<byte> pixels(width * height * 3);
+	bool decoded = false;
 	switch (data[pos - 2]) {
 	case 'b':
-		if (size < kGd3DataOffset + kBufferSize)
+		if (!gd3)
 			return false;
-		memcpy(_pixels.data(), data.data() + kGd3DataOffset, kBufferSize);
-		return true;
+		if (size < kGd3DataOffset + pixels.size())
+			return false;
+		memcpy(pixels.data(), data.data() + kGd3DataOffset, pixels.size());
+		decoded = true;
+		break;
 	case 'l':
-		return decodeLz(data.data(), size, pos);
+		decoded = decodeLz(data.data(), size, pos, pixels);
+		break;
 	case 'p':
-		return decodePredictive(data.data(), size, pos);
+		decoded = decodePredictive(data.data(), size, pos, width, height, pixels);
+		break;
 	default:
 		return false;
 	}
+	if (!decoded)
+		return false;
+	_isGd2 = gd2;
+
+	if (!gd2) {
+		_pixels = pixels;
+		return true;
+	}
+
+	_pixels.resize(kBufferSize);
+	for (uint y = 0; y < kScreenHeight; y++) {
+		const byte *srcRow = pixels.data() + (y * kGd2Height / kScreenHeight) * kGd2Width * 3;
+		byte *dst = _pixels.data() + y * kScreenWidth * 3;
+		for (uint x = 0; x < kScreenWidth; x++)
+			memcpy(dst + x * 3, srcRow + (x * kGd2Width / kScreenWidth) * 3, 3);
+	}
+	return true;
 }
 
 // LZSS with a 64KB ring buffer whose write position starts at 1
-bool GdImage::decodeLz(const byte *data, uint32 size, uint32 pos) {
+bool GdImage::decodeLz(const byte *data, uint32 size, uint32 pos, Common::Array<byte> &pixels) {
 	BitReader bits(data, size, pos);
-	byte *out = _pixels.data();
+	byte *out = pixels.data();
 	byte *window = new byte[0x10000]();
 	uint32 wpos = 1, opos = 0;
+	const uint32 bufferSize = pixels.size();
 
-	while (!bits.overrun()) {
+	while (!bits.overrun() && opos < bufferSize) {
 		if (bits.readBit()) {
 			byte b = bits.readBits(8);
-			if (opos >= kBufferSize)
+			if (opos >= bufferSize)
 				break;
 			out[opos++] = b;
 			window[wpos] = b;
@@ -140,7 +196,7 @@ bool GdImage::decodeLz(const byte *data, uint32 size, uint32 pos) {
 			if (offset == 0)
 				break;
 			uint32 length = bits.readBits(4) + 3;
-			for (uint32 i = 0; i < length && opos < kBufferSize; i++) {
+			for (uint32 i = 0; i < length && opos < bufferSize; i++) {
 				byte b = window[(offset + i) & 0xffff];
 				out[opos++] = b;
 				window[wpos] = b;
@@ -150,16 +206,18 @@ bool GdImage::decodeLz(const byte *data, uint32 size, uint32 pos) {
 	}
 
 	delete[] window;
-	return opos == kBufferSize;
+	return opos == bufferSize;
 }
 
 // Sparse pixel stream: each record places a colour at a skip distance and
 // optionally repeats it at neighbouring pixels. Unwritten (white) pixels are
 // filled from the previous pixel afterwards.
-bool GdImage::decodePredictive(const byte *data, uint32 size, uint32 pos) {
+bool GdImage::decodePredictive(const byte *data, uint32 size, uint32 pos, uint32 width, uint32 height,
+		Common::Array<byte> &pixels) {
 	BitReader bits(data, size, pos);
-	byte *out = _pixels.data();
-	memset(out, 0xff, kBufferSize);
+	byte *out = pixels.data();
+	const uint32 pixelCount = width * height;
+	memset(out, 0xff, pixels.size());
 
 	uint32 cur = 0;
 	while (!bits.overrun()) {
@@ -179,7 +237,7 @@ bool GdImage::decodePredictive(const byte *data, uint32 size, uint32 pos) {
 		byte color[3];
 		for (int i = 0; i < 3; i++)
 			color[i] = bits.readBits(8);
-		if (p >= kPixelCount)
+		if (p >= pixelCount)
 			return false;
 		memcpy(out + p * 3, color, 3);
 
@@ -190,19 +248,19 @@ bool GdImage::decodePredictive(const byte *data, uint32 size, uint32 pos) {
 				case 0:
 					if (!bits.readBit())
 						goto recordDone;
-					q += bits.readBit() ? 802 : 798;
+					q += bits.readBit() ? width + 2 : width - 2;
 					break;
 				case 1:
-					q += 799;
+					q += width - 1;
 					break;
 				case 2:
-					q += 800;
+					q += width;
 					break;
 				default:
-					q += 801;
+					q += width + 1;
 					break;
 				}
-				if (q >= kPixelCount || bits.overrun())
+				if (q >= pixelCount || bits.overrun())
 					return false;
 				memcpy(out + q * 3, color, 3);
 			}
@@ -212,7 +270,7 @@ recordDone:
 	}
 
 	byte last[3] = {0, 0, 0};
-	for (uint32 i = 0; i < kPixelCount; i++) {
+	for (uint32 i = 0; i < pixelCount; i++) {
 		byte *px = out + i * 3;
 		if (px[0] == 0xff && px[1] == 0xff && px[2] == 0xff)
 			memcpy(px, last, 3);

@@ -50,6 +50,15 @@ static const ADGameDescription gameDescriptions[] = {
 		ADGF_NO_FLAGS,
 		COMPLET_GUIO
 	},
+	{
+		"koisuruscience",
+		nullptr,
+		AD_ENTRY1s("mpx/startup.mpx", "d5aa4f549eb99b106efc3ce304252251", 1957),
+		Common::JA_JPN,
+		Common::kPlatformWindows,
+		ADGF_NO_FLAGS,
+		COMPLET_GUIO
+	},
 	AD_TABLE_END_MARKER
 };
 

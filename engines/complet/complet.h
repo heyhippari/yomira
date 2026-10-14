@@ -168,6 +168,7 @@ private:
 	Common::Array<byte> _bg;
 	Common::String _bgName;
 	bool _bgPending = false;
+	bool _xexLayout = false;
 	// What _scene shows: a full-screen image, or a background with sprites
 	Common::String _sceneFull;
 	Common::String _sceneBg;
