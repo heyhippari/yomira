@@ -33,6 +33,7 @@ static const DebugChannelDef debugFlagList[] = {
 
 static const PlainGameDescriptor completGames[] = {
 	{"mamatuma", "Mama! Tsuma?"},
+	{"matty", "Matty"},
 	{"yagai", "Yagai Gakushuu"},
 	{"koisuruscience", "Koi Suru Science"},
 	{nullptr, nullptr}

@@ -42,6 +42,15 @@ static const ADGameDescription gameDescriptions[] = {
 		GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 	},
 	{
+		"matty",
+		nullptr,
+		AD_ENTRY1s("mpx/startup.mpx", "c4b0060e5952f95c75c058835297fd4c", 3562),
+		Common::JA_JPN,
+		Common::kPlatformWindows,
+		ADGF_NO_FLAGS,
+		GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+	},
+	{
 		"yagai",
 		nullptr,
 		AD_ENTRY1s("mpx/startup.mpx", "eae53720ffed59edbd447a6d16452cd4", 2691),
