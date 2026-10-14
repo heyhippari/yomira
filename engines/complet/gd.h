@@ -32,6 +32,8 @@ namespace Complet {
 enum {
 	kScreenWidth = 800,
 	kScreenHeight = 600,
+	kGd2Width = 640,
+	kGd2Height = 480,
 	kThumbWidth = 80,
 	kThumbHeight = 60
 };
@@ -44,8 +46,8 @@ public:
 	bool load(Common::SeekableReadStream &stream);
 	bool loadFromName(const Common::String &name);
 	bool isGd2() const { return _isGd2; }
-	int getWidth() const { return _isGd2 ? 640 : kScreenWidth; }
-	int getHeight() const { return _isGd2 ? 480 : kScreenHeight; }
+	int getWidth() const { return _isGd2 ? kGd2Width : kScreenWidth; }
+	int getHeight() const { return _isGd2 ? kGd2Height : kScreenHeight; }
 
 	// 24bpp, B,G,R byte order, bottom-up rows, native image dimensions
 	const byte *getPixels() const { return _pixels.data(); }

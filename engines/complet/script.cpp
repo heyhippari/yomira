@@ -234,11 +234,14 @@ int16 Script::getValue(int16 ref) {
 }
 
 void Script::setVariable(int index, int16 value) {
+	if (index < 0 || index >= kGlobalCount)
+		return;
+
 	if (index < kLocalVarLimit) {
 		Common::Array<int16> &locals = _locals[_scenario.getName()];
 		if ((uint)index < locals.size())
 			locals[index] = value;
-	} else if (index < kGlobalCount) {
+	} else {
 		_globals[index] = value;
 	}
 }

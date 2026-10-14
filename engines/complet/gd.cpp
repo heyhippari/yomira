@@ -31,8 +31,6 @@ const uint32 kPixelCount = kScreenWidth * kScreenHeight;
 const uint32 kBufferSize = kPixelCount * 3;
 const uint32 kGd2DataOffset = 0x2346;
 const uint32 kGd3DataOffset = 0x3756;
-const uint32 kGd2Width = 640;
-const uint32 kGd2Height = 480;
 
 // MSB-first bit reader
 class BitReader {
@@ -129,8 +127,8 @@ bool GdImage::load(Common::SeekableReadStream &stream) {
 	uint32 pos = 2;
 	bool gd3 = size >= 3 && !memcmp(data.data(), "GD3", 3);
 	bool gd2 = size >= 3 && !memcmp(data.data(), "GD2", 3);
-	const uint32 width = gd2 ? kGd2Width : (uint32)kScreenWidth;
-	const uint32 height = gd2 ? kGd2Height : (uint32)kScreenHeight;
+	const uint32 width = gd2 ? (uint32)kGd2Width : (uint32)kScreenWidth;
+	const uint32 height = gd2 ? (uint32)kGd2Height : (uint32)kScreenHeight;
 	if (gd3)
 		pos = kGd3DataOffset;
 	else if (gd2)
