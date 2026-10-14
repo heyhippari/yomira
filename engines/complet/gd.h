@@ -38,7 +38,7 @@ enum {
 	kThumbHeight = 60
 };
 
-// Decoder for the C4 engine's GD2/GD3 images (GDS\*.GD)
+// Decoder for the engine's GD/GD2/GD3 images (GDS\*.GD)
 class GdImage {
 public:
 	GdImage();
@@ -46,8 +46,8 @@ public:
 	bool load(Common::SeekableReadStream &stream);
 	bool loadFromName(const Common::String &name);
 	bool isGd2() const { return _isGd2; }
-	int getWidth() const { return _isGd2 ? kGd2Width : kScreenWidth; }
-	int getHeight() const { return _isGd2 ? kGd2Height : kScreenHeight; }
+	int getWidth() const { return _width; }
+	int getHeight() const { return _height; }
 
 	// 24bpp, B,G,R byte order, bottom-up rows, native image dimensions
 	const byte *getPixels() const { return _pixels.data(); }
@@ -62,6 +62,8 @@ private:
 
 	Common::Array<byte> _pixels;
 	bool _isGd2 = false;
+	int _width = kScreenWidth;
+	int _height = kScreenHeight;
 };
 
 } // End of namespace Complet

@@ -58,8 +58,7 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 class CompletMetaEngine : public AdvancedMetaEngine<Complet::CompletGameDescription> {
 public:
 	Common::Error createInstance(OSystem *system, Engine **engine, const Complet::CompletGameDescription *description) const override {
-		*engine = new Complet::CompletEngine(system, description->screenWidth, description->screenHeight, description->xexLayout,
-				description->menuStyle);
+		*engine = new Complet::CompletEngine(system, *description);
 		return Common::Error(Common::kNoError);
 	}
 

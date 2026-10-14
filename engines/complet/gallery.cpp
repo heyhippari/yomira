@@ -23,6 +23,7 @@
 #include "common/system.h"
 
 #include "complet/complet.h"
+#include "complet/detection.h"
 
 namespace Complet {
 
@@ -33,26 +34,10 @@ enum {
 	kExitCell = 99
 };
 
-static const char *const kCgNames[kCgCount] = {
-	"CG01", "CG02", "CG02R", "CG03", "CG03R", "CG04", "CG05", "CG05R", "CG06", "CG07",
-	"CG08", "CG09", "CG09R", "CG10", "CG11", "CG12", "CG13", "CG14", "CG15", "CG16",
-	"CG17", "CG18", "CG19", "CG20", "CG21", "CG22", "CG23", "CG24", "CG25", "CG26",
-	"CG27", "CG28", "CG29", "CG30", "CG31", "CG32", "CG33", "CG34", "CG35", "CG36",
-	"CG37", "CG37R", "CG38", "CG39", "CG40", "CG41", "CG41R", "CG42", "CG42R", "CG43",
-	"CG43R", "CG44", "CG44R", "CG45", "CG46", "CG47", "CG47R", "CG48", "CG49", "CG50",
-	"CG51", "CG51n", "CG51R", "CG52", "CG53", "CG54", "CG54R", "CG55", "CG56", "CG57",
-	"CG58", "CG59", "CG60", "CG60R", "CG61", "CG61R", "CG62", "CG63", "CG64", "CG65",
-	"CG66", "CG67", "CG68", "CG69", "CG70", "CG71", "CG72", "CG72R", "CG73", "CG74",
-	"CG75", "CG76", "CG76R", "CG77", "CG78", "CG79", "CG80", "CG81", "CG82", "CG83",
-	"CG83R", "CG84", "CG85", "CG86", "CG87", "CG88", "CG89", "CG90", "CG91", "CG92",
-	"CG93", "CG94", "CG94R", "CG95", "CG96", "CG97", "CG98", "CG99", "CG100", "CGSP1",
-	"CGSP2", "CGSP3", "CGSP4", "CGSP5"
-};
-
 // Full-screen graphics shown through the script are what unlock gallery entries
 void CompletEngine::recordSeenCg(const Common::String &name) {
-	for (int i = 0; i < kCgCount; i++) {
-		if (name.equalsIgnoreCase(kCgNames[i])) {
+	for (int i = 0; i < _gallery->count; i++) {
+		if (name.equalsIgnoreCase(_gallery->names[i])) {
 			if (!_seenCg[i]) {
 				_seenCg[i] = true;
 				saveCommonData();
@@ -63,7 +48,7 @@ void CompletEngine::recordSeenCg(const Common::String &name) {
 }
 
 void CompletEngine::unlockAllCgs() {
-	for (int i = 0; i < kCgCount; i++)
+	for (int i = 0; i < _gallery->count; i++)
 		_seenCg[i] = true;
 	saveCommonData();
 }
@@ -105,11 +90,77 @@ bool CompletEngine::waitAnyInput() {
 	return false;
 }
 
+bool CompletEngine::runGroupedGallery(int group) {
+	if (group < 0 || group >= _gallery->groupCount)
+		return true;
+	const int first = group ? _gallery->groupEnds[group - 1] + 1 : 0;
+	const int last = _gallery->groupEnds[group];
+	if (first > last || last >= _gallery->count)
+		return true;
+
+	const bool restoreMessage = _messageVisible;
+	_messageVisible = false;
+	Common::Array<byte> lockedOverlay;
+	loadImage("cgndisp", lockedOverlay);
+	int selected = first;
+	int displayed = -1;
+	bool leave = false;
+	while (!leave && !interrupted()) {
+		if (selected != displayed) {
+			Common::Array<byte> image;
+			if (!loadImage(_gallery->names[selected], image))
+				break;
+			if (!_seenCg[selected]) {
+				Common::Array<byte> locked(image.size());
+				memset(locked.data(), 0, locked.size());
+				for (int row = 0; row < _screenHeight / 2; row++) {
+					for (int column = 0; column < _screenWidth / 2; column++) {
+						const byte *src = &image[(row * 2 * _screenWidth + column * 2) * 3];
+						byte *dst = &locked[((row + _screenHeight / 4) * _screenWidth + column + _screenWidth / 4) * 3];
+						for (int channel = 0; channel < 3; channel++)
+							dst[channel] = src[channel] / 6;
+					}
+				}
+				if (!lockedOverlay.empty())
+					overlaySprite(locked, lockedOverlay);
+				image = locked;
+			}
+			presentBuffer(image.data());
+			displayed = selected;
+		}
+		Common::Event event;
+		while (!leave && g_system->getEventManager()->pollEvent(event)) {
+			int direction = 0;
+			if (event.type == Common::EVENT_LBUTTONUP)
+				direction = 1;
+			else if (event.type == Common::EVENT_RBUTTONUP)
+				direction = -1;
+			else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
+				if (event.customType == kActionAdvance || event.customType == kActionRight || event.customType == kActionBacklogForward)
+					direction = 1;
+				else if (event.customType == kActionLeft || event.customType == kActionBacklog)
+					direction = -1;
+				else if (event.customType == kActionHide)
+					leave = true;
+			}
+			if (direction > 0 && selected == last)
+				leave = true;
+			else
+				selected = MAX(first, selected + direction);
+		}
+		refreshCursor();
+		g_system->delayMillis(10);
+	}
+	_messageVisible = restoreMessage;
+	present();
+	return !interrupted();
+}
+
 bool CompletEngine::runGallery() {
 	const int thumbWidth = _screenWidth / kCellColumns;
 	const int thumbHeight = _screenHeight / kCellColumns;
 	Common::Array<int> seen;
-	for (int i = 0; i < kCgCount; i++) {
+	for (int i = 0; i < _gallery->count; i++) {
 		if (_seenCg[i])
 			seen.push_back(i);
 	}
@@ -130,7 +181,7 @@ bool CompletEngine::runGallery() {
 		int first = p * kCellsPerPage;
 		for (int i = 0; i < kCellsPerPage && first + i < count; i++) {
 			Common::Array<byte> thumb;
-			if (!GdImage::loadThumbnail(kCgNames[seen[first + i]], thumb)) {
+			if (!GdImage::loadThumbnail(_gallery->names[seen[first + i]], thumb)) {
 				thumb.resize(thumbWidth * thumbHeight * 3);
 				memset(thumb.data(), 0x7f, thumb.size());
 			}
@@ -145,12 +196,12 @@ bool CompletEngine::runGallery() {
 
 		if (_xexLayout) {
 			blitFrame(page, 0, 0xc0, 640, 48, 0, 0x1af);
-			int width = count * 500 / kCgCount;
+			int width = count * 500 / _gallery->count;
 			if (width) {
 				drawBox(page, _screenWidth, _screenHeight, 0x13, 0x1b8, width + 0x15, 0x1d8, black);
 				drawBox(page, _screenWidth, _screenHeight, 0x14, 0x1b9, width + 0x14, 0x1d7, yellow);
 			}
-			int tenths = count * 1000 / kCgCount;
+			int tenths = count * 1000 / _gallery->count;
 			if (tenths < 1000) {
 				if (tenths >= 100)
 					blitFrame(page, (tenths / 100) * 8, 0xb4, 8, 12, 0x20e, 0x1cf);
@@ -170,7 +221,7 @@ bool CompletEngine::runGallery() {
 		}
 
 		// Progress bar showing how many CGs have been seen
-		int width = count * scaleX(600) / kCgCount;
+		int width = count * scaleX(600) / _gallery->count;
 		if (width) {
 			drawBox(page, _screenWidth, _screenHeight, scaleX(0x13), scaleY(0x240), width + scaleX(0x15), scaleY(0x24e), black);
 			drawBox(page, _screenWidth, _screenHeight, scaleX(0x14), scaleY(0x241), width + scaleX(0x14), scaleY(0x24d), yellow);
@@ -179,7 +230,7 @@ bool CompletEngine::runGallery() {
 		blitFrame(page, scaleX(0x2b8), scaleY(0x24c), scaleX(10), scaleY(4), scaleX(0x10), scaleY(0x23c));
 		blitFrame(page, scaleX(0x2b8), scaleY(0x24c), scaleX(10), scaleY(12), width + scaleX(0xf), scaleY(0x234));
 
-		int tenths = count * 1000 / kCgCount;
+		int tenths = count * 1000 / _gallery->count;
 		const int digitY = scaleY(0x24f), digitSrcX = scaleX(0x250), labelY = scaleY(0x22a);
 		if (tenths < 1000) {
 			if (tenths >= 100)
@@ -299,7 +350,7 @@ bool CompletEngine::runGallery() {
 			}
 		} else if (activated >= 0) {
 			GdImage image;
-			if (image.loadFromName(Common::String(kCgNames[seen[page * kCellsPerPage + activated]]) + ".gd")) {
+			if (image.loadFromName(Common::String(_gallery->names[seen[page * kCellsPerPage + activated]]) + ".gd")) {
 				presentBuffer(image.getPixels());
 				ok = waitAnyInput();
 				if (ok)

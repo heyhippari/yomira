@@ -55,6 +55,47 @@ static const CompletMenuStyle kKoiMenuStyle = {
 	false, true, false, 0, 0, false, false
 };
 
+static const char *const kC4CgNames[] = {
+	"CG01", "CG02", "CG02R", "CG03", "CG03R", "CG04", "CG05", "CG05R", "CG06", "CG07",
+	"CG08", "CG09", "CG09R", "CG10", "CG11", "CG12", "CG13", "CG14", "CG15", "CG16",
+	"CG17", "CG18", "CG19", "CG20", "CG21", "CG22", "CG23", "CG24", "CG25", "CG26",
+	"CG27", "CG28", "CG29", "CG30", "CG31", "CG32", "CG33", "CG34", "CG35", "CG36",
+	"CG37", "CG37R", "CG38", "CG39", "CG40", "CG41", "CG41R", "CG42", "CG42R", "CG43",
+	"CG43R", "CG44", "CG44R", "CG45", "CG46", "CG47", "CG47R", "CG48", "CG49", "CG50",
+	"CG51", "CG51n", "CG51R", "CG52", "CG53", "CG54", "CG54R", "CG55", "CG56", "CG57",
+	"CG58", "CG59", "CG60", "CG60R", "CG61", "CG61R", "CG62", "CG63", "CG64", "CG65",
+	"CG66", "CG67", "CG68", "CG69", "CG70", "CG71", "CG72", "CG72R", "CG73", "CG74",
+	"CG75", "CG76", "CG76R", "CG77", "CG78", "CG79", "CG80", "CG81", "CG82", "CG83",
+	"CG83R", "CG84", "CG85", "CG86", "CG87", "CG88", "CG89", "CG90", "CG91", "CG92",
+	"CG93", "CG94", "CG94R", "CG95", "CG96", "CG97", "CG98", "CG99", "CG100", "CGSP1",
+	"CGSP2", "CGSP3", "CGSP4", "CGSP5"
+};
+
+static const char *const kCollectionCgNames[] = {
+	"YO01", "YO02", "YO03", "YO04", "YO05", "YO06", "YO07", "YO08", "YO09", "YO10",
+	"YO10R", "YO11", "YO12", "YO13", "YO14", "YO14A", "YO14B", "YO15", "YO16", "YO17",
+	"YO18", "YO19", "YO20", "YO21", "YO22", "YA01", "YA02", "YA03", "YA04", "YA05",
+	"YA06", "YA07", "YA08", "YA09", "YA10", "YA11", "YA11R", "YA12", "YA13", "YA14",
+	"YA15", "YA16", "YA17", "YA18", "YA19", "YA20", "YA21", "YA22", "NA01", "NA02",
+	"NA03", "NA04", "NA05", "NA06", "NA07", "NA08", "NA09", "NA10", "NA11", "NA11R",
+	"NA12", "NA13", "NA13R", "NA14", "NA15", "NA16", "NA17", "NA18", "NA19", "NA20",
+	"YU01", "YU02", "YU03", "YU03R", "YU04", "YU05", "YU06", "YU07", "YU08", "YU08R",
+	"YU09", "YU10", "YU11", "YU12", "YU12A", "YU13", "YU13A", "YU14", "YU14A", "YU15",
+	"YU15R", "YU16", "YU17", "YU17R", "YU18", "YU19", "YU20", "YU21", "YU22", "YK01",
+	"YK02", "YK03", "YK04", "YK05", "YK06", "YK07", "YK08", "YK09", "YK10", "YK11",
+	"YK12", "YK13", "YK14", "YK15", "YK16", "YK17", "YK18", "YK19", "YK20", "YK21",
+	"YK22", "YK23", "YK24", "YK25", "YK26", "YK27", "KR01", "ED01", "KR02", "KR03",
+	"KR03R", "KR04", "KR04R", "KR05", "KR05A", "KR05B", "KR06", "KR07", "KR08", "KR09",
+	"KR11", "KR11R", "OP04", "KR10", "ED02", "ED03", "ED04", "ED05", "ED06", "ED07",
+	"ED08", "ED09", "OP01", "OP02", "OP03"
+};
+
+static const uint16 kCollectionCgGroupEnds[] = {24, 47, 69, 98, 125, 143, 154};
+static const CompletGallery kC4Gallery = {kC4CgNames, ARRAYSIZE(kC4CgNames), nullptr, 0};
+static const CompletGallery kCollectionGallery = {
+	kCollectionCgNames, ARRAYSIZE(kCollectionCgNames), kCollectionCgGroupEnds, ARRAYSIZE(kCollectionCgGroupEnds)
+};
+
 static const CompletGameDescription gameDescriptions[] = {
 	{
 		{
@@ -66,7 +107,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -78,7 +119,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -91,7 +132,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kMattyMenuStyle
+		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -104,7 +145,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kMattyMenuStyle
+		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -116,7 +157,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery
 	},
 	{
 		{
@@ -128,11 +169,23 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO2(COMPLET_GUIO, GUIO_NOMIDI)
 		},
-		640, 480, true, kKoiMenuStyle
+		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery
+	},
+	{
+		{
+			"collection",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "2dd5b65ed0e30b913a725d5a4fcd2356", 2225),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
+		},
+		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery
 	},
 	{
 		AD_TABLE_END_MARKER,
-		0, 0, false, {}
+		0, 0, false, {}, kMessageDialogue, 0, false, {}
 	}
 };
 

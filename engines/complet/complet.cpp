@@ -94,8 +94,11 @@ static const char *const kFontFiles[] = {
 	"NotoSerifCJK-Regular.ttc"
 };
 
-CompletEngine::CompletEngine(OSystem *system, int screenWidth, int screenHeight, bool xexLayout, const CompletMenuStyle &menuStyle) :
-		Engine(system), _menuStyle(&menuStyle), _xexLayout(xexLayout), _screenWidth(screenWidth), _screenHeight(screenHeight), _audio(_mixer), _script(this) {
+CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &description) :
+		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery), _xexLayout(description.xexLayout),
+		_fullScreenMessages(description.messageLayout == kMessageFullScreen), _waitUnitMillis(description.waitUnitMillis),
+		_midiOnly(description.midiOnly), _screenWidth(description.screenWidth), _screenHeight(description.screenHeight),
+		_audio(_mixer), _script(this) {
 }
 
 CompletEngine::~CompletEngine() {
@@ -112,7 +115,7 @@ bool CompletEngine::hasFeature(EngineFeature f) const {
 
 void CompletEngine::applyGameSettings() {
 	_animateText = ConfMan.getBool("text_animation");
-	_audio.setUseMidi(ConfMan.getBool("midi_music"));
+	_audio.setUseMidi(_midiOnly || ConfMan.getBool("midi_music"));
 }
 
 void CompletEngine::syncSoundSettings() {
@@ -234,6 +237,7 @@ void CompletEngine::initGame() {
 	// The detector already added mpx/, where the detection file lives
 	SearchMan.addSubDirectoryMatching(gameDataDir, "gds");
 	SearchMan.addSubDirectoryMatching(gameDataDir, "vmd");
+	SearchMan.addSubDirectoryMatching(gameDataDir, "mus");
 }
 
 void CompletEngine::loadFont() {
@@ -269,7 +273,7 @@ bool CompletEngine::loadFrameImage() {
 	if (!loaded)
 		return false;
 
-	_blackKeySprites = _frameImage.isGd2();
+	_blackKeySprites = _xexLayout;
 	if (_frameImage.getWidth() != _screenWidth || _frameImage.getHeight() != _screenHeight) {
 		warning("Complet: frame image dimensions do not match the detected game");
 		return false;
@@ -297,7 +301,7 @@ void CompletEngine::loadCommonData() {
 			if (_commonData[kCommonFlagBits + i / 8] & (1 << (i & 7)))
 				_script.setFlag(i);
 		}
-		for (int i = 0; i < kCgCount; i++)
+		for (int i = 0; i < _gallery->count; i++)
 			_seenCg[i] = _commonData[kCommonSeenBits + i / 8] & (1 << (i & 7));
 	}
 	delete file;
@@ -310,7 +314,7 @@ void CompletEngine::saveCommonData() {
 			_commonData[kCommonFlagBits + i / 8] |= 1 << (i & 7);
 	}
 	memset(_commonData + kCommonSeenBits, 0, 32);
-	for (int i = 0; i < kCgCount; i++) {
+	for (int i = 0; i < _gallery->count; i++) {
 		if (_seenCg[i])
 			_commonData[kCommonSeenBits + i / 8] |= 1 << (i & 7);
 	}
@@ -367,7 +371,12 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 	if (!_messageHidden)
 		drawMessage(screen);
 	if (_indicatorFrame >= 0 && !_messageHidden) {
-		if (_xexLayout) {
+		if (_fullScreenMessages) {
+			const int line = MAX(0, (int)_messageLines.size() - 1);
+			const int columns = _messageLines.empty() ? 0 : _messageLines.back().size();
+			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
+					26 + columns * 28, 25 + line * 24, _format.RGBToColor(0xff, 0xff, 0xff));
+		} else if (_xexLayout) {
 			drawFrameRect(screen, 0x40 + _indicatorFrame * 0x1a, _autoMode ? 0x0c : 0,
 					0x1a, 0x0c, 0x24c, 0x1e0 - 0x22);
 		} else {
@@ -394,7 +403,7 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 }
 
 CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
-	if (!_messageVisible || _messageHidden || _menu || pos.y < scaleY(kButtonTop) || pos.y >= scaleY(kButtonBottom))
+	if (_fullScreenMessages || !_messageVisible || _messageHidden || _menu || pos.y < scaleY(kButtonTop) || pos.y >= scaleY(kButtonBottom))
 		return kButtonNone;
 	if (pos.x >= scaleX(kLoadButtonLeft) && pos.x < scaleX(kLoadButtonRight))
 		return kButtonLoad;
@@ -417,10 +426,10 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		return;
 
 	// Dim the area behind the text
-	const int boxX = _xexLayout ? 16 : scaleX(kMessageBoxX);
-	const int boxY = _xexLayout ? 331 : scaleY(kMessageBoxY);
-	const int boxWidth = _xexLayout ? 608 : scaleX(kMessageBoxWidth);
-	const int boxHeight = _xexLayout ? 137 : scaleY(kMessageBoxHeight);
+	const int boxX = _fullScreenMessages ? 20 : (_xexLayout ? 16 : scaleX(kMessageBoxX));
+	const int boxY = _fullScreenMessages ? 15 : (_xexLayout ? 331 : scaleY(kMessageBoxY));
+	const int boxWidth = _fullScreenMessages ? 600 : (_xexLayout ? 608 : scaleX(kMessageBoxWidth));
+	const int boxHeight = _fullScreenMessages ? 450 : (_xexLayout ? 137 : scaleY(kMessageBoxHeight));
 	for (int y = boxY; y < boxY + boxHeight; y++) {
 		uint32 *p = (uint32 *)screen.getBasePtr(boxX, y);
 		for (int x = 0; x < boxWidth; x++, p++) {
@@ -430,13 +439,21 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		}
 	}
 
-	const uint32 shadow = _format.RGBToColor(0x3f, 0x3f, 0x7f);
+	const uint32 shadow = _fullScreenMessages ? _format.RGBToColor(0x18, 0x18, 0x30) : _format.RGBToColor(0x3f, 0x3f, 0x7f);
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (uint i = 0; i < _messageLines.size(); i++) {
-		int y = _xexLayout ? 0x14e + i * kMessageLineHeight : scaleY(kMessageTop + i * kMessageLineHeight);
-		int x = _xexLayout ? 0x1e : scaleX(kMessageLeft);
+		int y = _fullScreenMessages ? 23 + i * 24 : (_xexLayout ? 0x14e + i * kMessageLineHeight : scaleY(kMessageTop + i * kMessageLineHeight));
+		int x = _fullScreenMessages ? 24 : (_xexLayout ? 0x1e : scaleX(kMessageLeft));
 		int advance = _xexLayout ? kMessageCharAdvance : scaleX(kMessageCharAdvance);
-		drawText(screen, _messageLines[i], x + 1, y + 1, shadow, advance);
+		if (_fullScreenMessages) {
+			for (int offsetY = -1; offsetY < 2; offsetY++) {
+				for (int offsetX = -1; offsetX < 3; offsetX++)
+					drawText(screen, _messageLines[i], x + offsetX, y + offsetY, shadow, advance);
+			}
+			drawText(screen, _messageLines[i], x + 1, y, white, advance);
+		} else {
+			drawText(screen, _messageLines[i], x + 1, y + 1, shadow, advance);
+		}
 		drawText(screen, _messageLines[i], x, y, white, advance);
 	}
 
@@ -1061,6 +1078,32 @@ void CompletEngine::composeSprites(Common::Array<byte> &dst, const Common::Strin
 void CompletEngine::clearMessage() {
 	_messageLines.clear();
 	_messageVisible = false;
+	_messageIndent = 0;
+	_readingSpeaker = false;
+}
+
+int CompletEngine::messageLineChars() const {
+	return _fullScreenMessages ? 21 : (_xexLayout ? 20 : kMessageLineChars);
+}
+
+int CompletEngine::messageMaxLines() const {
+	return _fullScreenMessages ? 18 : kMessageMaxLines;
+}
+
+void CompletEngine::newMessageLine() {
+	if (_messageLines.size() >= (uint)messageMaxLines()) {
+		present();
+		if (!waitClick())
+			return;
+		_messageLines.clear();
+		_messageIndent = 0;
+		_readingSpeaker = false;
+	}
+	_messageLines.push_back(Common::U32String());
+	if (_fullScreenMessages) {
+		for (uint column = 0; column < _messageIndent; column++)
+			_messageLines.back() += 0x3000;
+	}
 }
 
 void CompletEngine::printChar(uint32 ch) {
@@ -1069,17 +1112,24 @@ void CompletEngine::printChar(uint32 ch) {
 
 	// Closing punctuation may overflow the line
 	bool hangs = ch == 0x3001 || ch == 0x3002 || ch == 0x300d;
-	if (_messageLines.back().size() >= (uint)(_xexLayout ? 20 : kMessageLineChars) && !hangs) {
-		if (_messageLines.size() >= kMessageMaxLines) {
-			present();
-			if (!waitClick())
-				return;
-			_messageLines.clear();
-		}
-		_messageLines.push_back(Common::U32String());
+	if (_messageLines.back().size() >= (uint)messageLineChars() && !hangs) {
+		newMessageLine();
+		if (interrupted())
+			return;
 	}
 
+	if (_fullScreenMessages && ch == '_')
+		ch = 0x3000;
 	_messageLines.back() += ch;
+	if (_fullScreenMessages) {
+		if (ch == 0x3010) {
+			_readingSpeaker = true;
+			_messageIndent = 0;
+		} else if (ch == 0x3011 && _readingSpeaker) {
+			_readingSpeaker = false;
+			_messageIndent = MIN(_messageLines.back().size(), (uint)messageLineChars() - 1);
+		}
+	}
 	_messageVisible = true;
 	addBacklogChar(ch);
 	_autoChars++;
@@ -1276,6 +1326,10 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 			args += *q++;
 		if (*q == ';')
 			q++;
+	} else if (command == 't' && _gallery->groupCount && *q >= '0' && *q <= '9') {
+		args += *q++;
+		if (*q == ';')
+			q++;
 	}
 	debugC(1, kDebugScript, "%%%c%c %s", command, variant ? variant : ' ', args.c_str());
 
@@ -1287,7 +1341,7 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 			showLogo();
 		else if (atoi(args.c_str()) == 11)
 			runGallery();
-		else
+		else if (atoi(args.c_str()) != 99)
 			warning("Complet: unimplemented effect %%e,%s", args.c_str());
 		break;
 	case 'g': {
@@ -1332,23 +1386,26 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 		// When skipping, the original clears the window instead of waiting
 		if (_skipMode)
 			clearMessage();
-		else
+		else {
 			waitClick();
+			if (_fullScreenMessages && !interrupted())
+				newMessageLine();
+		}
 		break;
 	case 'n':
 		addBacklogBreak();
-		if (_messageLines.size() >= kMessageMaxLines) {
-			waitClick();
-			_messageLines.clear();
-		}
-		_messageLines.push_back(Common::U32String());
+		newMessageLine();
 		break;
 	case 'q':
 		script.stop();
 		break;
+	case 't':
+		if (!_replaying && !args.empty())
+			runGroupedGallery(atoi(args.c_str()));
+		break;
 	case 'w':
 		present();
-		waitTimed(atoi(args.c_str()) * 100);
+		waitTimed(atoi(args.c_str()) * _waitUnitMillis);
 		break;
 	case 'y':
 		addBacklogBreak();

@@ -41,9 +41,11 @@ struct Surface;
 namespace Complet {
 
 struct CompletMenuStyle;
+struct CompletGameDescription;
+struct CompletGallery;
 
 enum {
-	kCgCount = 124
+	kMaxCgCount = 256
 };
 
 enum CompletAction {
@@ -64,7 +66,7 @@ enum CompletAction {
 
 class CompletEngine : public Engine, public Common::EventObserver {
 public:
-	CompletEngine(OSystem *system, int screenWidth, int screenHeight, bool xexLayout, const CompletMenuStyle &menuStyle);
+	CompletEngine(OSystem *system, const CompletGameDescription &description);
 	~CompletEngine() override;
 
 	Common::Error run() override;
@@ -125,6 +127,7 @@ private:
 
 	void recordSeenCg(const Common::String &name);
 	bool runGallery();
+	bool runGroupedGallery(int group);
 	void blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const;
 	bool waitAnyInput();
 
@@ -165,6 +168,9 @@ private:
 	const byte *runCommand(Script &script, const byte *p);
 	void printChar(uint32 ch);
 	void clearMessage();
+	void newMessageLine();
+	int messageLineChars() const;
+	int messageMaxLines() const;
 
 	Graphics::PixelFormat _format;
 	GdImage _frameImage;
@@ -175,7 +181,11 @@ private:
 	Common::String _bgName;
 	bool _bgPending = false;
 	const CompletMenuStyle *_menuStyle = nullptr;
+	const CompletGallery *_gallery = nullptr;
 	bool _xexLayout = false;
+	bool _fullScreenMessages = false;
+	uint16 _waitUnitMillis = 100;
+	bool _midiOnly = false;
 	bool _blackKeySprites = false;
 	int _screenWidth = kScreenWidth;
 	int _screenHeight = kScreenHeight;
@@ -201,6 +211,8 @@ private:
 	// Characters printed since the last click, for the auto mode delay
 	uint _autoChars = 0;
 	Common::Array<Common::U32String> _messageLines;
+	uint _messageIndent = 0;
+	bool _readingSpeaker = false;
 
 	// Message history, characters mixed with line and page markers
 	Common::Array<uint32> _backlog;
@@ -231,7 +243,7 @@ private:
 	Script _script;
 	// Layout of the original "common" file: settings, seen-CG bits, font, flag bits, volumes
 	byte _commonData[41];
-	bool _seenCg[kCgCount];
+	bool _seenCg[kMaxCgCount];
 };
 
 } // End of namespace Complet

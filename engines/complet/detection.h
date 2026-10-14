@@ -54,12 +54,28 @@ struct CompletMenuStyle {
 	bool outlineSelectedText;
 };
 
+enum CompletMessageLayout {
+	kMessageDialogue,
+	kMessageFullScreen
+};
+
+struct CompletGallery {
+	const char *const *names;
+	uint16 count;
+	const uint16 *groupEnds;
+	uint16 groupCount;
+};
+
 struct CompletGameDescription {
 	ADGameDescription gameDescription;
 	uint16 screenWidth;
 	uint16 screenHeight;
 	bool xexLayout;
 	CompletMenuStyle menuStyle;
+	CompletMessageLayout messageLayout;
+	uint16 waitUnitMillis;
+	bool midiOnly;
+	CompletGallery gallery;
 
 	AD_GAME_DESCRIPTION_HELPERS(gameDescription)
 };

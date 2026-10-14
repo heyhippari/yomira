@@ -119,6 +119,8 @@ bool GdImage::loadThumbnail(const Common::String &name, Common::Array<byte> &out
 
 bool GdImage::load(Common::SeekableReadStream &stream) {
 	uint32 size = stream.size();
+	if (size < 2)
+		return false;
 	Common::Array<byte> data;
 	data.resize(size);
 	if (stream.read(data.data(), size) != size)
@@ -127,13 +129,13 @@ bool GdImage::load(Common::SeekableReadStream &stream) {
 	uint32 pos = 2;
 	bool gd3 = size >= 3 && !memcmp(data.data(), "GD3", 3);
 	bool gd2 = size >= 3 && !memcmp(data.data(), "GD2", 3);
-	const uint32 width = gd2 ? (uint32)kGd2Width : (uint32)kScreenWidth;
-	const uint32 height = gd2 ? (uint32)kGd2Height : (uint32)kScreenHeight;
+	const uint32 width = gd3 ? (uint32)kScreenWidth : (uint32)kGd2Width;
+	const uint32 height = gd3 ? (uint32)kScreenHeight : (uint32)kGd2Height;
 	if (gd3)
 		pos = kGd3DataOffset;
 	else if (gd2)
 		pos = kGd2DataOffset;
-	if (pos > size)
+	if (pos >= size)
 		return false;
 
 	Common::Array<byte> pixels(width * height * 3);
@@ -159,6 +161,8 @@ bool GdImage::load(Common::SeekableReadStream &stream) {
 	if (!decoded)
 		return false;
 	_isGd2 = gd2;
+	_width = width;
+	_height = height;
 	_pixels = pixels;
 	return true;
 }
