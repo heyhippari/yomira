@@ -122,7 +122,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapDefault
+		640, 480, true, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
 	},
 	{
 		{
@@ -134,7 +134,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapDefault
+		640, 480, true, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
 	},
 	{
 		{
@@ -146,7 +146,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO2(COMPLET_GUIO, GUIO_MIDIGM)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapDefault
+		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -158,7 +158,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO2(COMPLET_GUIO, GUIO_NOMIDI)
 		},
-		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -183,7 +183,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -196,7 +196,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -208,7 +208,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -220,7 +220,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -232,11 +232,11 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapDefault
+		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		AD_TABLE_END_MARKER,
-		0, 0, false, {}, kMessageDialogue, 0, false, {}, kCompletMapDefault
+		0, 0, false, {}, kMessageDialogue, 0, false, {}, kCompletMapNone
 	}
 };
 

@@ -61,7 +61,8 @@ enum CompletMessageLayout {
 };
 
 enum CompletMapLayout {
-	kCompletMapDefault,
+	kCompletMapNone,
+	kCompletMapCase266,
 	kCompletMapMht
 };
 

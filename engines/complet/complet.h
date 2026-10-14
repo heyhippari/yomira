@@ -184,6 +184,7 @@ private:
 	bool _bgPending = false;
 	const CompletMenuStyle *_menuStyle = nullptr;
 	const CompletGallery *_gallery = nullptr;
+	bool _case266Map = false;
 	bool _mhtMap = false;
 	bool _xexLayout = false;
 	bool _fullScreenMessages = false;

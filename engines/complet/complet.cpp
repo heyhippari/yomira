@@ -96,6 +96,7 @@ static const char *const kFontFiles[] = {
 
 CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &description) :
 		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery),
+		_case266Map(description.mapLayout == kCompletMapCase266),
 		_mhtMap(description.mapLayout == kCompletMapMht),
 		_xexLayout(description.xexLayout),
 		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
@@ -1356,7 +1357,7 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p) {
 	case 'e':
 		if (_replaying)
 			break;
-		if (atoi(args.c_str()) == 1 && (_framedMessages || _mhtMap))
+		if (atoi(args.c_str()) == 1 && (_case266Map || _mhtMap))
 			runMap();
 		else if (atoi(args.c_str()) == 10)
 			showLogo();
