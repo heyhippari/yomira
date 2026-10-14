@@ -709,6 +709,15 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 		g_system->delayMillis(10);
 	}
 
+	if (result >= 0 && !interrupted()) {
+		if (_backlogLineChars)
+			addBacklogBreak();
+		Common::U32String choice(Common::String::format("\x81\x84\x81\x75%s\x81\x76\x82\xf0\x91\x49\x91\xf0\x81\x83", items[result].text.c_str()), Common::kWindows932);
+		for (uint i = 0; i < choice.size(); i++)
+			addBacklogChar(choice[i]);
+		addBacklogBreak();
+	}
+
 	_inputWait = false;
 	_menu = nullptr;
 	_hover = -1;
@@ -1162,6 +1171,14 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 		_format.RGBToColor(0x9e, 0xff, 0xc2)
 	};
 	int color = 0;
+	for (uint i = 0; i <= start; i++) {
+		if (_backlog[i] == 0xff1e)
+			color = 1;
+		else if (_backlog[i] == 0x226a)
+			color = 2;
+		else if (_backlog[i] == 0xff1c || _backlog[i] == 0x226b)
+			color = 0;
+	}
 	int x = 0, y = scaleY(0x18);
 	for (uint i = start + 1; i < _backlog.size() && _backlog[i] != kBacklogPage; i++) {
 		const uint32 ch = _backlog[i];
