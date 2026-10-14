@@ -231,25 +231,22 @@ bool CompletEngine::runGallery() {
 	};
 
 	int page = 0;
-	bool ok = fadeTo(pages[page]);
+	bool ok = true;
 	bool leave = false;
 	int selected = -1;
-	Common::Point lastMouse(-1, -1);
 	show(page, selected);
 
 	while (ok && !leave && !shouldQuit()) {
+		int previousSelected = selected;
 		int activated = -2;
 		Common::Event event;
-		while (g_system->getEventManager()->pollEvent(event)) {
+		while (activated < 0 && g_system->getEventManager()->pollEvent(event)) {
 			switch (event.type) {
-			case Common::EVENT_MOUSEMOVE:
-				if (event.mouse != lastMouse) {
-					lastMouse = event.mouse;
-					int cell = cellAt(page, event.mouse);
-					selected = cell < kCellsPerPage ? cell : -1;
-					show(page, selected);
-				}
+			case Common::EVENT_MOUSEMOVE: {
+				int cell = cellAt(page, event.mouse);
+				selected = cell < kCellsPerPage ? cell : -1;
 				break;
+			}
 			case Common::EVENT_LBUTTONUP:
 			case Common::EVENT_RBUTTONUP:
 				activated = cellAt(page, event.mouse);
@@ -282,7 +279,6 @@ bool CompletEngine::runGallery() {
 				default:
 					break;
 				}
-				show(page, selected);
 				break;
 			}
 			default:
@@ -290,6 +286,8 @@ bool CompletEngine::runGallery() {
 			}
 		}
 
+		if (selected != previousSelected)
+			show(page, selected);
 		refreshCursor();
 		if (activated == kExitCell) {
 			leave = true;
@@ -297,21 +295,15 @@ bool CompletEngine::runGallery() {
 			if (pageCount > 1) {
 				page ^= 1;
 				selected = -1;
-				ok = fadeTo(pages[page]);
 				show(page, selected);
 			}
 		} else if (activated >= 0) {
 			GdImage image;
 			if (image.loadFromName(Common::String(kCgNames[seen[page * kCellsPerPage + activated]]) + ".gd")) {
-				Common::Array<byte> picture(_screenWidth * _screenHeight * 3);
-				memcpy(picture.data(), image.getPixels(), picture.size());
-				memcpy(_scene.data(), pages[page].data(), _scene.size());
-				ok = fadeTo(picture) && waitAnyInput();
-				if (ok) {
-					memcpy(_scene.data(), picture.data(), _scene.size());
-					ok = fadeTo(pages[page]);
+				presentBuffer(image.getPixels());
+				ok = waitAnyInput();
+				if (ok)
 					show(page, selected);
-				}
 			}
 		}
 
