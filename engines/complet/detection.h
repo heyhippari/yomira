@@ -22,7 +22,42 @@
 #ifndef ENGINES_COMPLET_DETECTION_H
 #define ENGINES_COMPLET_DETECTION_H
 
+#include "engines/advancedDetector.h"
+
 namespace Complet {
+
+struct CompletMenuStyle {
+	uint16 centerX;
+	uint16 leftPerCharacter;
+	uint16 widthPerCharacter;
+	uint16 widthPadding;
+	uint16 topBase;
+	uint16 topPerRow;
+	uint16 rowHeight;
+	uint16 heightPadding;
+	uint16 charAdvance;
+	uint16 cornerRadius;
+	int16 offsetX;
+	int16 offsetY;
+	uint32 fillColor;
+	uint32 borderColor;
+	uint32 idleTextColor;
+	uint32 hoverTextColor;
+	uint32 textShadowColor;
+	uint32 hoverOutlineColor;
+	bool showQuickSaveLoad;
+	bool outlinedMenu;
+};
+
+struct CompletGameDescription {
+	ADGameDescription gameDescription;
+	uint16 screenWidth;
+	uint16 screenHeight;
+	bool xexLayout;
+	CompletMenuStyle menuStyle;
+
+	AD_GAME_DESCRIPTION_HELPERS(gameDescription)
+};
 
 enum CompletDebugChannels {
 	kDebugScript = 1,

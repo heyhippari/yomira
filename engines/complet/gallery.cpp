@@ -170,32 +170,32 @@ bool CompletEngine::runGallery() {
 		}
 
 		// Progress bar showing how many CGs have been seen
-		int width = count * 600 / kCgCount;
+		int width = count * scaleX(600) / kCgCount;
 		if (width) {
-			drawBox(page, _screenWidth, _screenHeight, 0x13, 0x240, width + 0x15, 0x24e, black);
-			drawBox(page, _screenWidth, _screenHeight, 0x14, 0x241, width + 0x14, 0x24d, yellow);
+			drawBox(page, _screenWidth, _screenHeight, scaleX(0x13), scaleY(0x240), width + scaleX(0x15), scaleY(0x24e), black);
+			drawBox(page, _screenWidth, _screenHeight, scaleX(0x14), scaleY(0x241), width + scaleX(0x14), scaleY(0x24d), yellow);
 		}
-		blitFrame(page, 0x284, 0x239, 0x33, 0x15, 0x2de, 0x230);
-		blitFrame(page, 0x2b8, 0x24c, 10, 4, 0x10, 0x23c);
-		blitFrame(page, 0x2b8, 0x24c, 10, 12, width + 0xf, 0x234);
+		blitFrame(page, scaleX(0x284), scaleY(0x239), scaleX(0x33), scaleY(0x15), scaleX(0x2de), scaleY(0x230));
+		blitFrame(page, scaleX(0x2b8), scaleY(0x24c), scaleX(10), scaleY(4), scaleX(0x10), scaleY(0x23c));
+		blitFrame(page, scaleX(0x2b8), scaleY(0x24c), scaleX(10), scaleY(12), width + scaleX(0xf), scaleY(0x234));
 
 		int tenths = count * 1000 / kCgCount;
-		const int digitY = 0x24f, digitSrcX = 0x250, labelY = 0x22a;
+		const int digitY = scaleY(0x24f), digitSrcX = scaleX(0x250), labelY = scaleY(0x22a);
 		if (tenths < 1000) {
 			if (tenths >= 100)
-				blitFrame(page, (tenths / 100) * 8 + digitSrcX, digitY, 8, 9, width + 1, labelY);
-			blitFrame(page, ((tenths % 100) / 10) * 8 + digitSrcX, digitY, 8, 9, width + 9, labelY);
-			blitFrame(page, 0x2a0, digitY, 8, 9, width + 0x11, labelY);
-			blitFrame(page, (tenths % 10) * 8 + digitSrcX, digitY, 8, 9, width + 0x15, labelY);
-			blitFrame(page, 0x2a8, digitY, 0x10, 9, width + 0x1d, labelY);
+				blitFrame(page, scaleX((tenths / 100) * 8) + digitSrcX, digitY, scaleX(8), scaleY(9), width + scaleX(1), labelY);
+			blitFrame(page, scaleX(((tenths % 100) / 10) * 8) + digitSrcX, digitY, scaleX(8), scaleY(9), width + scaleX(9), labelY);
+			blitFrame(page, scaleX(0x2a0), digitY, scaleX(8), scaleY(9), width + scaleX(0x11), labelY);
+			blitFrame(page, scaleX((tenths % 10) * 8) + digitSrcX, digitY, scaleX(8), scaleY(9), width + scaleX(0x15), labelY);
+			blitFrame(page, scaleX(0x2a8), digitY, scaleX(0x10), scaleY(9), width + scaleX(0x1d), labelY);
 		} else {
-			blitFrame(page, 600, digitY, 8, 9, width + 3, labelY);
-			blitFrame(page, digitSrcX, digitY, 8, 9, width + 0xb, labelY);
-			blitFrame(page, digitSrcX, digitY, 8, 9, width + 0x13, labelY);
-			blitFrame(page, 0x2a8, digitY, 0x10, 9, width + 0x1b, labelY);
+			blitFrame(page, scaleX(600), digitY, scaleX(8), scaleY(9), width + scaleX(3), labelY);
+			blitFrame(page, digitSrcX, digitY, scaleX(8), scaleY(9), width + scaleX(0xb), labelY);
+			blitFrame(page, digitSrcX, digitY, scaleX(8), scaleY(9), width + scaleX(0x13), labelY);
+			blitFrame(page, scaleX(0x2a8), digitY, scaleX(0x10), scaleY(9), width + scaleX(0x1b), labelY);
 		}
 		if (pageCount > 1)
-			blitFrame(page, 0x250, 0x23c, 0x33, 0xc, 0x290, 0x235);
+			blitFrame(page, scaleX(0x250), scaleY(0x23c), scaleX(0x33), scaleY(0xc), scaleX(0x290), scaleY(0x235));
 	}
 
 	bool restoreMessage = _messageVisible;

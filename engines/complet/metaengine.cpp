@@ -55,10 +55,11 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 	AD_EXTRA_GUI_OPTIONS_TERMINATOR
 };
 
-class CompletMetaEngine : public AdvancedMetaEngine<ADGameDescription> {
+class CompletMetaEngine : public AdvancedMetaEngine<Complet::CompletGameDescription> {
 public:
-	Common::Error createInstance(OSystem *system, Engine **engine, const ADGameDescription *) const override {
-		*engine = new Complet::CompletEngine(system);
+	Common::Error createInstance(OSystem *system, Engine **engine, const Complet::CompletGameDescription *description) const override {
+		*engine = new Complet::CompletEngine(system, description->screenWidth, description->screenHeight, description->xexLayout,
+				description->menuStyle);
 		return Common::Error(Common::kNoError);
 	}
 

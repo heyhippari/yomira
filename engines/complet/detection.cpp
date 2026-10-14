@@ -39,7 +39,7 @@ static const PlainGameDescriptor completGames[] = {
 	{nullptr, nullptr}
 };
 
-class CompletMetaEngineDetection : public AdvancedMetaEngineDetection<ADGameDescription> {
+class CompletMetaEngineDetection : public AdvancedMetaEngineDetection<Complet::CompletGameDescription> {
 public:
 	CompletMetaEngineDetection() : AdvancedMetaEngineDetection(Complet::gameDescriptions, completGames) {
 		_flags = kADFlagMatchFullPaths;

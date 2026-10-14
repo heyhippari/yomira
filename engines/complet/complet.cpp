@@ -65,10 +65,6 @@ enum {
 	kMessageBoxHeight = 113,
 
 	// Selection window
-	kMenuRowHeight = 32,
-	kMenuCharAdvance = 32,
-	kMenuRadius = 16,
-
 	// Glyph sheet inside the frame image (GDS\MESFRAME.GD)
 	kGlyphSourceRow = 472,
 
@@ -98,13 +94,15 @@ static const char *const kFontFiles[] = {
 	"NotoSerifCJK-Regular.ttc"
 };
 
-CompletEngine::CompletEngine(OSystem *system) : Engine(system), _audio(_mixer), _script(this) {
+CompletEngine::CompletEngine(OSystem *system, int screenWidth, int screenHeight, bool xexLayout, const CompletMenuStyle &menuStyle) :
+		Engine(system), _menuStyle(&menuStyle), _xexLayout(xexLayout), _screenWidth(screenWidth), _screenHeight(screenHeight), _audio(_mixer), _script(this) {
 }
 
 CompletEngine::~CompletEngine() {
 	g_system->getEventManager()->getEventDispatcher()->unregisterObserver(this);
 	if (_ownFont)
 		delete _font;
+	delete _menuFont;
 }
 
 bool CompletEngine::hasFeature(EngineFeature f) const {
@@ -182,9 +180,10 @@ void CompletEngine::initCursor() {
 
 Common::Error CompletEngine::run() {
 	_format = Graphics::PixelFormat::createFormatBGRA32();
-	if (!initGame())
-		return Common::Error(Common::kReadingFailed, "Missing game data (gds/mpx folders)");
+	initGame();
 	initGraphics(_screenWidth, _screenHeight, &_format);
+	if (!loadFrameImage())
+		return Common::Error(Common::kReadingFailed, "Missing or incompatible game frame image");
 
 	setDebugger(new Console(this));
 	ConfMan.registerDefault("text_animation", false);
@@ -230,20 +229,23 @@ bool CompletEngine::interrupted() {
 	return shouldQuit() || _loadPending;
 }
 
-bool CompletEngine::initGame() {
+void CompletEngine::initGame() {
 	const Common::FSNode gameDataDir(ConfMan.getPath("path"));
 	// The detector already added mpx/, where the detection file lives
 	SearchMan.addSubDirectoryMatching(gameDataDir, "gds");
 	SearchMan.addSubDirectoryMatching(gameDataDir, "vmd");
-
-	return loadFrameImage();
 }
 
 void CompletEngine::loadFont() {
 	for (uint i = 0; i < ARRAYSIZE(kFontFiles) && !_font; i++) {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 		if (stream)
-			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _xexLayout ? 24 : kFontSize, Graphics::kTTFSizeModeCell);
+			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _xexLayout ? 24 : scaleY(kFontSize), Graphics::kTTFSizeModeCell);
+		if (_font && _menuStyle->outlinedMenu) {
+			stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
+			if (stream)
+				_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 32, Graphics::kTTFSizeModeCell, 100, 72);
+		}
 	}
 
 	if (_font) {
@@ -258,10 +260,15 @@ void CompletEngine::loadFont() {
 bool CompletEngine::loadFrameImage() {
 	// MESFRAME.GD holds the message frame and glyph sheet, NULL.GD is the fallback
 	const bool loaded = _frameImage.loadFromName("mesframe.gd") || _frameImage.loadFromName("null.gd");
-	_xexLayout = loaded && _frameImage.isGd2();
-	_screenWidth = _frameImage.getWidth();
-	_screenHeight = _frameImage.getHeight();
-	return loaded;
+	if (!loaded)
+		return false;
+
+	_blackKeySprites = _frameImage.isGd2();
+	if (_frameImage.getWidth() != _screenWidth || _frameImage.getHeight() != _screenHeight) {
+		warning("Complet: frame image dimensions do not match the detected game");
+		return false;
+	}
+	return true;
 }
 
 enum {
@@ -356,11 +363,11 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 	if (_indicatorFrame >= 0 && !_messageHidden) {
 		if (_xexLayout) {
 			drawFrameRect(screen, 0x40 + _indicatorFrame * 0x1a, _autoMode ? 0x0c : 0,
-					0x1a, 0x0c, 0x244, 0x1e0 - 0x22);
+					0x1a, 0x0c, 0x24c, 0x1e0 - 0x22);
 		} else {
 			// Animated "CLICK" (or "AUTO") marker from the top left of the C4 frame image
-			drawFrameRect(screen, (_indicatorFrame + (_autoMode ? 8 : 0)) * 32, 0, 32, 32,
-					0x2e7, kScreenHeight - 0x34, true);
+			drawFrameRect(screen, scaleX((_indicatorFrame + (_autoMode ? 8 : 0)) * 32), 0,
+					scaleX(32), scaleY(32), scaleX(0x2e7), scaleY(kScreenHeight - 0x34), true);
 		}
 	}
 	if (_menu)
@@ -381,13 +388,13 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 }
 
 CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
-	if (!_messageVisible || _messageHidden || _menu || pos.y < kButtonTop || pos.y >= kButtonBottom)
+	if (!_messageVisible || _messageHidden || _menu || pos.y < scaleY(kButtonTop) || pos.y >= scaleY(kButtonBottom))
 		return kButtonNone;
-	if (pos.x >= kLoadButtonLeft && pos.x < kLoadButtonRight)
+	if (pos.x >= scaleX(kLoadButtonLeft) && pos.x < scaleX(kLoadButtonRight))
 		return kButtonLoad;
-	if (pos.x >= kSaveButtonLeft && pos.x < kSaveButtonRight)
+	if (pos.x >= scaleX(kSaveButtonLeft) && pos.x < scaleX(kSaveButtonRight))
 		return kButtonSave;
-	if (pos.x >= kLogButtonLeft && pos.x < kLogButtonRight)
+	if (pos.x >= scaleX(kLogButtonLeft) && pos.x < scaleX(kLogButtonRight))
 		return kButtonLog;
 	return kButtonNone;
 }
@@ -404,10 +411,10 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		return;
 
 	// Dim the area behind the text
-	const int boxX = _xexLayout ? 16 : kMessageBoxX;
-	const int boxY = _xexLayout ? 331 : kMessageBoxY;
-	const int boxWidth = _xexLayout ? 608 : kMessageBoxWidth;
-	const int boxHeight = _xexLayout ? 137 : kMessageBoxHeight;
+	const int boxX = _xexLayout ? 16 : scaleX(kMessageBoxX);
+	const int boxY = _xexLayout ? 331 : scaleY(kMessageBoxY);
+	const int boxWidth = _xexLayout ? 608 : scaleX(kMessageBoxWidth);
+	const int boxHeight = _xexLayout ? 137 : scaleY(kMessageBoxHeight);
 	for (int y = boxY; y < boxY + boxHeight; y++) {
 		uint32 *p = (uint32 *)screen.getBasePtr(boxX, y);
 		for (int x = 0; x < boxWidth; x++, p++) {
@@ -420,16 +427,17 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	const uint32 shadow = _format.RGBToColor(0x3f, 0x3f, 0x7f);
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (uint i = 0; i < _messageLines.size(); i++) {
-		int y = (_xexLayout ? 0x14e : kMessageTop) + i * kMessageLineHeight;
-		int x = _xexLayout ? 0x1e : kMessageLeft;
-		drawText(screen, _messageLines[i], x + 1, y + 1, shadow, kMessageCharAdvance);
-		drawText(screen, _messageLines[i], x, y, white, kMessageCharAdvance);
+		int y = _xexLayout ? 0x14e + i * kMessageLineHeight : scaleY(kMessageTop + i * kMessageLineHeight);
+		int x = _xexLayout ? 0x1e : scaleX(kMessageLeft);
+		int advance = _xexLayout ? kMessageCharAdvance : scaleX(kMessageCharAdvance);
+		drawText(screen, _messageLines[i], x + 1, y + 1, shadow, advance);
+		drawText(screen, _messageLines[i], x, y, white, advance);
 	}
 
 	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
 	if (!_menu && !_xexLayout) {
-		drawFrameRect(screen, 0x200, 0, 0x4d, 0xf, kSaveButtonLeft - 1, kButtonTop - 1);
-		drawFrameRect(screen, 0x200, 0x10, 0x1b, 0xf, kLogButtonLeft - 1, kButtonTop - 1);
+		drawFrameRect(screen, scaleX(0x200), 0, scaleX(0x4d), scaleY(0xf), scaleX(kSaveButtonLeft - 1), scaleY(kButtonTop - 1));
+		drawFrameRect(screen, scaleX(0x200), scaleY(0x10), scaleX(0x1b), scaleY(0xf), scaleX(kLogButtonLeft - 1), scaleY(kButtonTop - 1));
 	}
 }
 
@@ -443,14 +451,12 @@ CompletEngine::MenuLayout CompletEngine::getMenuLayout() const {
 
 	MenuLayout layout;
 	layout.rows = _menu->size();
-	layout.left = 0x170 - 7 * longest;
-	layout.width = 14 * longest + 0x30;
-	layout.top = 0x11c - 16 * layout.rows;
-	layout.height = kMenuRowHeight * layout.rows + 6;
-	if (_xexLayout) {
-		layout.left -= 80;
-		layout.top -= 60;
-	}
+	layout.left = scaleX(_menuStyle->centerX - _menuStyle->leftPerCharacter * longest);
+	layout.width = scaleX(_menuStyle->widthPerCharacter * longest + _menuStyle->widthPadding);
+	layout.top = scaleY(_menuStyle->topBase - _menuStyle->topPerRow * layout.rows);
+	layout.height = scaleY(_menuStyle->rowHeight * layout.rows + _menuStyle->heightPadding);
+	layout.left += scaleX(_menuStyle->offsetX);
+	layout.top += scaleY(_menuStyle->offsetY);
 	return layout;
 }
 
@@ -466,48 +472,100 @@ static bool insideRoundRect(int x, int y, int w, int h, int r) {
 
 void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	const MenuLayout layout = getMenuLayout();
-
-	const uint32 fill = _format.RGBToColor(0x00, 0x00, 0x30);
-	const uint32 border = _format.RGBToColor(0xb0, 0xc0, 0x00);
+	const CompletMenuStyle &style = *_menuStyle;
+	const int rowHeight = scaleY(style.rowHeight);
+	const int charAdvance = scaleX(style.charAdvance);
+	const uint32 fill = _format.RGBToColor((style.fillColor >> 16) & 0xff, (style.fillColor >> 8) & 0xff, style.fillColor & 0xff);
+	const uint32 border = _format.RGBToColor((style.borderColor >> 16) & 0xff, (style.borderColor >> 8) & 0xff, style.borderColor & 0xff);
 	for (int y = 0; y < layout.height; y++) {
 		int sy = layout.top + y;
 		if (sy < 0 || sy >= screen.h)
 			continue;
 		for (int x = 0; x < layout.width; x++) {
 			int sx = layout.left + x;
-			if (sx < 0 || sx >= screen.w || !insideRoundRect(x, y, layout.width, layout.height, kMenuRadius))
+			if (sx < 0 || sx >= screen.w || !insideRoundRect(x, y, layout.width, layout.height, scaleX(style.cornerRadius)))
 				continue;
-			bool inner = insideRoundRect(x - 2, y - 2, layout.width - 4, layout.height - 4, kMenuRadius - 2);
+			const int borderWidth = style.outlinedMenu ? 1 : 2;
+			bool inner = insideRoundRect(x - borderWidth, y - borderWidth, layout.width - 2 * borderWidth, layout.height - 2 * borderWidth, scaleX(style.cornerRadius - borderWidth));
 			*(uint32 *)screen.getBasePtr(sx, sy) = inner ? fill : border;
 		}
 	}
 
-	const uint32 idle = _format.RGBToColor(0x40, 0x40, 0xff);
-	const uint32 shadow = _format.RGBToColor(0x3f, 0x3f, 0x7f);
-	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (int i = 0; i < layout.rows; i++) {
 		Common::U32String text((*_menu)[i].text, Common::kWindows932);
+		if (style.outlinedMenu) {
+			const Graphics::Font *font = _menuFont ? _menuFont : _font;
+			const int textWidth = text.size() * charAdvance;
+			const int x = layout.left + layout.width / 2 - textWidth / 2;
+			const int y = layout.top + 2 + i * rowHeight;
+			if (i == _hover) {
+				screen.drawEllipse(x - 8, y, x + textWidth + 7, y + 23, _format.RGBToColor(0xf3, 0x9b, 0x23), true);
+				screen.drawEllipse(x - 8, y, x + textWidth + 7, y + 23, _format.RGBToColor(0, 0, 0), false);
+			}
+			Graphics::Surface glyph;
+			for (uint j = 0; j < text.size(); j++) {
+				glyph.create(MAX(1, font->getCharWidth(text[j])), font->getFontHeight(), _format);
+				glyph.fillRect(Common::Rect(glyph.w, glyph.h), 0);
+				font->drawChar(&glyph, text[j], 0, 0, _format.RGBToColor(0xff, 0xff, 0xff));
+				Graphics::Surface *scaledGlyph = glyph.scale(32, 32);
+				for (int pass = 0; pass < 2; pass++) {
+					for (int glyphY = 0; glyphY < 32; glyphY++) {
+						for (int glyphX = 0; glyphX < 32; glyphX++) {
+							byte alpha, unusedGreen, unusedBlue;
+							_format.colorToRGB(*(const uint32 *)scaledGlyph->getBasePtr(glyphX, glyphY), alpha, unusedGreen, unusedBlue);
+							if (!alpha)
+								continue;
+							const int radius = pass == 0 ? 1 : 0;
+							const int shade = pass == 0 ? 0x60 : 0xff;
+							for (int offsetY = -radius; offsetY <= radius; offsetY++) {
+								for (int offsetX = -radius; offsetX <= radius; offsetX++) {
+									const int sx = x + j * charAdvance + glyphX + offsetX;
+									const int sy = y + glyphY + offsetY - 6;
+									if (sx < 0 || sx >= screen.w || sy < 0 || sy >= screen.h)
+										continue;
+									uint32 *pixel = (uint32 *)screen.getBasePtr(sx, sy);
+									byte red, green, blue;
+									_format.colorToRGB(*pixel, red, green, blue);
+									*pixel = _format.RGBToColor((red * (255 - alpha) + shade * alpha) / 255,
+											(green * (255 - alpha) + shade * alpha) / 255, (blue * (255 - alpha) + shade * alpha) / 255);
+								}
+							}
+						}
+					}
+				}
+				scaledGlyph->free();
+				delete scaledGlyph;
+				glyph.free();
+			}
+			continue;
+		}
 		int inkLeft = INT_MAX;
 		int inkRight = INT_MIN;
 		for (uint j = 0; j < text.size(); j++) {
 			const Common::Rect bounds = _font->getBoundingBox(text[j]);
-			inkLeft = MIN(inkLeft, (int)j * kMenuCharAdvance + bounds.left);
-			inkRight = MAX(inkRight, (int)j * kMenuCharAdvance + bounds.right);
+			inkLeft = MIN(inkLeft, (int)j * charAdvance + bounds.left);
+			inkRight = MAX(inkRight, (int)j * charAdvance + bounds.right);
 		}
 		int x = layout.left + layout.width / 2 - (inkLeft + inkRight) / 2;
-		int y = layout.top + 2 + i * kMenuRowHeight;
+		int y = layout.top + scaleY(2) + i * rowHeight;
 
+		const uint32 idle = _format.RGBToColor((style.idleTextColor >> 16) & 0xff, (style.idleTextColor >> 8) & 0xff, style.idleTextColor & 0xff);
+		const uint32 shadow = _format.RGBToColor((style.textShadowColor >> 16) & 0xff, (style.textShadowColor >> 8) & 0xff, style.textShadowColor & 0xff);
+		const uint32 white = _format.RGBToColor((style.hoverTextColor >> 16) & 0xff, (style.hoverTextColor >> 8) & 0xff, style.hoverTextColor & 0xff);
+		const uint32 outline = _format.RGBToColor((style.hoverOutlineColor >> 16) & 0xff, (style.hoverOutlineColor >> 8) & 0xff, style.hoverOutlineColor & 0xff);
 		if (i == _hover) {
-			drawText(screen, text, x + 1, y + 1, shadow, kMenuCharAdvance);
-			drawText(screen, text, x, y, white, kMenuCharAdvance);
+			drawText(screen, text, x + 2, y + 2, shadow, charAdvance);
+			drawText(screen, text, x + 1, y + 1, outline, charAdvance);
+			drawText(screen, text, x, y, white, charAdvance);
 		} else {
-			drawText(screen, text, x, y, idle, kMenuCharAdvance);
+			drawText(screen, text, x + 1, y + 1, shadow, charAdvance);
+			drawText(screen, text, x, y, idle, charAdvance);
 		}
 	}
 
-	// Q-SAVE and Q-LOAD below the bottom right of the window
-	if (!_xexLayout)
-		drawFrameRect(screen, 0x200, 1, 0x4d, 0xe, layout.left + layout.width - 0x5d, layout.top + layout.rows * kMenuRowHeight + 2);
+	if (style.showQuickSaveLoad)
+		drawFrameRect(screen, scaleX(0x200), scaleY(1), scaleX(0x4d), scaleY(0xe),
+				layout.left + layout.width - scaleX(0x5d), layout.top + layout.rows * rowHeight + scaleY(2));
 }
 
 int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {
@@ -519,13 +577,15 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 	auto rowAt = [&](const Common::Point &pos) {
 		if (pos.x < layout.left || pos.x >= layout.left + layout.width)
 			return -1;
-		int row = (pos.y - layout.top) / kMenuRowHeight;
+		int row = (pos.y - layout.top) / scaleY(_menuStyle->rowHeight);
 		if (pos.y < layout.top || row >= layout.rows)
 			return -1;
 		return row;
 	};
 
 	_hover = rowAt(g_system->getEventManager()->getMousePos());
+	if (_hover < 0)
+		_hover = 0;
 	present();
 
 	// Right click or Escape goes back from a submenu and hides the top menu to show the artwork
@@ -545,13 +605,15 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 		present();
 	};
 	auto quickButtonAt = [&](const Common::Point &pos) {
-		int x = pos.x - layout.left - layout.width;
-		int y = pos.y - layout.top - layout.rows * kMenuRowHeight;
-		if (y < 2 || y >= 0x10)
+		if (!_menuStyle->showQuickSaveLoad)
 			return kButtonNone;
-		if (x > -0x5d && x < -0x39)
+		int x = pos.x - layout.left - layout.width;
+		int y = pos.y - layout.top - layout.rows * scaleY(_menuStyle->rowHeight);
+		if (y < scaleY(2) || y >= scaleY(0x10))
+			return kButtonNone;
+		if (x > -scaleX(0x5d) && x < -scaleX(0x39))
 			return kButtonSave;
-		if (x >= -0x38 && x < -0x12)
+		if (x >= -scaleX(0x38) && x < -scaleX(0x12))
 			return kButtonLoad;
 		return kButtonNone;
 	};
@@ -567,7 +629,8 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 
 			switch (event.type) {
 			case Common::EVENT_MOUSEMOVE:
-				_hover = rowAt(event.mouse);
+				if (rowAt(event.mouse) >= 0)
+					_hover = rowAt(event.mouse);
 				break;
 			case Common::EVENT_LBUTTONUP:
 				if (hidden)
@@ -878,7 +941,7 @@ bool CompletEngine::loadImage(const Common::String &name, Common::Array<byte> &o
 }
 
 void CompletEngine::overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite) {
-	const byte transparentGreen = _xexLayout ? 0 : 0xff;
+	const byte transparentGreen = _blackKeySprites ? 0 : 0xff;
 	for (uint i = 0; i + 2 < dst.size(); i += 3) {
 		if (sprite[i] != 0 || sprite[i + 1] != transparentGreen || sprite[i + 2] != 0)
 			memcpy(&dst[i], &sprite[i], 3);
@@ -1060,16 +1123,16 @@ void CompletEngine::showBacklog() {
 void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 	Graphics::Surface *screen = g_system->lockScreen();
 
-	screen->fillRect(Common::Rect(10, 10, _screenWidth - 10, _screenHeight - 10), _format.RGBToColor(0, 0, 0));
-	screen->fillRect(Common::Rect(11, 11, _screenWidth - 11, _screenHeight - 11), _format.RGBToColor(0x10, 0x30, 0x10));
+	screen->fillRect(Common::Rect(scaleX(10), scaleY(10), _screenWidth - scaleX(10), _screenHeight - scaleY(10)), _format.RGBToColor(0, 0, 0));
+	screen->fillRect(Common::Rect(scaleX(11), scaleY(11), _screenWidth - scaleX(11), _screenHeight - scaleY(11)), _format.RGBToColor(0x10, 0x30, 0x10));
 
 	// Page number as full-width digits followed by a full-width "p"
 	if (pageCount < 100) {
 		const uint32 color = _format.RGBToColor(0x7f, 0xff, 0xff);
-		_font->drawChar(screen, 0xff50, _screenWidth - 42, _screenHeight - 46, color);
-		_font->drawChar(screen, 0xff10 + pageNumber % 10, _screenWidth - 70, _screenHeight - 44, color);
+		_font->drawChar(screen, 0xff50, _screenWidth - scaleX(42), _screenHeight - scaleY(46), color);
+		_font->drawChar(screen, 0xff10 + pageNumber % 10, _screenWidth - scaleX(70), _screenHeight - scaleY(44), color);
 		if (pageNumber > 9)
-			_font->drawChar(screen, 0xff10 + pageNumber / 10, _screenWidth - 102, _screenHeight - 44, color);
+			_font->drawChar(screen, 0xff10 + pageNumber / 10, _screenWidth - scaleX(102), _screenHeight - scaleY(44), color);
 	}
 
 	// Full-width angle brackets and double angle quotes switch colours, as in the original
@@ -1079,12 +1142,12 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 		_format.RGBToColor(0x9e, 0xff, 0xc2)
 	};
 	int color = 0;
-	int x = 0, y = 0x18;
+	int x = 0, y = scaleY(0x18);
 	for (uint i = start + 1; i < _backlog.size() && _backlog[i] != kBacklogPage; i++) {
 		const uint32 ch = _backlog[i];
 		if (ch == kBacklogLine) {
 			x = 0;
-			y += 0x20;
+			y += scaleY(0x20);
 			continue;
 		}
 
@@ -1092,14 +1155,14 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 			color = 1;
 		else if (ch == 0x226a)
 			color = 2;
-		_font->drawChar(screen, ch, x + 0x1b, y, colors[color]);
+		_font->drawChar(screen, ch, x + scaleX(0x1b), y, colors[color]);
 		if (ch == 0xff1c || ch == 0x226b)
 			color = 0;
 
-		x += kBacklogAdvance;
-		if (x > _screenWidth - 35) {
+		x += scaleX(kBacklogAdvance);
+		if (x > _screenWidth - scaleX(35)) {
 			x = 0;
-			y += 0x20;
+			y += scaleY(0x20);
 		}
 	}
 

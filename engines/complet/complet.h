@@ -40,6 +40,8 @@ struct Surface;
 
 namespace Complet {
 
+struct CompletMenuStyle;
+
 enum {
 	kCgCount = 124
 };
@@ -62,7 +64,7 @@ enum CompletAction {
 
 class CompletEngine : public Engine, public Common::EventObserver {
 public:
-	CompletEngine(OSystem *system);
+	CompletEngine(OSystem *system, int screenWidth, int screenHeight, bool xexLayout, const CompletMenuStyle &menuStyle);
 	~CompletEngine() override;
 
 	Common::Error run() override;
@@ -96,6 +98,9 @@ private:
 		int left, top, width, height, rows;
 	};
 
+	int scaleX(int value) const { return _xexLayout ? value : value * _screenWidth / kScreenWidth; }
+	int scaleY(int value) const { return _xexLayout ? value : value * _screenHeight / kScreenHeight; }
+
 	enum MessageButton {
 		kButtonNone,
 		kButtonLoad,
@@ -103,7 +108,7 @@ private:
 		kButtonLog
 	};
 
-	bool initGame();
+	void initGame();
 	void initCursor();
 	void loadFont();
 	bool loadFrameImage();
@@ -169,7 +174,9 @@ private:
 	Common::Array<byte> _bg;
 	Common::String _bgName;
 	bool _bgPending = false;
+	const CompletMenuStyle *_menuStyle = nullptr;
 	bool _xexLayout = false;
+	bool _blackKeySprites = false;
 	int _screenWidth = kScreenWidth;
 	int _screenHeight = kScreenHeight;
 	// What _scene shows: a full-screen image, or a background with sprites
@@ -177,6 +184,7 @@ private:
 	Common::String _sceneBg;
 	Common::String _sceneFg;
 	const Graphics::Font *_font = nullptr;
+	const Graphics::Font *_menuFont = nullptr;
 	bool _ownFont = false;
 
 	bool _messageVisible = false;
