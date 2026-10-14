@@ -44,11 +44,13 @@ public:
 	bool load(Common::SeekableReadStream &stream);
 	bool loadFromName(const Common::String &name);
 	bool isGd2() const { return _isGd2; }
+	int getWidth() const { return _isGd2 ? 640 : kScreenWidth; }
+	int getHeight() const { return _isGd2 ? 480 : kScreenHeight; }
 
-	// 24bpp, B,G,R byte order, bottom-up rows, kScreenWidth x kScreenHeight
+	// 24bpp, B,G,R byte order, bottom-up rows, native image dimensions
 	const byte *getPixels() const { return _pixels.data(); }
 
-	// An 80x60 preview, same pixel layout
+	// A native-size 1/10 preview, same pixel layout
 	static bool loadThumbnail(const Common::String &name, Common::Array<byte> &out);
 
 private:

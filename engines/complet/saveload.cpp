@@ -148,7 +148,7 @@ bool CompletEngine::applyPendingLoad() {
 
 // Restores the background layer and the screen from the image names
 void CompletEngine::rebuildScene() {
-	const uint size = kScreenWidth * kScreenHeight * 3;
+	const uint size = _screenWidth * _screenHeight * 3;
 	_bg.resize(size);
 	memset(_bg.data(), 0, size);
 	if (!_bgName.empty())

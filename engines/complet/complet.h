@@ -169,6 +169,8 @@ private:
 	Common::String _bgName;
 	bool _bgPending = false;
 	bool _xexLayout = false;
+	int _screenWidth = kScreenWidth;
+	int _screenHeight = kScreenHeight;
 	// What _scene shows: a full-screen image, or a background with sprites
 	Common::String _sceneFull;
 	Common::String _sceneBg;

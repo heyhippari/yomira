@@ -175,9 +175,10 @@ void CompletEngine::initCursor() {
 }
 
 Common::Error CompletEngine::run() {
-	// The original uses a fixed 800x600 window with 24bpp BGR DIBs
 	_format = Graphics::PixelFormat::createFormatBGRA32();
-	initGraphics(kScreenWidth, kScreenHeight, &_format);
+	if (!initGame())
+		return Common::Error(Common::kReadingFailed, "Missing game data (gds/mpx folders)");
+	initGraphics(_screenWidth, _screenHeight, &_format);
 
 	setDebugger(new Console(this));
 	ConfMan.registerDefault("auto_mode", false);
@@ -186,16 +187,13 @@ Common::Error CompletEngine::run() {
 	syncSoundSettings();
 	applyGameSettings();
 
-	if (!initGame())
-		return Common::Error(Common::kReadingFailed, "Missing game data (gds/mpx folders)");
-
 	loadFont();
 	initCursor();
 #ifndef USE_MAD
 	warning("Complet: built without MP3 support, voices and digital music are silent");
 #endif
 
-	_scene.resize(kScreenWidth * kScreenHeight * 3);
+	_scene.resize(_screenWidth * _screenHeight * 3);
 	memset(_scene.data(), 0, _scene.size());
 	_bg = _scene;
 	resetBacklog();
@@ -240,7 +238,7 @@ void CompletEngine::loadFont() {
 	for (uint i = 0; i < ARRAYSIZE(kFontFiles) && !_font; i++) {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 		if (stream)
-			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, kFontSize, Graphics::kTTFSizeModeCell);
+			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _xexLayout ? 24 : kFontSize, Graphics::kTTFSizeModeCell);
 	}
 
 	if (_font) {
@@ -256,6 +254,8 @@ bool CompletEngine::loadFrameImage() {
 	// MESFRAME.GD holds the message frame and glyph sheet, NULL.GD is the fallback
 	const bool loaded = _frameImage.loadFromName("mesframe.gd") || _frameImage.loadFromName("null.gd");
 	_xexLayout = loaded && _frameImage.isGd2();
+	_screenWidth = _frameImage.getWidth();
+	_screenHeight = _frameImage.getHeight();
 	return loaded;
 }
 
@@ -312,10 +312,10 @@ void CompletEngine::presentBuffer(const byte *bgr, int brightness) {
 	Graphics::Surface *screen = g_system->lockScreen();
 
 	// Source rows are bottom-up
-	for (int y = 0; y < kScreenHeight; y++) {
-		const byte *row = bgr + (kScreenHeight - 1 - y) * kScreenWidth * 3;
+	for (int y = 0; y < _screenHeight; y++) {
+		const byte *row = bgr + (_screenHeight - 1 - y) * _screenWidth * 3;
 		uint32 *dst = (uint32 *)screen->getBasePtr(0, y);
-		for (int x = 0; x < kScreenWidth; x++, row += 3)
+		for (int x = 0; x < _screenWidth; x++, row += 3)
 			*dst++ = _format.RGBToColor(row[2] * brightness / 255, row[1] * brightness / 255, row[0] * brightness / 255);
 	}
 
@@ -332,10 +332,10 @@ void CompletEngine::present() {
 	Graphics::Surface *screen = g_system->lockScreen();
 
 	const byte *bgr = _scene.data();
-	for (int y = 0; y < kScreenHeight; y++) {
-		const byte *row = bgr + (kScreenHeight - 1 - y) * kScreenWidth * 3;
+	for (int y = 0; y < _screenHeight; y++) {
+		const byte *row = bgr + (_screenHeight - 1 - y) * _screenWidth * 3;
 		uint32 *dst = (uint32 *)screen->getBasePtr(0, y);
-		for (int x = 0; x < kScreenWidth; x++, row += 3)
+		for (int x = 0; x < _screenWidth; x++, row += 3)
 			*dst++ = _format.RGBToColor(row[2], row[1], row[0]);
 	}
 	drawOverlays(*screen);
@@ -350,14 +350,8 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 		drawMessage(screen);
 	if (_indicatorFrame >= 0 && !_messageHidden) {
 		if (_xexLayout) {
-			const int nativeX = 0x40 + _indicatorFrame * 0x1a;
-			const int sourceX = nativeX * kScreenWidth / 640;
-			const int sourceRight = (nativeX + 0x1a) * kScreenWidth / 640;
-			const int sourceY = _autoMode ? 0x0c : 0;
-			const int destX = 0x244 * kScreenWidth / 640;
-			const int destY = (0x1e0 - 0x22) * kScreenHeight / 480;
-			drawFrameRect(screen, sourceX, sourceY, sourceRight - sourceX, 0x0c * kScreenHeight / 480,
-					destX, destY, true);
+			drawFrameRect(screen, 0x40 + _indicatorFrame * 0x1a, _autoMode ? 0x0c : 0,
+					0x1a, 0x0c, 0x244, 0x1e0 - 0x22);
 		} else {
 			// Animated "CLICK" (or "AUTO") marker from the top left of the C4 frame image
 			drawFrameRect(screen, (_indicatorFrame + (_autoMode ? 8 : 0)) * 32, 0, 32, 32,
@@ -372,7 +366,7 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey) {
 	const byte *frame = _frameImage.getPixels();
 	for (int y = 0; y < h; y++) {
-		const byte *src = frame + ((kScreenHeight - 1 - (sy + y)) * kScreenWidth + sx) * 3;
+		const byte *src = frame + ((_screenHeight - 1 - (sy + y)) * _screenWidth + sx) * 3;
 		uint32 *dst = (uint32 *)screen.getBasePtr(dx, dy + y);
 		for (int x = 0; x < w; x++, src += 3, dst++) {
 			if (!blackKey || src[0] || src[1] || src[2])
@@ -405,21 +399,26 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 		return;
 
 	// Dim the area behind the text
-	for (int y = kMessageBoxY; y < kMessageBoxY + kMessageBoxHeight; y++) {
-		uint32 *p = (uint32 *)screen.getBasePtr(kMessageBoxX, y);
-		for (int x = 0; x < kMessageBoxWidth; x++, p++) {
+	const int boxX = _xexLayout ? 16 : kMessageBoxX;
+	const int boxY = _xexLayout ? 331 : kMessageBoxY;
+	const int boxWidth = _xexLayout ? 608 : kMessageBoxWidth;
+	const int boxHeight = _xexLayout ? 137 : kMessageBoxHeight;
+	for (int y = boxY; y < boxY + boxHeight; y++) {
+		uint32 *p = (uint32 *)screen.getBasePtr(boxX, y);
+		for (int x = 0; x < boxWidth; x++, p++) {
 			byte r, g, b;
 			_format.colorToRGB(*p, r, g, b);
-			*p = _format.RGBToColor(r >> 2, g >> 2, b >> 1);
+			*p = _format.RGBToColor(r >> (_xexLayout ? 1 : 2), g >> (_xexLayout ? 1 : 2), b >> 1);
 		}
 	}
 
 	const uint32 shadow = _format.RGBToColor(0x3f, 0x3f, 0x7f);
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (uint i = 0; i < _messageLines.size(); i++) {
-		int y = kMessageTop + i * kMessageLineHeight;
-		drawText(screen, _messageLines[i], kMessageLeft + 1, y + 1, shadow, kMessageCharAdvance);
-		drawText(screen, _messageLines[i], kMessageLeft, y, white, kMessageCharAdvance);
+		int y = (_xexLayout ? 0x14e : kMessageTop) + i * kMessageLineHeight;
+		int x = _xexLayout ? 0x1e : kMessageLeft;
+		drawText(screen, _messageLines[i], x + 1, y + 1, shadow, kMessageCharAdvance);
+		drawText(screen, _messageLines[i], x, y, white, kMessageCharAdvance);
 	}
 
 	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
@@ -443,6 +442,10 @@ CompletEngine::MenuLayout CompletEngine::getMenuLayout() const {
 	layout.width = 14 * longest + 0x30;
 	layout.top = 0x11c - 16 * layout.rows;
 	layout.height = kMenuRowHeight * layout.rows + 6;
+	if (_xexLayout) {
+		layout.left -= 80;
+		layout.top -= 60;
+	}
 	return layout;
 }
 
@@ -860,7 +863,11 @@ bool CompletEngine::loadImage(const Common::String &name, Common::Array<byte> &o
 		return false;
 	}
 
-	out.resize(kScreenWidth * kScreenHeight * 3);
+	if (image.getWidth() != _screenWidth || image.getHeight() != _screenHeight) {
+		warning("Complet: graphic '%s' has incompatible dimensions", name.c_str());
+		return false;
+	}
+	out.resize(_screenWidth * _screenHeight * 3);
 	memcpy(out.data(), image.getPixels(), out.size());
 	return true;
 }
@@ -948,7 +955,7 @@ void CompletEngine::printChar(uint32 ch) {
 
 	// Closing punctuation may overflow the line
 	bool hangs = ch == 0x3001 || ch == 0x3002 || ch == 0x300d;
-	if (_messageLines.back().size() >= kMessageLineChars && !hangs) {
+	if (_messageLines.back().size() >= (uint)(_xexLayout ? 20 : kMessageLineChars) && !hangs) {
 		if (_messageLines.size() >= kMessageMaxLines) {
 			present();
 			if (!waitClick())
@@ -970,7 +977,7 @@ void CompletEngine::printChar(uint32 ch) {
 
 void CompletEngine::addBacklogChar(uint32 ch) {
 	// Like the original, a line break is inserted before the 24th character after an explicit break
-	if (++_backlogLineChars >= kBacklogLineChars)
+	if (++_backlogLineChars >= (_xexLayout ? 22 : kBacklogLineChars))
 		addBacklogBreak();
 	_backlog.push_back(ch);
 
@@ -986,7 +993,7 @@ void CompletEngine::addBacklogChar(uint32 ch) {
 
 void CompletEngine::addBacklogBreak() {
 	_backlogLineChars = 0;
-	if (++_backlogLines >= kBacklogPageLines) {
+	if (++_backlogLines >= (_xexLayout ? 13 : kBacklogPageLines)) {
 		_backlogLines = 0;
 		_backlog.push_back(kBacklogPage);
 	} else {
@@ -1048,16 +1055,16 @@ void CompletEngine::showBacklog() {
 void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 	Graphics::Surface *screen = g_system->lockScreen();
 
-	screen->fillRect(Common::Rect(10, 10, 790, 590), _format.RGBToColor(0, 0, 0));
-	screen->fillRect(Common::Rect(11, 11, 789, 589), _format.RGBToColor(0x10, 0x30, 0x10));
+	screen->fillRect(Common::Rect(10, 10, _screenWidth - 10, _screenHeight - 10), _format.RGBToColor(0, 0, 0));
+	screen->fillRect(Common::Rect(11, 11, _screenWidth - 11, _screenHeight - 11), _format.RGBToColor(0x10, 0x30, 0x10));
 
 	// Page number as full-width digits followed by a full-width "p"
 	if (pageCount < 100) {
 		const uint32 color = _format.RGBToColor(0x7f, 0xff, 0xff);
-		_font->drawChar(screen, 0xff50, 0x2f6, 0x22a, color);
-		_font->drawChar(screen, 0xff10 + pageNumber % 10, 0x2da, 0x22c, color);
+		_font->drawChar(screen, 0xff50, _screenWidth - 42, _screenHeight - 46, color);
+		_font->drawChar(screen, 0xff10 + pageNumber % 10, _screenWidth - 70, _screenHeight - 44, color);
 		if (pageNumber > 9)
-			_font->drawChar(screen, 0xff10 + pageNumber / 10, 0x2ba, 0x22c, color);
+			_font->drawChar(screen, 0xff10 + pageNumber / 10, _screenWidth - 102, _screenHeight - 44, color);
 	}
 
 	// Full-width angle brackets and double angle quotes switch colours, as in the original
@@ -1085,7 +1092,7 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 			color = 0;
 
 		x += kBacklogAdvance;
-		if (x > 0x2fd) {
+		if (x > _screenWidth - 35) {
 			x = 0;
 			y += 0x20;
 		}

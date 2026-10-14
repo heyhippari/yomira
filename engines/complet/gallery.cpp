@@ -73,18 +73,18 @@ void CompletEngine::blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, i
 	const byte *frame = _frameImage.getPixels();
 	for (int k = 0; k < h; k++) {
 		int topDownRow = dy + (h - 1 - k);
-		int dstRow = kScreenHeight - 1 - topDownRow;
-		if (dstRow < 0 || dstRow >= kScreenHeight || dx < 0 || dx + w > kScreenWidth)
+		int dstRow = _screenHeight - 1 - topDownRow;
+		if (dstRow < 0 || dstRow >= _screenHeight || dx < 0 || dx + w > _screenWidth)
 			continue;
-		memcpy(&dst[(dstRow * kScreenWidth + dx) * 3], frame + ((sy + k) * kScreenWidth + sx) * 3, w * 3);
+		memcpy(&dst[(dstRow * _screenWidth + dx) * 3], frame + ((sy + k) * _screenWidth + sx) * 3, w * 3);
 	}
 }
 
-static void drawBox(Common::Array<byte> &buf, int x0, int y0, int x1, int y1, const byte color[3]) {
+static void drawBox(Common::Array<byte> &buf, int width, int height, int x0, int y0, int x1, int y1, const byte color[3]) {
 	for (int y = y0; y < y1; y++) {
-		int row = kScreenHeight - 1 - y;
+		int row = height - 1 - y;
 		for (int x = x0; x < x1; x++)
-			memcpy(&buf[(row * kScreenWidth + x) * 3], color, 3);
+			memcpy(&buf[(row * width + x) * 3], color, 3);
 	}
 }
 
@@ -106,6 +106,8 @@ bool CompletEngine::waitAnyInput() {
 }
 
 bool CompletEngine::runGallery() {
+	const int thumbWidth = _screenWidth / kCellColumns;
+	const int thumbHeight = _screenHeight / kCellColumns;
 	Common::Array<int> seen;
 	for (int i = 0; i < kCgCount; i++) {
 		if (_seenCg[i])
@@ -122,30 +124,56 @@ bool CompletEngine::runGallery() {
 	Common::Array<byte> pages[2];
 	for (int p = 0; p < pageCount; p++) {
 		Common::Array<byte> &page = pages[p];
-		page.resize(kScreenWidth * kScreenHeight * 3);
+		page.resize(_screenWidth * _screenHeight * 3);
 		memset(page.data(), 0, page.size());
 
 		int first = p * kCellsPerPage;
 		for (int i = 0; i < kCellsPerPage && first + i < count; i++) {
 			Common::Array<byte> thumb;
 			if (!GdImage::loadThumbnail(kCgNames[seen[first + i]], thumb)) {
-				thumb.resize(kThumbWidth * kThumbHeight * 3);
+				thumb.resize(thumbWidth * thumbHeight * 3);
 				memset(thumb.data(), 0x7f, thumb.size());
 			}
 
-			int cellX = (i % kCellColumns) * kThumbWidth;
-			int cellTop = (i / kCellColumns) * kThumbHeight;
-			for (int r = 0; r < kThumbHeight; r++) {
-				int dstRow = kScreenHeight - 1 - (cellTop + kThumbHeight - 1 - r);
-				memcpy(&page[(dstRow * kScreenWidth + cellX) * 3], &thumb[r * kThumbWidth * 3], kThumbWidth * 3);
+			int cellX = (i % kCellColumns) * thumbWidth;
+			int cellTop = (i / kCellColumns) * thumbHeight;
+			for (int row = 0; row < thumbHeight; row++) {
+				int dstRow = _screenHeight - 1 - (cellTop + thumbHeight - 1 - row);
+				memcpy(&page[(dstRow * _screenWidth + cellX) * 3], &thumb[row * thumbWidth * 3], thumbWidth * 3);
 			}
+		}
+
+		if (_xexLayout) {
+			blitFrame(page, 0, 0xc0, 640, 48, 0, 0x1af);
+			int width = count * 500 / kCgCount;
+			if (width) {
+				drawBox(page, _screenWidth, _screenHeight, 0x13, 0x1b8, width + 0x15, 0x1d8, black);
+				drawBox(page, _screenWidth, _screenHeight, 0x14, 0x1b9, width + 0x14, 0x1d7, yellow);
+			}
+			int tenths = count * 1000 / kCgCount;
+			if (tenths < 1000) {
+				if (tenths >= 100)
+					blitFrame(page, (tenths / 100) * 8, 0xb4, 8, 12, 0x20e, 0x1cf);
+				blitFrame(page, ((tenths % 100) / 10) * 8, 0xb4, 8, 12, 0x216, 0x1cf);
+				blitFrame(page, 0x50, 0xb4, 8, 12, 0x21e, 0x1cf);
+				blitFrame(page, (tenths % 10) * 8, 0xb4, 8, 12, 0x222, 0x1cf);
+				blitFrame(page, 0x58, 0xb4, 16, 12, 0x22a, 0x1cf);
+			} else {
+				blitFrame(page, 8, 0xb4, 8, 12, 0x20e, 0x1cf);
+				blitFrame(page, 0, 0xb4, 8, 12, 0x216, 0x1cf);
+				blitFrame(page, 0, 0xb4, 8, 12, 0x21e, 0x1cf);
+				blitFrame(page, 0x58, 0xb4, 16, 12, 0x226, 0x1cf);
+			}
+			if (pageCount > 1)
+				blitFrame(page, 0, 0xa7, 0x33, 12, 0x20a, 0x1b7);
+			continue;
 		}
 
 		// Progress bar showing how many CGs have been seen
 		int width = count * 600 / kCgCount;
 		if (width) {
-			drawBox(page, 0x13, 0x240, width + 0x15, 0x24e, black);
-			drawBox(page, 0x14, 0x241, width + 0x14, 0x24d, yellow);
+			drawBox(page, _screenWidth, _screenHeight, 0x13, 0x240, width + 0x15, 0x24e, black);
+			drawBox(page, _screenWidth, _screenHeight, 0x14, 0x241, width + 0x14, 0x24d, yellow);
 		}
 		blitFrame(page, 0x284, 0x239, 0x33, 0x15, 0x2de, 0x230);
 		blitFrame(page, 0x2b8, 0x24c, 10, 4, 0x10, 0x23c);
@@ -174,8 +202,8 @@ bool CompletEngine::runGallery() {
 	_messageVisible = false;
 
 	auto cellAt = [&](int page, const Common::Point &pos) {
-		int cell = pos.x / kThumbWidth + (pos.y / kThumbHeight) * kCellColumns;
-		if (pos.x < 0 || pos.y < 0 || pos.x >= kScreenWidth || pos.y >= kScreenHeight)
+		int cell = pos.x / thumbWidth + (pos.y / thumbHeight) * kCellColumns;
+		if (pos.x < 0 || pos.y < 0 || pos.x >= _screenWidth || pos.y >= _screenHeight)
 			return -1;
 		if (cell == kNextPageCell || cell == kExitCell)
 			return cell;
@@ -188,14 +216,14 @@ bool CompletEngine::runGallery() {
 	auto show = [&](int page, int selected) {
 		Common::Array<byte> view = pages[page];
 		if (selected >= 0 && selected < kCellsPerPage) {
-			int cellX = (selected % kCellColumns) * kThumbWidth;
-			int cellTop = (selected / kCellColumns) * kThumbHeight;
-			for (int k = 0; k < kThumbHeight; k++) {
-				int row = kScreenHeight - 1 - (cellTop + kThumbHeight - 1 - k);
-				bool edge = k < 2 || k > 0x39;
-				for (int x = 0; x < kThumbWidth; x++) {
-					if (edge || x < 2 || (x >= 76 && x < 78))
-						memcpy(&view[(row * kScreenWidth + cellX + x) * 3], highlight, 3);
+			int cellX = (selected % kCellColumns) * thumbWidth;
+			int cellTop = (selected / kCellColumns) * thumbHeight;
+			for (int rowIndex = 0; rowIndex < thumbHeight; rowIndex++) {
+				int row = _screenHeight - 1 - (cellTop + thumbHeight - 1 - rowIndex);
+				bool edge = rowIndex < 2 || rowIndex >= thumbHeight - 2;
+				for (int x = 0; x < thumbWidth; x++) {
+					if (edge || x < 2 || (x >= thumbWidth - 4 && x < thumbWidth - 2))
+						memcpy(&view[(row * _screenWidth + cellX + x) * 3], highlight, 3);
 				}
 			}
 		}
@@ -275,7 +303,7 @@ bool CompletEngine::runGallery() {
 		} else if (activated >= 0) {
 			GdImage image;
 			if (image.loadFromName(Common::String(kCgNames[seen[page * kCellsPerPage + activated]]) + ".gd")) {
-				Common::Array<byte> picture(kScreenWidth * kScreenHeight * 3);
+				Common::Array<byte> picture(_screenWidth * _screenHeight * 3);
 				memcpy(picture.data(), image.getPixels(), picture.size());
 				memcpy(_scene.data(), pages[page].data(), _scene.size());
 				ok = fadeTo(picture) && waitAnyInput();

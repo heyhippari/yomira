@@ -99,12 +99,14 @@ bool GdImage::loadThumbnail(const Common::String &name, Common::Array<byte> &out
 		if (!image.load(file))
 			return false;
 
-		out.resize(kThumbWidth * kThumbHeight * 3);
+		const int thumbWidth = image.getWidth() / 10;
+		const int thumbHeight = image.getHeight() / 10;
+		out.resize(thumbWidth * thumbHeight * 3);
 		const byte *pixels = image.getPixels();
-		for (uint y = 0; y < kThumbHeight; y++) {
-			const byte *src = pixels + (y * 10 * kScreenWidth) * 3;
-			byte *dst = out.data() + y * kThumbWidth * 3;
-			for (uint x = 0; x < kThumbWidth; x++)
+		for (int y = 0; y < thumbHeight; y++) {
+			const byte *src = pixels + (y * 10 * image.getWidth()) * 3;
+			byte *dst = out.data() + y * thumbWidth * 3;
+			for (int x = 0; x < thumbWidth; x++)
 				memcpy(dst + x * 3, src + x * 10 * 3, 3);
 		}
 		return true;
@@ -159,19 +161,7 @@ bool GdImage::load(Common::SeekableReadStream &stream) {
 	if (!decoded)
 		return false;
 	_isGd2 = gd2;
-
-	if (!gd2) {
-		_pixels = pixels;
-		return true;
-	}
-
-	_pixels.resize(kBufferSize);
-	for (uint y = 0; y < kScreenHeight; y++) {
-		const byte *srcRow = pixels.data() + (y * kGd2Height / kScreenHeight) * kGd2Width * 3;
-		byte *dst = _pixels.data() + y * kScreenWidth * 3;
-		for (uint x = 0; x < kScreenWidth; x++)
-			memcpy(dst + x * 3, srcRow + (x * kGd2Width / kScreenWidth) * 3, 3);
-	}
+	_pixels = pixels;
 	return true;
 }
 
