@@ -36,7 +36,15 @@ static const CompletMenuStyle kC4MenuStyle = {
 	0x11c, 16, 32, 6,
 	32, 16, 0, 0,
 	0x000030, 0xffff00, 0xffffff, 0xffc000, 0x000018, 0xffffff,
-	true, false
+	true, false, false
+};
+
+static const CompletMenuStyle kMamaMenuStyle = {
+	0x170, 7, 14, 0x30,
+	0x11c, 16, 32, 6,
+	32, 16, 0, 0,
+	0x000030, 0x000030, 0x4040ff, 0xffffff, 0x3f3f7f, 0xffffff,
+	true, false, true
 };
 
 static const CompletMenuStyle kXexMenuStyle = {
@@ -44,7 +52,7 @@ static const CompletMenuStyle kXexMenuStyle = {
 	0x11c, 16, 32, 6,
 	32, 16, -80, -60,
 	0x000030, 0xffff00, 0xffffff, 0xffc000, 0x000018, 0xffffff,
-	false, false
+	false, false, false
 };
 
 static const CompletMenuStyle kKoiMenuStyle = {
@@ -52,7 +60,7 @@ static const CompletMenuStyle kKoiMenuStyle = {
 	240, 14, 28, 0,
 	28, 16, 0, 0,
 	0x000030, 0xffff00, 0xffffff, 0xf39b23, 0x606060, 0xffffff,
-	false, true
+	false, true, false
 };
 
 static const CompletGameDescription gameDescriptions[] = {
@@ -66,7 +74,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
 		},
-		800, 600, false, kC4MenuStyle
+		800, 600, false, kMamaMenuStyle
 	},
 	{
 		{

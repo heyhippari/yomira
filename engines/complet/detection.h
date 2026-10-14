@@ -47,6 +47,7 @@ struct CompletMenuStyle {
 	uint32 hoverOutlineColor;
 	bool showQuickSaveLoad;
 	bool outlinedMenu;
+	bool plainMenu;
 };
 
 struct CompletGameDescription {

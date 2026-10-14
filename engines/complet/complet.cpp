@@ -241,10 +241,14 @@ void CompletEngine::loadFont() {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 		if (stream)
 			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _xexLayout ? 24 : scaleY(kFontSize), Graphics::kTTFSizeModeCell);
-		if (_font && _menuStyle->outlinedMenu) {
+		if (_font && (_menuStyle->outlinedMenu || _menuStyle->plainMenu)) {
 			stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
-			if (stream)
-				_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 32, Graphics::kTTFSizeModeCell, 100, 72);
+			if (stream) {
+				if (_menuStyle->plainMenu)
+					_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 30, Graphics::kTTFSizeModeCharacter);
+				else
+					_menuFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 32, Graphics::kTTFSizeModeCell, 100, 72);
+			}
 		}
 	}
 
@@ -493,6 +497,22 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 
 	for (int i = 0; i < layout.rows; i++) {
 		Common::U32String text((*_menu)[i].text, Common::kWindows932);
+		if (style.plainMenu) {
+			const Graphics::Font *font = _menuFont ? _menuFont : _font;
+			const int x = layout.left + layout.width / 2 - text.size() * charAdvance / 2;
+			const int y = layout.top + 2 + i * rowHeight - MAX(0, (font->getFontHeight() - 30) / 2);
+			const uint32 textColor = i == _hover ? style.hoverTextColor : style.idleTextColor;
+			const uint32 color = _format.RGBToColor((textColor >> 16) & 0xff, (textColor >> 8) & 0xff, textColor & 0xff);
+			const uint32 shadow = _format.RGBToColor((style.textShadowColor >> 16) & 0xff, (style.textShadowColor >> 8) & 0xff, style.textShadowColor & 0xff);
+			for (uint j = 0; j < text.size(); j++) {
+				const int glyphX = x + j * charAdvance;
+				if (i == _hover)
+					font->drawChar(&screen, text[j], glyphX + 1, y + 1, shadow);
+				font->drawChar(&screen, text[j], glyphX + 1, y, color);
+				font->drawChar(&screen, text[j], glyphX, y, color);
+			}
+			continue;
+		}
 		if (style.outlinedMenu) {
 			const Graphics::Font *font = _menuFont ? _menuFont : _font;
 			const int textWidth = text.size() * charAdvance;
@@ -584,7 +604,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 	};
 
 	_hover = rowAt(g_system->getEventManager()->getMousePos());
-	if (_hover < 0)
+	if (_hover < 0 && !_menuStyle->plainMenu)
 		_hover = 0;
 	present();
 
@@ -629,7 +649,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 
 			switch (event.type) {
 			case Common::EVENT_MOUSEMOVE:
-				if (rowAt(event.mouse) >= 0)
+				if (_menuStyle->plainMenu || rowAt(event.mouse) >= 0)
 					_hover = rowAt(event.mouse);
 				break;
 			case Common::EVENT_LBUTTONUP:
