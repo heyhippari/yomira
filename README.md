@@ -1,26 +1,22 @@
-# [ScummVM README](https://www.scummvm.org/) · [![Translation status](https://translations.scummvm.org/widgets/scummvm/-/scummvm/svg-badge.svg)](https://translations.scummvm.org/engage/scummvm/?utm_source=widget) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md#pull-requests)
+# Yomira
 
-## About ScummVM
+## About Yomira
 
-ScummVM allows you to play classic graphic point-and-click adventure games, text adventure games, and RPGs, as long as you already have the game data files. ScummVM replaces the executable files shipped with the games, which means you can now play your favorite games on all your favorite devices.
+Yomira is a fork of [ScummVM](https://www.scummvm.org/) that lets you play classic graphic point-and-click adventure games, text adventure games, and RPGs using the original game data files. It retains ScummVM's broad platform and game support while keeping changes focused so upstream improvements can be backported.
 
-So how did ScummVM get its name? Many of the famous LucasArts adventure games, such as Maniac Mansion and the Monkey Island series, were created using a utility called SCUMM (Script Creation Utility for Maniac Mansion). The ‘VM’ in ScummVM stands for Virtual Machine.
+Yomira inherits support for many games from ScummVM, including Broken Sword, Myst, and Blade Runner. See the [upstream supported games list](https://wiki.scummvm.org/index.php?title=Category:Supported_Games).
 
-While ScummVM was originally designed to run LucasArts’ SCUMM games, over time support has been added for many other games: see the full list [on our wiki](https://wiki.scummvm.org/index.php?title=Category:Supported_Games). Noteworthy titles include Broken Sword, Myst and Blade Runner, although there are countless other hidden gems to explore.
-
-For more information, compatibility lists, details on donating, the
-latest release, progress reports and more, please visit the ScummVM [home
-page](https://www.scummvm.org/).
+For upstream compatibility information, releases, and project news, visit the [ScummVM website](https://www.scummvm.org/).
 
 ## Quickstart
 
-For the impatient among you, here is how to get ScummVM running in five simple steps.
+For the impatient among you, here is how to get Yomira running in five simple steps.
 
-1. Download ScummVM from [our website](https://www.scummvm.org/downloads/) and install it.
+1. Install a Yomira build for your platform.
 
 2. Create a directory on your hard drive and copy the game datafiles from the original media to this directory. Repeat this for every game you want to play.
 
-3. Start ScummVM, choose 'Add game', select the directory containing the game datafiles (do not try to select the datafiles themselves!) and press Choose.
+3. Start Yomira, choose 'Add game', select the directory containing the game datafiles (do not try to select the datafiles themselves!) and press Choose.
 
 4. The Game Options dialog opens to allow configuration of various settings for the game. These can be reconfigured at any time, but for now everything should be OK at the default settings.
 
@@ -29,19 +25,19 @@ For the impatient among you, here is how to get ScummVM running in five simple s
 >
 > Hint:
 >
-> To add multiple games in one go, click the small arrow on the 'Add game' button and choose 'Mass Add'. You are again asked to select a directory, only this time ScummVM will search through all subdirectories for supported games.
+> To add multiple games in one go, click the small arrow on the 'Add game' button and choose 'Mass Add'. Yomira will search the selected directory and its subdirectories for supported games.
 
 
 
 ## Reporting a bug
 
-To report a bug, go to the ScummVM [Issue Tracker](https://bugs.scummvm.org/) and log in with your GitHub account.
+For bugs specific to Yomira, use this repository's issue tracker. For issues also present in upstream ScummVM, use the ScummVM [Issue Tracker](https://bugs.scummvm.org/).
 
-Please make sure the bug is reproducible, and still occurs in the latest git/[Daily build](https://buildbot.scummvm.org/#/dailybuilds) version. Also check the [compatibility list](https://www.scummvm.org/compatibility/) for that game, to ensure the issue is not already known. Please do not report bugs for games that are not listed as completable on the [Supported Games](https://wiki.scummvm.org/index.php?title=Category:Supported_Games) wiki page, or on the compatibility list. We already know those games have bugs!
+Please make sure the bug is reproducible on the latest Yomira build. For upstream reports, check the [ScummVM daily builds](https://buildbot.scummvm.org/#/dailybuilds) and [compatibility list](https://www.scummvm.org/compatibility/) first. Please do not report upstream bugs for games that are not listed as completable on the [Supported Games](https://wiki.scummvm.org/index.php?title=Category:Supported_Games) wiki page or compatibility list.
 
 Please include the following information in the bug report:
 
-- ScummVM version (test the latest git/[Daily build](https://buildbot.scummvm.org/#/dailybuilds))
+- Yomira version
 - Bug details, including instructions for how to reproduce the bug. If possible, include log files, screenshots, and any other relevant information.
 - Game language
 - Game version (for example, talkie or floppy)
@@ -55,11 +51,11 @@ Finally, please report each issue separately; do not file multiple issues on the
 
 ### User documentation
 
-For everything you need to know about how to use ScummVM, see our [user documentation](https://docs.scummvm.org/).
+For general usage information, see the upstream [ScummVM user documentation](https://docs.scummvm.org/).
 
 ### The ScummVM Wiki
 
-[The wiki](https://wiki.scummvm.org/) is the place to go for information about every game supported by ScummVM. If you're a developer, there's also some very handy information in the Developer section.
+[The wiki](https://wiki.scummvm.org/) has information about games supported by ScummVM and development.
 
 ### Changelog
 
@@ -71,10 +67,9 @@ Our extensive change log is available [here](NEWS.md).
 
 ## Credits
 
-A massive thank you to the entire team for making the ScummVM project possible. See the credits [here](AUTHORS)!
+A massive thank you to the ScummVM team and all Yomira contributors. See the credits [here](AUTHORS)!
 
 -----
 
 > Good Luck and Happy Adventuring\!
-> The ScummVM team.
-> <https://www.scummvm.org/>
+> The Yomira contributors.

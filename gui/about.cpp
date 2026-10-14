@@ -92,7 +92,7 @@ AboutDialog::AboutDialog(bool inGame)
 	  _scrollPos(0.0f), _scrollTime(0), _willClose(false), _autoScroll(true), _inGame(inGame),
 	  _isDragging(false), _dragLastY(0) {
 
-	_fluidScroller = new FluidScroller();	
+	_fluidScroller = new FluidScroller();
 	_scrollbar = nullptr;
 	_closeButton = nullptr;
 	reflowLayout();
@@ -110,7 +110,7 @@ void AboutDialog::buildLines() {
 	for (i = 0; i < 1; i++)
 		_lines.push_back(Common::U32String());
 
-	Common::String version("C0""ScummVM ");
+	Common::String version("C0""Yomira ");
 	version += gScummVMVersion;
 	addLine(version);
 

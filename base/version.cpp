@@ -56,7 +56,7 @@
  */
 const char gScummVMVersion[] = SCUMMVM_VERSION SCUMMVM_REVISION;
 #if defined(__amigaos4__) || defined(__MORPHOS__)
-static const char *version_cookie __attribute__((used)) = "$VER: ScummVM " SCUMMVM_VERSION SCUMMVM_REVISION " (" AMIGA_DATE ")";
+static const char *version_cookie __attribute__((used)) = "$VER: Yomira " SCUMMVM_VERSION SCUMMVM_REVISION " (" AMIGA_DATE ")";
 #endif
 const char gScummVMCompiler[] = ""
 #define STR_HELPER(x)	#x
@@ -80,10 +80,10 @@ const char gScummVMCompiler[] = ""
 	;
 
 #ifdef RELEASE_BUILD
-	const char gScummVMFullVersion[] = "ScummVM " SCUMMVM_VERSION;
+	const char gScummVMFullVersion[] = "Yomira " SCUMMVM_VERSION;
 	const char gScummVMBuildDate[] = SCUMMVM_VERSION;
 #else
-	const char gScummVMFullVersion[] = "ScummVM " SCUMMVM_VERSION SCUMMVM_REVISION " (" __DATE__ " " __TIME__ ")";
+	const char gScummVMFullVersion[] = "Yomira " SCUMMVM_VERSION SCUMMVM_REVISION " (" __DATE__ " " __TIME__ ")";
 	const char gScummVMBuildDate[] = __DATE__ " " __TIME__;
 #endif
 

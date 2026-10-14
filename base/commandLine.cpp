@@ -70,9 +70,9 @@ static const char USAGE_STRING[] =
 
 // DONT FIXME: DO NOT ORDER ALPHABETICALLY, THIS IS ORDERED BY IMPORTANCE/CATEGORY! :)
 static const char HELP_STRING1[] =
-	"ScummVM - Graphical Adventure Game Interpreter\n"
+	"Yomira - Visual Novel Interpreter\n"
 	"Usage: %s [OPTIONS]... [GAME]\n"
-	"  -v, --version            Display ScummVM version information and exit\n"
+	"  -v, --version            Display Yomira version information and exit\n"
 	"  -h, --help               Display a brief help text and exit\n"
 	"  -z, --list-games         Display list of supported games and exit\n"
 	"  --list-games-json        Display list of supported games in JSON format and exit\n"
@@ -130,7 +130,7 @@ static const char HELP_STRING1[] =
 	"  --filtering              Force filtered graphics mode\n"
 	"  --no-filtering           Force unfiltered graphics mode\n"
 #ifdef USE_OPENGL
-	"  --window-size=W,H        Set the ScummVM window size to the specified dimensions\n"
+	"  --window-size=W,H        Set the Yomira window size to the specified dimensions\n"
 	"                           (OpenGL only)\n"
 #endif
 	"  --gui-theme=THEME        Select GUI theme\n"
@@ -225,7 +225,7 @@ static const char HELP_STRING4[] =
 	"                           Steel Sky and Flight of the Amazon Queen\n"
 #endif
 	"  --copy-protection        Enable copy protection in games, when\n"
-	"                           ScummVM disables it by default.\n"
+	"                           Yomira disables it by default.\n"
 	"  --talkspeed=NUM          Set talk speed for games (default: 60)\n"
 	"                           Grim Fandango or EMI (default: 179).\n"
 #if defined(ENABLE_SCUMM) || defined(ENABLE_GROOVIE)
@@ -1687,7 +1687,7 @@ static Common::String detectGames(const Common::Path &path, const Common::String
 	DetectedGames candidates = recListGames(dir, engineId, gameId, recursive);
 
 	if (candidates.empty()) {
-		printf("WARNING: ScummVM could not find any game in %s\n", dir.getPath().toString(Common::Path::kNativeSeparator).c_str());
+		printf("WARNING: Yomira could not find any game in %s\n", dir.getPath().toString(Common::Path::kNativeSeparator).c_str());
 		if (noPath) {
 			printf("WARNING: Consider using --path=<path> to specify a directory\n");
 		}
