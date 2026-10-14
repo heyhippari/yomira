@@ -78,6 +78,18 @@ static const CompletGameDescription gameDescriptions[] = {
 	},
 	{
 		{
+			"mamatuma",
+			"Updated",
+			AD_ENTRY1s("mpx/startup.mpx", "05b01d4bec391bfc0ee93465a4954cb5", 2453),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+		},
+		800, 600, false, kMamaMenuStyle
+	},
+	{
+		{
 			"matty",
 			nullptr,
 			AD_ENTRY1s("mpx/startup.mpx", "c4b0060e5952f95c75c058835297fd4c", 3562),
