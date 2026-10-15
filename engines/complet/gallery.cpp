@@ -387,7 +387,7 @@ bool CompletEngine::runGallery() {
 			}
 		}
 
-		if (_xexLayout) {
+		if (isXexEngine()) {
 			blitFrame(page, 0, 0xc0, 640, 48, 0, 0x1af);
 			int width = count * 500 / _gallery->count;
 			if (width) {

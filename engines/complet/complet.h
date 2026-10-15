@@ -100,8 +100,9 @@ private:
 		int left, top, width, height, rows;
 	};
 
-	int scaleX(int value) const { return _xexLayout ? value : value * _screenWidth / kScreenWidth; }
-	int scaleY(int value) const { return _xexLayout ? value : value * _screenHeight / kScreenHeight; }
+	bool isXexEngine() const { return _xexEngine; }
+	int scaleX(int value) const { return isXexEngine() ? value : value * _screenWidth / kScreenWidth; }
+	int scaleY(int value) const { return isXexEngine() ? value : value * _screenHeight / kScreenHeight; }
 	int scaleMessageX(int value) const { return value * _screenWidth / kGd2Width; }
 	int scaleMessageY(int value) const { return value * _screenHeight / kGd2Height; }
 
@@ -189,7 +190,7 @@ private:
 	const CompletGallery *_gallery = nullptr;
 	bool _case266Map = false;
 	bool _mhtMap = false;
-	bool _xexLayout = false;
+	bool _xexEngine = false;
 	bool _fullScreenMessages = false;
 	bool _framedMessages = false;
 	uint16 _waitUnitMillis = 100;

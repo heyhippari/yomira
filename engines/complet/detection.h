@@ -60,6 +60,11 @@ enum CompletMessageLayout {
 	kMessageFramedDialogue
 };
 
+enum CompletEngineFamily {
+	kCompletEngineXex,
+	kCompletEngineC4
+};
+
 enum CompletMapLayout {
 	kCompletMapNone,
 	kCompletMapCase266,
@@ -77,7 +82,7 @@ struct CompletGameDescription {
 	ADGameDescription gameDescription;
 	uint16 screenWidth;
 	uint16 screenHeight;
-	bool xexLayout;
+	CompletEngineFamily engineFamily;
 	CompletMenuStyle menuStyle;
 	CompletMessageLayout messageLayout;
 	uint16 waitUnitMillis;

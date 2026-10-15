@@ -97,7 +97,7 @@ CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &desc
 		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery),
 		_case266Map(description.mapLayout == kCompletMapCase266),
 		_mhtMap(description.mapLayout == kCompletMapMht),
-		_xexLayout(description.xexLayout),
+		_xexEngine(description.engineFamily == kCompletEngineXex),
 		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
 		_framedMessages(description.messageLayout == kMessageFramedDialogue), _waitUnitMillis(description.waitUnitMillis),
 		_midiOnly(description.midiOnly), _screenWidth(description.screenWidth), _screenHeight(description.screenHeight),
@@ -285,7 +285,7 @@ bool CompletEngine::loadFrameImage() {
 	if (!loaded)
 		return false;
 
-	_blackKeySprites = _xexLayout;
+	_blackKeySprites = isXexEngine();
 	if (_frameImage.getWidth() != _screenWidth || _frameImage.getHeight() != _screenHeight) {
 		warning("Complet: frame image dimensions do not match the detected game");
 		return false;
@@ -401,7 +401,7 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 			}
 			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
 					scaleMessageX(580), scaleMessageY(446), _format.RGBToColor(red, green, blue));
-		} else if (_xexLayout) {
+		} else if (isXexEngine()) {
 			drawFrameRect(screen, 64 + _indicatorFrame * 26, _autoMode ? 12 : 0,
 					26, 12, 588, 480 - 34);
 		} else {
@@ -429,7 +429,7 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 
 CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
 	const int buttonY = scaleMessageY(kMessageBoxY) - scaleY(kMessageButtonHeight);
-	if (_fullScreenMessages || _xexLayout || !_messageVisible || _messageHidden || _menu ||
+	if (_fullScreenMessages || isXexEngine() || !_messageVisible || _messageHidden || _menu ||
 			pos.y < buttonY + scaleY(1) || pos.y >= buttonY + scaleY(kMessageButtonHeight - 1))
 		return kButtonNone;
 	if (pos.x >= scaleX(kLoadButtonLeft) && pos.x < scaleX(kLoadButtonRight))
@@ -523,7 +523,7 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	}
 
 	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
-	if (!_menu && !_xexLayout) {
+	if (!_menu && !isXexEngine()) {
 		const int buttonY = boxY - scaleY(kMessageButtonHeight);
 		drawFrameRect(screen, scaleX(512), 0, scaleX(77), scaleY(kMessageButtonHeight), scaleX(kSaveButtonLeft - 1), buttonY);
 		drawFrameRect(screen, scaleX(512), scaleY(16), scaleX(27), scaleY(kMessageButtonHeight), scaleX(kLogButtonLeft - 1), buttonY);
@@ -679,7 +679,7 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	}
 
 	if (style.showQuickSaveLoad) {
-		if (_xexLayout)
+		if (isXexEngine())
 			drawFrameRect(screen, 121, 291, 75, 13,
 					layout.left + layout.width - 93, layout.top + layout.rows * rowHeight - 1);
 		else
@@ -729,7 +729,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 			return kButtonNone;
 		int x = pos.x - layout.left - layout.width;
 		int y = pos.y - layout.top - layout.rows * scaleY(_menuStyle->rowHeight);
-		if (y < (_xexLayout ? -1 : scaleY(2)) || y >= (_xexLayout ? 12 : scaleY(16)))
+		if (y < (isXexEngine() ? -1 : scaleY(2)) || y >= (isXexEngine() ? 12 : scaleY(16)))
 			return kButtonNone;
 		if (x > -scaleX(93) && x < -scaleX(57))
 			return kButtonSave;
@@ -1231,7 +1231,7 @@ void CompletEngine::printChar(uint32 ch) {
 
 void CompletEngine::addBacklogChar(uint32 ch) {
 	// Like the original, a line break is inserted before the 24th character after an explicit break
-	if (++_backlogLineChars >= (_xexLayout ? 22 : kBacklogLineChars))
+	if (++_backlogLineChars >= (isXexEngine() ? 22 : kBacklogLineChars))
 		addBacklogBreak();
 	_backlog.push_back(ch);
 
@@ -1247,7 +1247,7 @@ void CompletEngine::addBacklogChar(uint32 ch) {
 
 void CompletEngine::addBacklogBreak() {
 	_backlogLineChars = 0;
-	if (++_backlogLines >= (_xexLayout ? 13 : kBacklogPageLines)) {
+	if (++_backlogLines >= (isXexEngine() ? 13 : kBacklogPageLines)) {
 		_backlogLines = 0;
 		_backlog.push_back(kBacklogPage);
 	} else {
