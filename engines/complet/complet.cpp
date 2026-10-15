@@ -50,7 +50,7 @@ enum {
 
 	// Message window geometry (client coordinates)
 	kMessageLeft = 30,
-	kMessageTop = 350,
+	kMessageTop = 352,
 	kMessageLineHeight = 24,
 	kMessageMaxLines = 4,
 	kMessageLineChars = 20,

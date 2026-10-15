@@ -47,7 +47,7 @@ static const CompletMenuStyle kMattyMenuStyle = {
 	true, false, true, 26, 32, false, true
 };
 
-static const CompletMenuStyle kKoiMenuStyle = {
+static const CompletMenuStyle kKexMenuStyle = {
 	0x124, 7, 14, 42,
 	240, 14, 28, 0,
 	28, 16, 0, 0,
@@ -122,7 +122,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
 	},
 	{
 		{
@@ -134,7 +134,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
 	},
 	{
 		{
@@ -146,7 +146,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -158,7 +158,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO3(COMPLET_GUIO, GUIO_NOMIDI, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -170,7 +170,19 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
+	},
+	{
+		{
+			"boseimamaclub",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "a3f8b989737e6856be21c720b29263d1", 2133),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+		},
+		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
