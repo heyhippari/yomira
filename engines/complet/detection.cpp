@@ -41,6 +41,7 @@ static const PlainGameDescriptor completGames[] = {
 	{"matty", "Matty"},
 	{"yagai", "Yagai Gakushuu"},
 	{"mamatuma", "Mama! Tsuma?"},
+	{"mousugunatsuyasumi", "Mousugu Natsuyasumi!"},
 	{nullptr, nullptr}
 };
 

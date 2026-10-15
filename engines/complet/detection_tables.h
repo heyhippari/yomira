@@ -247,6 +247,18 @@ static const CompletGameDescription gameDescriptions[] = {
 		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
+		{
+			"mousugunatsuyasumi",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "46b53766121e969b1cef1dbd123dcc4b", 2479),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+		},
+		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+	},
+	{
 		AD_TABLE_END_MARKER,
 		0, 0, kCompletEngineC4, false, {}, kMessageDialogue, 0, false, {}, kCompletMapNone
 	}
