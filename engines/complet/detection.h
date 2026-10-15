@@ -83,6 +83,7 @@ struct CompletGameDescription {
 	uint16 screenWidth;
 	uint16 screenHeight;
 	CompletEngineFamily engineFamily;
+	bool showMessageButtons;
 	CompletMenuStyle menuStyle;
 	CompletMessageLayout messageLayout;
 	uint16 waitUnitMillis;

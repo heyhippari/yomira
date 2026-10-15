@@ -122,7 +122,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
 	},
 	{
 		{
@@ -134,7 +134,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
+		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
 	},
 	{
 		{
@@ -146,7 +146,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -158,7 +158,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO3(COMPLET_GUIO, GUIO_NOMIDI, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -170,7 +170,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
+		640, 480, kCompletEngineXex, false, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
 	},
 	{
 		{
@@ -183,7 +183,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -196,7 +196,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kCompletEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -208,7 +208,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -220,7 +220,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		{
@@ -232,11 +232,11 @@ static const CompletGameDescription gameDescriptions[] = {
 			ADGF_NO_FLAGS,
 				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
 	{
 		AD_TABLE_END_MARKER,
-		0, 0, kCompletEngineC4, {}, kMessageDialogue, 0, false, {}, kCompletMapNone
+		0, 0, kCompletEngineC4, false, {}, kMessageDialogue, 0, false, {}, kCompletMapNone
 	}
 };
 

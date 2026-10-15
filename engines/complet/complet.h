@@ -100,9 +100,11 @@ private:
 		int left, top, width, height, rows;
 	};
 
+	int scaleScreenX(int value) const { return value * _screenWidth / kScreenWidth; }
+	int scaleScreenY(int value) const { return value * _screenHeight / kScreenHeight; }
 	bool isXexEngine() const { return _xexEngine; }
-	int scaleX(int value) const { return isXexEngine() ? value : value * _screenWidth / kScreenWidth; }
-	int scaleY(int value) const { return isXexEngine() ? value : value * _screenHeight / kScreenHeight; }
+	int scaleX(int value) const { return isXexEngine() ? value : scaleScreenX(value); }
+	int scaleY(int value) const { return isXexEngine() ? value : scaleScreenY(value); }
 	int scaleMessageX(int value) const { return value * _screenWidth / kGd2Width; }
 	int scaleMessageY(int value) const { return value * _screenHeight / kGd2Height; }
 
@@ -191,6 +193,7 @@ private:
 	bool _case266Map = false;
 	bool _mhtMap = false;
 	bool _xexEngine = false;
+	bool _showMessageButtons = false;
 	bool _fullScreenMessages = false;
 	bool _framedMessages = false;
 	uint16 _waitUnitMillis = 100;

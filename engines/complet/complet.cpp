@@ -76,6 +76,8 @@ enum {
 	kSaveButtonRight = 737,
 	kLoadButtonLeft = 739,
 	kLoadButtonRight = 776,
+	kXexMessageButtonWidth = 75,
+	kXexMessageButtonHeight = 13,
 
 	// Message history
 	kBacklogLineChars = 24,
@@ -98,6 +100,7 @@ CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &desc
 		_case266Map(description.mapLayout == kCompletMapCase266),
 		_mhtMap(description.mapLayout == kCompletMapMht),
 		_xexEngine(description.engineFamily == kCompletEngineXex),
+		_showMessageButtons(description.showMessageButtons),
 		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
 		_framedMessages(description.messageLayout == kMessageFramedDialogue), _waitUnitMillis(description.waitUnitMillis),
 		_midiOnly(description.midiOnly), _screenWidth(description.screenWidth), _screenHeight(description.screenHeight),
@@ -428,15 +431,29 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 }
 
 CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
-	const int buttonY = scaleMessageY(kMessageBoxY) - scaleY(kMessageButtonHeight);
-	if (_fullScreenMessages || isXexEngine() || !_messageVisible || _messageHidden || _menu ||
-			pos.y < buttonY + scaleY(1) || pos.y >= buttonY + scaleY(kMessageButtonHeight - 1))
+	if (!_showMessageButtons || !_messageVisible || _messageHidden || _menu)
 		return kButtonNone;
-	if (pos.x >= scaleX(kLoadButtonLeft) && pos.x < scaleX(kLoadButtonRight))
+	if (isXexEngine()) {
+		const int buttonX = scaleMessageX(kMessageBoxX) + scaleMessageX(kMessageBoxWidth) - kXexMessageButtonWidth;
+		const int buttonY = scaleMessageY(kMessageBoxY) - kXexMessageButtonHeight;
+		const int buttonOffsetX = pos.x - buttonX;
+		if (pos.y < buttonY || pos.y >= buttonY + kXexMessageButtonHeight)
+			return kButtonNone;
+		if (buttonOffsetX > 0 && buttonOffsetX < 36)
+			return kButtonSave;
+		if (buttonOffsetX >= 37 && buttonOffsetX < kXexMessageButtonWidth)
+			return kButtonLoad;
+		return kButtonNone;
+	}
+
+	const int buttonY = scaleMessageY(kMessageBoxY) - scaleScreenY(kMessageButtonHeight);
+	if (pos.y < buttonY + scaleScreenY(1) || pos.y >= buttonY + scaleScreenY(kMessageButtonHeight - 1))
+		return kButtonNone;
+	if (pos.x >= scaleScreenX(kLoadButtonLeft) && pos.x < scaleScreenX(kLoadButtonRight))
 		return kButtonLoad;
-	if (pos.x >= scaleX(kSaveButtonLeft) && pos.x < scaleX(kSaveButtonRight))
+	if (pos.x >= scaleScreenX(kSaveButtonLeft) && pos.x < scaleScreenX(kSaveButtonRight))
 		return kButtonSave;
-	if (pos.x >= scaleX(kLogButtonLeft) && pos.x < scaleX(kLogButtonRight))
+	if (pos.x >= scaleScreenX(kLogButtonLeft) && pos.x < scaleScreenX(kLogButtonRight))
 		return kButtonLog;
 	return kButtonNone;
 }
@@ -522,11 +539,15 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 			drawText(screen, _messageLines[i], x, y, white, advance);
 	}
 
-	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
-	if (!_menu && !isXexEngine()) {
-		const int buttonY = boxY - scaleY(kMessageButtonHeight);
-		drawFrameRect(screen, scaleX(512), 0, scaleX(77), scaleY(kMessageButtonHeight), scaleX(kSaveButtonLeft - 1), buttonY);
-		drawFrameRect(screen, scaleX(512), scaleY(16), scaleX(27), scaleY(kMessageButtonHeight), scaleX(kLogButtonLeft - 1), buttonY);
+	if (!_menu && _showMessageButtons) {
+		if (isXexEngine()) {
+			drawFrameRect(screen, 121, 291, kXexMessageButtonWidth, kXexMessageButtonHeight,
+					boxX + boxWidth - kXexMessageButtonWidth, boxY - kXexMessageButtonHeight);
+		} else {
+			const int buttonY = boxY - scaleScreenY(kMessageButtonHeight);
+			drawFrameRect(screen, scaleScreenX(512), 0, scaleScreenX(77), scaleScreenY(kMessageButtonHeight), scaleScreenX(kSaveButtonLeft - 1), buttonY);
+			drawFrameRect(screen, scaleScreenX(512), scaleScreenY(16), scaleScreenX(27), scaleScreenY(kMessageButtonHeight), scaleScreenX(kLogButtonLeft - 1), buttonY);
+		}
 	}
 }
 
