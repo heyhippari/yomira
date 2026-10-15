@@ -102,6 +102,8 @@ private:
 
 	int scaleX(int value) const { return _xexLayout ? value : value * _screenWidth / kScreenWidth; }
 	int scaleY(int value) const { return _xexLayout ? value : value * _screenHeight / kScreenHeight; }
+	int scaleMessageX(int value) const { return value * _screenWidth / kGd2Width; }
+	int scaleMessageY(int value) const { return value * _screenHeight / kGd2Height; }
 
 	enum MessageButton {
 		kButtonNone,
@@ -139,6 +141,7 @@ private:
 	void drawMessage(Graphics::Surface &screen);
 	void drawMenu(Graphics::Surface &screen);
 	void drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance);
+	void drawOutlinedText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, int advance, uint32 outline, uint32 fill);
 	void drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey = false);
 	MenuLayout getMenuLayout() const;
 	MessageButton messageButtonAt(const Common::Point &pos) const;
@@ -205,6 +208,7 @@ private:
 	bool _messageVisible = false;
 	// Right click hides the message window and pauses the script
 	bool _messageHidden = false;
+	Common::U32String _messageSpeaker;
 	// A click while typing shows the rest of the text at once
 	bool _fastText = false;
 	// Held Ctrl skips text, waits and voices
@@ -213,6 +217,7 @@ private:
 	// Engine options
 	bool _autoMode = false;
 	bool _animateText = false;
+	bool _nameFrameEnabled = false;
 	// Characters printed since the last click, for the auto mode delay
 	uint _autoChars = 0;
 	Common::Array<Common::U32String> _messageLines;

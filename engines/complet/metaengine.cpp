@@ -52,6 +52,17 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 			0
 		}
 	},
+	{
+		GAMEOPTION_NAME_FRAME,
+		{
+			_s("Show speaker name frame"),
+			_s("Display speaker names in a separate frame above dialogue text"),
+			"name_frame",
+			true,
+			0,
+			0
+		}
+	},
 	AD_EXTRA_GUI_OPTIONS_TERMINATOR
 };
 

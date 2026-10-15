@@ -41,7 +41,7 @@
 namespace Complet {
 
 enum {
-	kFontSize = 30,
+	kFontSize = 24,
 	kLogoFadeSteps = 32,
 	kLogoFadeDelay = 8,
 	kLogoHoldMs = 4000,
@@ -49,19 +49,19 @@ enum {
 	kFadeDelay = 8,
 
 	// Message window geometry (client coordinates)
-	kMessageLeft = 26,
-	kMessageTop = 484,
+	kMessageLeft = 30,
+	kMessageTop = 350,
 	kMessageLineHeight = 24,
 	kMessageMaxLines = 4,
-	kMessageLineChars = 23,
+	kMessageLineChars = 20,
 	kMessageCharAdvance = 28,
 	kMessageCharDelay = 16,
 	// The original's 16 ms timer moves the indicator every 8 ticks on NT
 	kIndicatorFrameDelay = 128,
 	kAutoCharDelay = kIndicatorFrameDelay,
 	kMessageBoxX = 16,
-	kMessageBoxY = 475,
-	kMessageBoxWidth = 768,
+	kMessageBoxY = 355,
+	kMessageBoxWidth = 608,
 	kMessageBoxHeight = 113,
 
 	// Selection window
@@ -69,19 +69,18 @@ enum {
 	kGlyphSourceRow = 472,
 
 	// LOG, Q-SAVE and Q-LOAD buttons above the message window
-	kButtonTop = 0x1ce,
-	kButtonBottom = 0x1db,
-	kLogButtonLeft = 0x2a2,
-	kLogButtonRight = 0x2bb,
-	kSaveButtonLeft = 0x2bd,
-	kSaveButtonRight = 0x2e1,
-	kLoadButtonLeft = 0x2e3,
-	kLoadButtonRight = 0x308,
+	kMessageButtonHeight = 15,
+	kLogButtonLeft = 674,
+	kLogButtonRight = 699,
+	kSaveButtonLeft = 701,
+	kSaveButtonRight = 737,
+	kLoadButtonLeft = 739,
+	kLoadButtonRight = 776,
 
 	// Message history
 	kBacklogLineChars = 24,
 	kBacklogPageLines = 16,
-	kBacklogMaxSize = 0x2000,
+	kBacklogMaxSize = 8192,
 	kBacklogAdvance = 32
 };
 
@@ -119,6 +118,7 @@ bool CompletEngine::hasFeature(EngineFeature f) const {
 
 void CompletEngine::applyGameSettings() {
 	_animateText = ConfMan.getBool("text_animation");
+	_nameFrameEnabled = !_fullScreenMessages && !_framedMessages && ConfMan.getBool("name_frame");
 	_audio.setUseMidi(_midiOnly || ConfMan.getBool("midi_music"));
 }
 
@@ -195,6 +195,7 @@ Common::Error CompletEngine::run() {
 	setDebugger(new Console(this));
 	ConfMan.registerDefault("text_animation", false);
 	ConfMan.registerDefault("midi_music", false);
+	ConfMan.registerDefault("name_frame", true);
 	syncSoundSettings();
 	applyGameSettings();
 
@@ -247,8 +248,15 @@ void CompletEngine::initGame() {
 void CompletEngine::loadFont() {
 	for (uint i = 0; i < ARRAYSIZE(kFontFiles) && !_font; i++) {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
-		if (stream)
-			_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, _xexLayout ? 24 : scaleY(kFontSize), Graphics::kTTFSizeModeCell);
+		if (stream) {
+			const int fontSize = scaleMessageY(_menuStyle->menuFontSize ? _menuStyle->menuFontSize : static_cast<int>(kFontSize));
+			if (_menuStyle->plainMenu && _menuStyle->menuFontWidth) {
+				const int xdpi = _menuStyle->menuFontWidth * 72 / _menuStyle->menuFontSize;
+				_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, fontSize, Graphics::kTTFSizeModeCharacter, xdpi, 72);
+			} else {
+				_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, fontSize, Graphics::kTTFSizeModeCell);
+			}
+		}
 		if (_font && (_menuStyle->outlinedMenu || _menuStyle->plainMenu)) {
 			stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 			if (stream) {
@@ -379,7 +387,7 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 			const int line = MAX(0, (int)_messageLines.size() - 1);
 			const int columns = _messageLines.empty() ? 0 : _messageLines.back().size();
 			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
-					26 + columns * 28, 25 + line * 24, _format.RGBToColor(0xff, 0xff, 0xff));
+					scaleMessageX(26 + columns * 28), scaleMessageY(25 + line * 24), _format.RGBToColor(0xff, 0xff, 0xff));
 		} else if (_framedMessages) {
 			const byte level = (_indicatorFrame % 8 + 1) * 31;
 			byte red = 0, green = 0, blue = 0;
@@ -392,14 +400,14 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 			default: red = 248; green = 248 - level; break;
 			}
 			_font->drawChar(&screen, _indicatorFrame & 2 ? 0x25bd : 0x25bc,
-					580, 446, _format.RGBToColor(red, green, blue));
+					scaleMessageX(580), scaleMessageY(446), _format.RGBToColor(red, green, blue));
 		} else if (_xexLayout) {
-			drawFrameRect(screen, 0x40 + _indicatorFrame * 0x1a, _autoMode ? 0x0c : 0,
-					0x1a, 0x0c, 0x24c, 0x1e0 - 0x22);
+			drawFrameRect(screen, 64 + _indicatorFrame * 26, _autoMode ? 12 : 0,
+					26, 12, 588, 480 - 34);
 		} else {
 			// Animated "CLICK" (or "AUTO") marker from the top left of the C4 frame image
 			drawFrameRect(screen, scaleX((_indicatorFrame + (_autoMode ? 8 : 0)) * 32), 0,
-					scaleX(32), scaleY(32), scaleX(0x2e7), scaleY(kScreenHeight - 0x34), true);
+					scaleX(32), scaleY(32), scaleX(743), scaleY(kScreenHeight - 52), true);
 		}
 	}
 	if (_menu)
@@ -420,7 +428,9 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 }
 
 CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
-	if (_fullScreenMessages || !_messageVisible || _messageHidden || _menu || pos.y < scaleY(kButtonTop) || pos.y >= scaleY(kButtonBottom))
+	const int buttonY = scaleMessageY(kMessageBoxY) - scaleY(kMessageButtonHeight);
+	if (_fullScreenMessages || _xexLayout || !_messageVisible || _messageHidden || _menu ||
+			pos.y < buttonY + scaleY(1) || pos.y >= buttonY + scaleY(kMessageButtonHeight - 1))
 		return kButtonNone;
 	if (pos.x >= scaleX(kLoadButtonLeft) && pos.x < scaleX(kLoadButtonRight))
 		return kButtonLoad;
@@ -438,33 +448,67 @@ void CompletEngine::drawText(Graphics::Surface &screen, const Common::U32String 
 	}
 }
 
+void CompletEngine::drawOutlinedText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, int advance, uint32 outline, uint32 fill) {
+	for (int offsetY = -1; offsetY <= 1; offsetY++) {
+		drawText(screen, text, x - 1, y + offsetY, outline, advance);
+		drawText(screen, text, x + 1, y + offsetY, outline, advance);
+	}
+	drawText(screen, text, x + 1, y, fill, advance);
+	drawText(screen, text, x, y, fill, advance);
+}
+
 void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	if (!_messageVisible)
 		return;
 
 	// Dim the area behind the text
-	const int boxX = _fullScreenMessages ? 20 : (_xexLayout ? 16 : scaleX(kMessageBoxX));
-	const int boxY = _fullScreenMessages ? 15 : (_xexLayout ? 331 : scaleY(kMessageBoxY));
-	const int boxWidth = _fullScreenMessages ? 600 : (_xexLayout ? 608 : scaleX(kMessageBoxWidth));
-	const int boxHeight = _fullScreenMessages ? 450 : (_xexLayout ? 137 : scaleY(kMessageBoxHeight));
+	const int boxX = scaleMessageX(_fullScreenMessages ? 20 : kMessageBoxX);
+	const int boxY = scaleMessageY(_fullScreenMessages ? 15 : kMessageBoxY);
+	const int boxWidth = scaleMessageX(_fullScreenMessages ? 600 : kMessageBoxWidth);
+	const int boxHeight = scaleMessageY(_fullScreenMessages ? 450 : kMessageBoxHeight);
 	for (int y = boxY; y < boxY + boxHeight; y++) {
 		uint32 *p = (uint32 *)screen.getBasePtr(boxX, y);
 		for (int x = 0; x < boxWidth; x++, p++) {
 			byte r, g, b;
 			_format.colorToRGB(*p, r, g, b);
-			*p = _format.RGBToColor(r >> (_xexLayout ? 1 : 2), g >> (_xexLayout ? 1 : 2), b >> 1);
+			*p = _format.RGBToColor(r >> 2, g >> 2, b >> 1);
 		}
 	}
 
 	if (_framedMessages)
-		drawFrameRect(screen, 0, 318, 640, 162, 0, 318, true);
+		drawFrameRect(screen, 0, scaleMessageY(318), scaleMessageX(640), scaleMessageY(162), 0, scaleMessageY(318), true);
+	const bool showNameFrame = _nameFrameEnabled && !_messageSpeaker.empty();
+	const int advance = scaleMessageX(kMessageCharAdvance);
+	const int messageX = scaleMessageX(_fullScreenMessages ? 24 : kMessageLeft);
+	if (showNameFrame) {
+		const int frameX = boxX;
+		const int frameY = boxY - scaleMessageY(33);
+		const int frameHeight = scaleMessageY(33);
+		const int frameWidth = scaleMessageX(128);
+		const int bevel = scaleMessageX(34);
+		for (int row = 0; row < frameHeight; row++) {
+			const int right = frameX + frameWidth - bevel + bevel * row / (frameHeight - 1);
+			uint32 *pixel = (uint32 *)screen.getBasePtr(frameX, frameY + row);
+			for (int column = 0; column < right - frameX; column++, pixel++) {
+				byte red, green, blue;
+				_format.colorToRGB(*pixel, red, green, blue);
+				*pixel = _format.RGBToColor(red >> 2, green >> 2, blue >> 1);
+			}
+		}
+
+		const int speakerX = messageX - scaleMessageX(7);
+		const int speakerY = frameY - scaleMessageY(2);
+		const uint32 speakerOutline = _format.RGBToColor(0x50, 0x50, 0x7f);
+		drawOutlinedText(screen, _messageSpeaker, speakerX, speakerY, advance, speakerOutline, _format.RGBToColor(0xff, 0xff, 0xff));
+	}
 
 	const uint32 shadow = (_fullScreenMessages || _framedMessages) ? _format.RGBToColor(0x18, 0x18, 0x30) : _format.RGBToColor(0x3f, 0x3f, 0x7f);
 	const uint32 white = _format.RGBToColor(0xff, 0xff, 0xff);
 	for (uint i = 0; i < _messageLines.size(); i++) {
-		int y = _fullScreenMessages ? 23 + i * 24 : (_xexLayout ? 0x14e + i * kMessageLineHeight : scaleY(kMessageTop + i * kMessageLineHeight));
-		int x = _fullScreenMessages ? 24 : (_xexLayout ? 0x1e : scaleX(kMessageLeft));
-		int advance = _xexLayout ? kMessageCharAdvance : scaleX(kMessageCharAdvance);
+		int y = scaleMessageY(_fullScreenMessages ? 23 + i * 24 : kMessageTop + i * kMessageLineHeight);
+		if (!_fullScreenMessages && _screenWidth == 800 && _screenHeight == 600)
+			y += 2;
+		int x = messageX;
 		if (_fullScreenMessages || _framedMessages) {
 			for (int offsetY = -1; offsetY < 2; offsetY++) {
 				for (int offsetX = -1; offsetX < 3; offsetX++)
@@ -472,15 +516,17 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 			}
 			drawText(screen, _messageLines[i], x + 1, y, white, advance);
 		} else {
-			drawText(screen, _messageLines[i], x + 1, y + 1, shadow, advance);
+			drawOutlinedText(screen, _messageLines[i], x, y, advance, _format.RGBToColor(0x50, 0x50, 0x7f), white);
 		}
-		drawText(screen, _messageLines[i], x, y, white, advance);
+		if (_fullScreenMessages || _framedMessages)
+			drawText(screen, _messageLines[i], x, y, white, advance);
 	}
 
 	// Q-SAVE/Q-LOAD and LOG buttons from the top right of the frame image
 	if (!_menu && !_xexLayout) {
-		drawFrameRect(screen, scaleX(0x200), 0, scaleX(0x4d), scaleY(0xf), scaleX(kSaveButtonLeft - 1), scaleY(kButtonTop - 1));
-		drawFrameRect(screen, scaleX(0x200), scaleY(0x10), scaleX(0x1b), scaleY(0xf), scaleX(kLogButtonLeft - 1), scaleY(kButtonTop - 1));
+		const int buttonY = boxY - scaleY(kMessageButtonHeight);
+		drawFrameRect(screen, scaleX(512), 0, scaleX(77), scaleY(kMessageButtonHeight), scaleX(kSaveButtonLeft - 1), buttonY);
+		drawFrameRect(screen, scaleX(512), scaleY(16), scaleX(27), scaleY(kMessageButtonHeight), scaleX(kLogButtonLeft - 1), buttonY);
 	}
 }
 
@@ -637,8 +683,8 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 			drawFrameRect(screen, 121, 291, 75, 13,
 					layout.left + layout.width - 93, layout.top + layout.rows * rowHeight - 1);
 		else
-			drawFrameRect(screen, scaleX(0x200), scaleY(1), scaleX(0x4d), scaleY(0xe),
-					layout.left + layout.width - scaleX(0x5d), layout.top + layout.rows * rowHeight + scaleY(2));
+			drawFrameRect(screen, scaleX(512), scaleY(1), scaleX(77), scaleY(14),
+					layout.left + layout.width - scaleX(93), layout.top + layout.rows * rowHeight + scaleY(2));
 	}
 }
 
@@ -683,11 +729,11 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 			return kButtonNone;
 		int x = pos.x - layout.left - layout.width;
 		int y = pos.y - layout.top - layout.rows * scaleY(_menuStyle->rowHeight);
-		if (y < (_xexLayout ? -1 : scaleY(2)) || y >= (_xexLayout ? 12 : scaleY(0x10)))
+		if (y < (_xexLayout ? -1 : scaleY(2)) || y >= (_xexLayout ? 12 : scaleY(16)))
 			return kButtonNone;
-		if (x > -scaleX(0x5d) && x < -scaleX(0x39))
+		if (x > -scaleX(93) && x < -scaleX(57))
 			return kButtonSave;
-		if (x >= -scaleX(0x38) && x < -scaleX(0x12))
+		if (x >= -scaleX(56) && x < -scaleX(18))
 			return kButtonLoad;
 		return kButtonNone;
 	};
@@ -992,7 +1038,7 @@ bool CompletEngine::fadeTo(const Common::Array<byte> &target) {
 	bool ok = true;
 	for (int i = 0; i < kFadeSteps && ok; i++) {
 		int newWeight = i + 1;
-		int oldWeight = 0x1e - i > 0 ? 0x1e - i : 0;
+		int oldWeight = 30 - i > 0 ? 30 - i : 0;
 		for (uint k = 0; k < blended.size(); k++) {
 			int v = (next[k] * newWeight + old[k] * oldWeight) >> 5;
 			blended[k] = v > 255 ? 255 : v;
@@ -1097,17 +1143,22 @@ void CompletEngine::composeSprites(Common::Array<byte> &dst, const Common::Strin
 
 void CompletEngine::clearMessage() {
 	_messageLines.clear();
+	_messageSpeaker.clear();
 	_messageVisible = false;
 	_messageIndent = 0;
 	_readingSpeaker = false;
 }
 
 int CompletEngine::messageLineChars() const {
-	return _fullScreenMessages ? 21 : (_xexLayout ? 20 : kMessageLineChars);
+	return _fullScreenMessages ? 21 : kMessageLineChars;
 }
 
 int CompletEngine::messageMaxLines() const {
-	return _fullScreenMessages ? 18 : (_framedMessages ? 5 : kMessageMaxLines);
+	if (_fullScreenMessages)
+		return 18;
+	if (_framedMessages)
+		return 5;
+	return kMessageMaxLines;
 }
 
 void CompletEngine::newMessageLine() {
@@ -1127,27 +1178,42 @@ void CompletEngine::newMessageLine() {
 }
 
 void CompletEngine::printChar(uint32 ch) {
-	if (_messageLines.empty())
-		_messageLines.push_back(Common::U32String());
-
-	// Closing punctuation may overflow the line
-	bool hangs = ch == 0x3001 || ch == 0x3002 || ch == 0x300d;
-	if (_messageLines.back().size() >= (uint)messageLineChars() && !hangs) {
-		newMessageLine();
-		if (interrupted())
-			return;
+	bool capturedSpeaker = false;
+	if (_nameFrameEnabled && ch == 0x3010) {
+		_messageSpeaker.clear();
+		_readingSpeaker = true;
+		capturedSpeaker = true;
+	} else if (_nameFrameEnabled && ch == 0x3011 && _readingSpeaker) {
+		_readingSpeaker = false;
+		capturedSpeaker = true;
+	} else if (_nameFrameEnabled && _readingSpeaker) {
+		_messageSpeaker += ch;
+		capturedSpeaker = true;
 	}
 
-	if ((_fullScreenMessages || _framedMessages) && ch == '_')
-		ch = 0x3000;
-	_messageLines.back() += ch;
-	if (_fullScreenMessages || _framedMessages) {
-		if (ch == 0x3010) {
-			_readingSpeaker = true;
-			_messageIndent = 0;
-		} else if (ch == 0x3011 && _readingSpeaker) {
-			_readingSpeaker = false;
-			_messageIndent = MIN(_messageLines.back().size(), (uint)messageLineChars() - 1);
+	if (!capturedSpeaker) {
+		if (_messageLines.empty())
+			_messageLines.push_back(Common::U32String());
+
+		// Closing punctuation may overflow the line
+		bool hangs = ch == 0x3001 || ch == 0x3002 || ch == 0x300d;
+		if (_messageLines.back().size() >= (uint)messageLineChars() && !hangs) {
+			newMessageLine();
+			if (interrupted())
+				return;
+		}
+
+		if ((_fullScreenMessages || _framedMessages) && ch == '_')
+			ch = 0x3000;
+		_messageLines.back() += ch;
+		if (_fullScreenMessages || _framedMessages) {
+			if (ch == 0x3010) {
+				_readingSpeaker = true;
+				_messageIndent = 0;
+			} else if (ch == 0x3011 && _readingSpeaker) {
+				_readingSpeaker = false;
+				_messageIndent = MIN(_messageLines.back().size(), (uint)messageLineChars() - 1);
+			}
 		}
 	}
 	_messageVisible = true;
@@ -1266,12 +1332,12 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 		else if (_backlog[i] == 0xff1c || _backlog[i] == 0x226b)
 			color = 0;
 	}
-	int x = 0, y = scaleY(0x18);
+	int x = 0, y = scaleY(24);
 	for (uint i = start + 1; i < _backlog.size() && _backlog[i] != kBacklogPage; i++) {
 		const uint32 ch = _backlog[i];
 		if (ch == kBacklogLine) {
 			x = 0;
-			y += scaleY(0x20);
+			y += scaleY(32);
 			continue;
 		}
 
@@ -1279,14 +1345,14 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 			color = 1;
 		else if (ch == 0x226a)
 			color = 2;
-		_font->drawChar(screen, ch, x + scaleX(0x1b), y, colors[color]);
+		_font->drawChar(screen, ch, x + scaleX(27), y, colors[color]);
 		if (ch == 0xff1c || ch == 0x226b)
 			color = 0;
 
 		x += scaleX(kBacklogAdvance);
 		if (x > _screenWidth - scaleX(35)) {
 			x = 0;
-			y += scaleY(0x20);
+			y += scaleY(32);
 		}
 	}
 

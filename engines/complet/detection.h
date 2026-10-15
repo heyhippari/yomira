@@ -96,6 +96,7 @@ enum CompletDebugChannels {
 
 #define GAMEOPTION_TEXT_ANIMATION GUIO_GAMEOPTIONS2
 #define GAMEOPTION_MIDI_MUSIC     GUIO_GAMEOPTIONS3
+#define GAMEOPTION_NAME_FRAME     GUIO_GAMEOPTIONS4
 
 } // End of namespace Complet
 

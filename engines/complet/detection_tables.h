@@ -144,7 +144,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO2(COMPLET_GUIO, GUIO_MIDIGM)
+				GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
 		},
 		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
 	},
@@ -156,7 +156,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO2(COMPLET_GUIO, GUIO_NOMIDI)
+				GUIO3(COMPLET_GUIO, GUIO_NOMIDI, GAMEOPTION_NAME_FRAME)
 		},
 		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
@@ -168,7 +168,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		640, 480, true, kKoiMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
 	},
@@ -181,7 +181,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
@@ -194,7 +194,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		640, 480, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
@@ -206,7 +206,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
@@ -218,7 +218,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
@@ -230,7 +230,7 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC)
+				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
 		800, 600, false, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
 	},
