@@ -474,9 +474,18 @@ void CompletEngine::drawOutlinedText(Graphics::Surface &screen, const Common::U3
 	drawText(screen, text, x, y, fill, advance);
 }
 
+static bool isSpeakerSpace(uint32 ch) {
+	return ch == ' ' || ch == 0x3000;
+}
+
 void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	if (!_messageVisible)
 		return;
+	Common::U32String speaker = _messageSpeaker;
+	while (!speaker.empty() && isSpeakerSpace(speaker.firstChar()))
+		speaker.erase(0, 1);
+	while (!speaker.empty() && isSpeakerSpace(speaker.lastChar()))
+		speaker.chop();
 
 	// Dim the area behind the text
 	const int boxX = scaleMessageX(_fullScreenMessages ? 20 : kMessageBoxX);
@@ -494,7 +503,7 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 
 	if (_framedMessages)
 		drawFrameRect(screen, 0, scaleMessageY(318), scaleMessageX(640), scaleMessageY(162), 0, scaleMessageY(318), true);
-	const bool showNameFrame = _nameFrameEnabled && !_messageSpeaker.empty();
+	const bool showNameFrame = _nameFrameEnabled && !speaker.empty();
 	const int advance = scaleMessageX(kMessageCharAdvance);
 	const int messageX = scaleMessageX(_fullScreenMessages ? 24 : kMessageLeft);
 	if (showNameFrame) {
@@ -513,10 +522,16 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 			}
 		}
 
-		const int speakerX = messageX - scaleMessageX(7);
+		int speakerX = messageX - scaleMessageX(7);
+		if (speaker.size() <= 2) {
+			int speakerWidth = 0;
+			for (uint i = 0; i < speaker.size(); i++)
+				speakerWidth += speaker[i] < 0x100 ? advance / 2 : advance;
+			speakerX += (advance * 4 - speakerWidth) / 2;
+		}
 		const int speakerY = frameY - scaleMessageY(2);
 		const uint32 speakerOutline = _format.RGBToColor(0x50, 0x50, 0x7f);
-		drawOutlinedText(screen, _messageSpeaker, speakerX, speakerY, advance, speakerOutline, _format.RGBToColor(0xff, 0xff, 0xff));
+		drawOutlinedText(screen, speaker, speakerX, speakerY, advance, speakerOutline, _format.RGBToColor(0xff, 0xff, 0xff));
 	}
 
 	const uint32 shadow = (_fullScreenMessages || _framedMessages) ? _format.RGBToColor(0x18, 0x18, 0x30) : _format.RGBToColor(0x3f, 0x3f, 0x7f);
