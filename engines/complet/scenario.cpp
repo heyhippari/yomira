@@ -53,6 +53,7 @@ bool Scenario::load(const Common::String &name) {
 
 	_data = data;
 	_textOffset = textOffset;
+	_textSize = textSize;
 	_localCount = localCount;
 	_name = name;
 	return true;

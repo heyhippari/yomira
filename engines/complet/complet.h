@@ -85,7 +85,7 @@ public:
 	void markResumePoint();
 
 	// Runs a script text, including its % commands, until it has finished
-	void runText(Script &script, const byte *text);
+	void runText(Script &script, const byte *text, uint32 textSize);
 	// Shows the selection window; returns the chosen item, -2 to go back from a submenu or -1 on quit
 	int selectMenu(const Common::Array<MenuItem> &items, bool nested);
 
@@ -170,7 +170,7 @@ private:
 	bool delay(uint32 ms);
 	bool waitClick();
 
-	const byte *runCommand(Script &script, const byte *p);
+	const byte *runCommand(Script &script, const byte *p, const byte *end);
 	void printChar(uint32 ch);
 	void clearMessage();
 	void newMessageLine();
@@ -239,6 +239,7 @@ private:
 	bool _inText = false;
 	// Set while waiting for a click or a menu choice, the points where saving is allowed
 	bool _inputWait = false;
+	bool _showingBacklog = false;
 	// Frame of the click indicator while waiting for a click, -1 when hidden
 	int _indicatorFrame = -1;
 	// Loaded state applied once the interpreter has unwound

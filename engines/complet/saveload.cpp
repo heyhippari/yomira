@@ -120,7 +120,7 @@ bool CompletEngine::applyPendingLoad() {
 	_bgPending = stream.readByte();
 	Common::String music = readString(stream);
 	bool loop = stream.readByte();
-	if (stream.err())
+	if (stream.err() || stream.eos())
 		return false;
 
 	_resumePoint = _pendingState;

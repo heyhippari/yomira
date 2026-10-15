@@ -50,12 +50,14 @@ public:
 	const byte *getData() const { return _data.data(); }
 	uint32 getSize() const { return _data.size(); }
 	uint32 getTextOffset() const { return _textOffset; }
+	uint32 getTextSize() const { return _textSize; }
 	uint32 getLocalCount() const { return _localCount; }
 
 private:
 	Common::String _name;
 	Common::Array<byte> _data;
 	uint32 _textOffset = 0;
+	uint32 _textSize = 0;
 	uint32 _localCount = 0;
 };
 

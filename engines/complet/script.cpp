@@ -114,7 +114,7 @@ bool Script::loadState(Common::ReadStream &stream) {
 	Common::String name = readString(stream);
 	uint32 cur = stream.readUint32LE();
 	Common::String queued = readString(stream);
-	if (stream.err() || !loadScenario(name) || cur < Scenario::kCommandsOffset || cur >= _scenario.getSize())
+	if (stream.err() || stream.eos() || !loadScenario(name) || cur < Scenario::kCommandsOffset || cur >= _scenario.getSize())
 		return false;
 
 	_cur = cur;
@@ -151,7 +151,7 @@ bool Script::loadState(Common::ReadStream &stream) {
 	if (!_locals.contains(name))
 		_locals[name].resize(_scenario.getLocalCount());
 
-	_running = !stream.err();
+	_running = !stream.err() && !stream.eos();
 	return _running;
 }
 
@@ -377,14 +377,25 @@ void Script::runExpression() {
 
 void Script::showText(uint16 offset) {
 	uint32 pos = _scenario.getTextOffset() + offset;
-	if (pos >= _scenario.getSize())
+	const uint32 textEnd = _scenario.getTextOffset() + _scenario.getTextSize();
+	if (pos >= textEnd)
 		return;
-	_vm->runText(*this, _scenario.getData() + pos);
+	_vm->runText(*this, _scenario.getData() + pos, textEnd - pos);
 }
 
 void Script::addMenuItem(uint16 textOffset) {
+	const uint32 pos = _scenario.getTextOffset() + textOffset;
+	const uint32 textEnd = _scenario.getTextOffset() + _scenario.getTextSize();
+	if (pos >= textEnd)
+		return;
+
+	const byte *text = _scenario.getData() + pos;
+	uint32 length = 0;
+	while (pos + length < textEnd && text[length])
+		length++;
+
 	MenuItem item;
-	item.text = (const char *)(_scenario.getData() + _scenario.getTextOffset() + textOffset);
+	item.text = Common::String((const char *)text, length);
 	item.body = _cur;
 	if (!_menus.empty())
 		_menus.back().push_back(item);
@@ -466,8 +477,9 @@ void Script::step() {
 		uint16 text = readWord();
 		bool matched = evalCondition();
 		const byte *data = _scenario.getData();
-		bool hasText = _scenario.getTextOffset() + text < _scenario.getSize() &&
-			data[_scenario.getTextOffset() + text];
+		const uint32 textPos = _scenario.getTextOffset() + text;
+		const uint32 textEnd = _scenario.getTextOffset() + _scenario.getTextSize();
+		bool hasText = textPos < textEnd && data[textPos];
 
 		if (!matched) {
 			skipAssignments();

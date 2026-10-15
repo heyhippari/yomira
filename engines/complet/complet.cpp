@@ -136,7 +136,7 @@ void CompletEngine::pauseEngineIntern(bool pause) {
 bool CompletEngine::notifyEvent(const Common::Event &event) {
 	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionAutoMode) {
 		_autoMode = !_autoMode;
-		if (_indicatorFrame >= 0)
+		if (_indicatorFrame >= 0 && !_showingBacklog)
 			present();
 		return true;
 	}
@@ -1005,6 +1005,10 @@ bool CompletEngine::showLogo() {
 	GdImage logo;
 	if (!logo.loadFromName("cplogo.gd"))
 		return true;
+	if (logo.getWidth() != _screenWidth || logo.getHeight() != _screenHeight) {
+		warning("Complet: company logo has incompatible dimensions");
+		return true;
+	}
 
 	for (int i = 1; i <= kLogoFadeSteps; i++) {
 		presentBuffer(logo.getPixels(), i * 255 / kLogoFadeSteps);
@@ -1270,6 +1274,7 @@ void CompletEngine::showBacklog() {
 	}
 	const int pageCount = pages.size();
 
+	_showingBacklog = true;
 	int back = 1;
 	drawBacklogPage(pages[pageCount - back], back, pageCount);
 
@@ -1299,6 +1304,7 @@ void CompletEngine::showBacklog() {
 		g_system->delayMillis(10);
 	}
 
+	_showingBacklog = false;
 	present();
 }
 
@@ -1360,13 +1366,14 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 	g_system->updateScreen();
 }
 
-void CompletEngine::runText(Script &script, const byte *text) {
+void CompletEngine::runText(Script &script, const byte *text, uint32 textSize) {
 	clearMessage();
 	_fastText = false;
 	_inText = true;
 
 	const byte *p = text;
-	while (*p && !shouldQuit() && script.isRunning()) {
+	const byte *end = text + textSize;
+	while (p < end && *p && !shouldQuit() && script.isRunning()) {
 		_textPos = p - script.getData();
 		if (_replaying && _textPos >= _replayEnd) {
 			_replaying = false;
@@ -1374,11 +1381,11 @@ void CompletEngine::runText(Script &script, const byte *text) {
 		}
 
 		if (*p == '%') {
-			p = runCommand(script, p);
+			p = runCommand(script, p, end);
 			continue;
 		}
 
-		int length = ((*p >= 0x81 && *p <= 0x9f) || (*p >= 0xe0 && *p <= 0xfc)) && p[1] ? 2 : 1;
+		int length = ((*p >= 0x81 && *p <= 0x9f) || (*p >= 0xe0 && *p <= 0xfc)) && p + 1 < end && p[1] ? 2 : 1;
 		Common::U32String ch((const char *)p, length, Common::kWindows932);
 		if (ch.size())
 			printChar(ch[0]);
@@ -1390,31 +1397,43 @@ void CompletEngine::runText(Script &script, const byte *text) {
 }
 
 // Handles one "%X[,arg;]" command and returns the position after it
-const byte *CompletEngine::runCommand(Script &script, const byte *p) {
-	const char command = p[1] | 0x20;
-	if (!command)
+const byte *CompletEngine::runCommand(Script &script, const byte *p, const byte *end) {
+	if (p + 1 >= end)
+		return end;
+	if (!p[1])
 		return p + 1;
 
+	const char command = p[1] | 0x20;
+
 	// The argument starts after "%X," ("%gX," for the graphic variants)
-	int argStart = 3;
 	char variant = 0;
+	const byte *q = p + 2;
 	if (command == 'g') {
-		variant = p[2] | 0x20;
-		argStart = variant == ',' ? 3 : 4;
+		if (q >= end || !*q)
+			return q;
+		variant = *q++ | 0x20;
+		if (variant != ',') {
+			if (q >= end || !*q)
+				return q;
+			q++;
+		}
 	}
 
-	const byte *q = p + 2;
 	Common::String args;
 	bool hasArgs = Common::String("efgjmosvw").contains(command);
 	if (hasArgs) {
-		q = p + argStart;
-		while (*q && *q != ';')
-			args += *q++;
-		if (*q == ';')
+		if (command != 'g') {
+			if (q >= end || !*q)
+				return q;
 			q++;
-	} else if (command == 't' && _gallery->groupCount && *q >= '0' && *q <= '9') {
+		}
+		while (q < end && *q && *q != ';')
+			args += *q++;
+		if (q < end && *q == ';')
+			q++;
+	} else if (command == 't' && _gallery->groupCount && q < end && *q >= '0' && *q <= '9') {
 		args += *q++;
-		if (*q == ';')
+		if (q < end && *q == ';')
 			q++;
 	}
 	debugC(1, kDebugScript, "%%%c%c %s", command, variant ? variant : ' ', args.c_str());

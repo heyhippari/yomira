@@ -373,7 +373,8 @@ bool CompletEngine::runGallery() {
 		int first = p * kCellsPerPage;
 		for (int i = 0; i < kCellsPerPage && first + i < count; i++) {
 			Common::Array<byte> thumb;
-			if (!GdImage::loadThumbnail(_gallery->names[seen[first + i]], thumb)) {
+			if (!GdImage::loadThumbnail(_gallery->names[seen[first + i]], thumb) ||
+					thumb.size() != (uint)(thumbWidth * thumbHeight * 3)) {
 				thumb.resize(thumbWidth * thumbHeight * 3);
 				memset(thumb.data(), 0x7f, thumb.size());
 			}
@@ -542,11 +543,16 @@ bool CompletEngine::runGallery() {
 			}
 		} else if (activated >= 0) {
 			GdImage image;
-			if (image.loadFromName(Common::String(_gallery->names[seen[page * kCellsPerPage + activated]]) + ".gd")) {
-				presentBuffer(image.getPixels());
-				ok = waitAnyInput();
-				if (ok)
-					show(page, selected);
+			const Common::String imageName = _gallery->names[seen[page * kCellsPerPage + activated]];
+			if (image.loadFromName(imageName + ".gd")) {
+				if (image.getWidth() != _screenWidth || image.getHeight() != _screenHeight) {
+					warning("Complet: gallery image '%s' has incompatible dimensions", imageName.c_str());
+				} else {
+					presentBuffer(image.getPixels());
+					ok = waitAnyInput();
+					if (ok)
+						show(page, selected);
+				}
 			}
 		}
 
