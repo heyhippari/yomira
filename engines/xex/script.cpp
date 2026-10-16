@@ -23,13 +23,13 @@
 #include "common/stream.h"
 #include "common/system.h"
 
-#include "complet/complet.h"
-#include "complet/detection.h"
-#include "complet/script.h"
+#include "xex/xex.h"
+#include "xex/detection.h"
+#include "xex/script.h"
 
-namespace Complet {
+namespace Xex {
 
-Script::Script(CompletEngine *vm) : _vm(vm) {
+Script::Script(XexEngine *vm) : _vm(vm) {
 	memset(_counters, 0, sizeof(_counters));
 	memset(_globals, 0, sizeof(_globals));
 	memset(_flags, 0, sizeof(_flags));
@@ -178,7 +178,7 @@ bool Script::getFlag(int number) const {
 
 void Script::newMenu() {
 	if (_menus.size() >= kMaxMenuDepth) {
-		warning("Complet: menu nesting too deep");
+		warning("Xex: menu nesting too deep");
 		_running = false;
 		return;
 	}
@@ -187,7 +187,7 @@ void Script::newMenu() {
 
 byte Script::readByte() {
 	if (_cur >= _scenario.getSize()) {
-		warning("Complet: script read past end of '%s'", _scenario.getName().c_str());
+		warning("Xex: script read past end of '%s'", _scenario.getName().c_str());
 		_running = false;
 		return 0;
 	}
@@ -279,7 +279,7 @@ bool Script::evalCondition() {
 		case 5: r = a == b; break;
 		case 6: r = a != b; break;
 		default:
-			warning("Complet: bad condition operator %d", op);
+			warning("Xex: bad condition operator %d", op);
 			_running = false;
 			return false;
 		}
@@ -309,7 +309,7 @@ void Script::runAssignments() {
 		int16 target = readSWord();
 		int16 value = getValue(readSWord());
 		if (target >= 0) {
-			warning("Complet: bad assignment target");
+			warning("Xex: bad assignment target");
 			_running = false;
 			return;
 		}
@@ -326,7 +326,7 @@ void Script::runAssignments() {
 			setVariable(index, getValue(target) - value);
 			break;
 		default:
-			warning("Complet: bad assignment operator %d", op);
+			warning("Xex: bad assignment operator %d", op);
 			_running = false;
 			return;
 		}
@@ -342,7 +342,7 @@ void Script::runExpression() {
 		int16 token = readSWord();
 		if (token < -0x206 || token > -0x201) {
 			if (sp == 0) {
-				warning("Complet: expression stack overflow");
+				warning("Xex: expression stack overflow");
 				_running = false;
 				return;
 			}
@@ -358,7 +358,7 @@ void Script::runExpression() {
 		}
 
 		if (sp > 30) {
-			warning("Complet: expression stack underflow");
+			warning("Xex: expression stack underflow");
 			_running = false;
 			return;
 		}
@@ -418,7 +418,7 @@ void Script::endPage() {
 		_queued.clear();
 		bool leavingTitle = _scenario.getName().equalsIgnoreCase("startup") && !name.equalsIgnoreCase("startup");
 		if (!loadScenario(name)) {
-			warning("Complet: cannot load scenario '%s'", name.c_str());
+			warning("Xex: cannot load scenario '%s'", name.c_str());
 			_running = false;
 			return;
 		}
@@ -542,10 +542,10 @@ void Script::step() {
 		break;
 	}
 	default:
-		warning("Complet: unknown script opcode 0x%02x at 0x%x in '%s'", op, _cur - 1, _scenario.getName().c_str());
+		warning("Xex: unknown script opcode 0x%02x at 0x%x in '%s'", op, _cur - 1, _scenario.getName().c_str());
 		_running = false;
 		break;
 	}
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

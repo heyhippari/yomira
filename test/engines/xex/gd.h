@@ -22,9 +22,9 @@
 #include <cxxtest/TestSuite.h>
 
 #include "common/memstream.h"
-#include "engines/complet/gd.h"
+#include "engines/xex/gd.h"
 
-class CompletGdTestSuite : public CxxTest::TestSuite {
+class XexGdTestSuite : public CxxTest::TestSuite {
 	static void appendBits(Common::Array<byte> &data, uint32 &bitPosition, uint32 value, int count) {
 		for (int bit = count - 1; bit >= 0; bit--) {
 			if (!(bitPosition & 7))
@@ -83,7 +83,7 @@ class CompletGdTestSuite : public CxxTest::TestSuite {
 		return data;
 	}
 
-	void checkImage(Complet::GdImage &image, int version, bool lz) {
+	void checkImage(Xex::GdImage &image, int version, bool lz) {
 		const Common::Array<byte> data = makeImage(version, lz);
 		Common::MemoryReadStream stream(data.data(), data.size());
 		TS_ASSERT(image.load(stream));
@@ -103,14 +103,14 @@ class CompletGdTestSuite : public CxxTest::TestSuite {
 
 public:
 	void test_predictive_dimensions_and_pixels_across_revisions() {
-		Complet::GdImage image;
+		Xex::GdImage image;
 		checkImage(image, 3, false);
 		checkImage(image, 1, false);
 		checkImage(image, 2, false);
 	}
 
 	void test_lz_dimensions_and_pixels_across_revisions() {
-		Complet::GdImage image;
+		Xex::GdImage image;
 		checkImage(image, 2, true);
 		checkImage(image, 3, true);
 		checkImage(image, 1, true);
@@ -118,7 +118,7 @@ public:
 
 	void test_short_and_unsupported_headers_are_rejected() {
 		const byte data[] = {'x', 0, 0};
-		Complet::GdImage image;
+		Xex::GdImage image;
 		for (uint32 size = 0; size <= sizeof(data); size++) {
 			Common::MemoryReadStream stream(data, size);
 			TS_ASSERT(!image.load(stream));

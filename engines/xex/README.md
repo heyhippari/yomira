@@ -1,9 +1,13 @@
-# C4
+# XEX
 
 Implementation of Complet's XEX and C4 visual novel engines, registered in
-ScummVM as `complet`. Gameplay, graphics, audio, message history, save/load,
+ScummVM as `xex`. Gameplay, graphics, audio, message history, save/load,
 and CG galleries are implemented. The engine remains experimental; detection
 does not imply that every route or feature has been verified.
+
+Existing launcher entries need their engine ID updated to `xex`, or the games
+can be added again. Per-game keymapper overrides now use the
+`keymap_xex-default_` configuration prefix.
 
 ## Detected Releases
 
@@ -43,7 +47,7 @@ font filenames in order:
 - `NotoSerifCJK-Regular.ttc`
 
 The build requires 16-bit color, high-resolution graphics, and FreeType2.
-Enable the engine with `./configure --enable-engine=complet`, then build with
+Enable the engine with `./configure --enable-engine=xex`, then build with
 `make -j2`. It is not enabled by default.
 
 ## Engine Options

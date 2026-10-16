@@ -26,10 +26,10 @@
 #include "common/file.h"
 #include "common/memstream.h"
 
-#include "complet/audio.h"
-#include "complet/detection.h"
+#include "xex/audio.h"
+#include "xex/detection.h"
 
-namespace Complet {
+namespace Xex {
 
 #ifdef USE_MAD
 // The VMD files are MP3 data with every byte XORed with this value
@@ -169,7 +169,7 @@ void AudioPlayer::playMusic(const Common::String &name, bool loop) {
 
 	Audio::SeekableAudioStream *stream = openStream(name);
 	if (!stream) {
-		warning("Complet: cannot play music '%s'", name.c_str());
+		warning("Xex: cannot play music '%s'", name.c_str());
 		_musicName.clear();
 		return;
 	}
@@ -213,4 +213,4 @@ Common::String AudioPlayer::getMusic(bool &loop) const {
 	return playing ? _musicName : Common::String();
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

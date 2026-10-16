@@ -19,15 +19,15 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_GD_H
-#define ENGINES_COMPLET_GD_H
+#ifndef ENGINES_XEX_GD_H
+#define ENGINES_XEX_GD_H
 
 #include "common/array.h"
 #include "common/stream.h"
 #include "common/str.h"
 #include "common/types.h"
 
-namespace Complet {
+namespace Xex {
 
 enum {
 	kScreenWidth = 800,
@@ -66,6 +66,6 @@ private:
 	int _height = kScreenHeight;
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_GD_H
+#endif // ENGINES_XEX_GD_H

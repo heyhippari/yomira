@@ -19,14 +19,14 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_DETECTION_H
-#define ENGINES_COMPLET_DETECTION_H
+#ifndef ENGINES_XEX_DETECTION_H
+#define ENGINES_XEX_DETECTION_H
 
 #include "engines/advancedDetector.h"
 
-namespace Complet {
+namespace Xex {
 
-struct CompletMenuStyle {
+struct XexMenuStyle {
 	uint16 centerX;
 	uint16 leftPerCharacter;
 	uint16 widthPerCharacter;
@@ -54,47 +54,47 @@ struct CompletMenuStyle {
 	bool outlineSelectedText;
 };
 
-enum CompletMessageLayout {
+enum XexMessageLayout {
 	kMessageDialogue,
 	kMessageFullScreen,
 	kMessageFramedDialogue
 };
 
-enum CompletEngineFamily {
-	kCompletEngineXex,
-	kCompletEngineC4
+enum XexEngineFamily {
+	kXexEngineXex,
+	kXexEngineC4
 };
 
-enum CompletMapLayout {
-	kCompletMapNone,
-	kCompletMapCase266,
-	kCompletMapMht
+enum XexMapLayout {
+	kXexMapNone,
+	kXexMapCase266,
+	kXexMapMht
 };
 
-struct CompletGallery {
+struct XexGallery {
 	const char *const *names;
 	uint16 count;
 	const uint16 *groupEnds;
 	uint16 groupCount;
 };
 
-struct CompletGameDescription {
+struct XexGameDescription {
 	ADGameDescription gameDescription;
 	uint16 screenWidth;
 	uint16 screenHeight;
-	CompletEngineFamily engineFamily;
+	XexEngineFamily engineFamily;
 	bool showMessageButtons;
-	CompletMenuStyle menuStyle;
-	CompletMessageLayout messageLayout;
+	XexMenuStyle menuStyle;
+	XexMessageLayout messageLayout;
 	uint16 waitUnitMillis;
 	bool midiOnly;
-	CompletGallery gallery;
-	CompletMapLayout mapLayout;
+	XexGallery gallery;
+	XexMapLayout mapLayout;
 
 	AD_GAME_DESCRIPTION_HELPERS(gameDescription)
 };
 
-enum CompletDebugChannels {
+enum XexDebugChannels {
 	kDebugScript = 1,
 	kDebugGraphics,
 	kDebugAudio
@@ -104,6 +104,6 @@ enum CompletDebugChannels {
 #define GAMEOPTION_MIDI_MUSIC     GUIO_GAMEOPTIONS3
 #define GAMEOPTION_NAME_FRAME     GUIO_GAMEOPTIONS4
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_DETECTION_H
+#endif // ENGINES_XEX_DETECTION_H

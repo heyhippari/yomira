@@ -26,8 +26,8 @@
 #include "common/translation.h"
 #include "engines/advancedDetector.h"
 
-#include "complet/complet.h"
-#include "complet/detection.h"
+#include "xex/xex.h"
+#include "xex/detection.h"
 
 static const ADExtraGuiOptionsMap optionsList[] = {
 	{
@@ -66,15 +66,15 @@ static const ADExtraGuiOptionsMap optionsList[] = {
 	AD_EXTRA_GUI_OPTIONS_TERMINATOR
 };
 
-class CompletMetaEngine : public AdvancedMetaEngine<Complet::CompletGameDescription> {
+class XexMetaEngine : public AdvancedMetaEngine<Xex::XexGameDescription> {
 public:
-	Common::Error createInstance(OSystem *system, Engine **engine, const Complet::CompletGameDescription *description) const override {
-		*engine = new Complet::CompletEngine(system, *description);
+	Common::Error createInstance(OSystem *system, Engine **engine, const Xex::XexGameDescription *description) const override {
+		*engine = new Xex::XexEngine(system, *description);
 		return Common::Error(Common::kNoError);
 	}
 
 	const char *getName() const override {
-		return "complet";
+		return "xex";
 	}
 
 	const ADExtraGuiOptionsMap *getAdvancedExtraGuiOptions() const override {
@@ -84,11 +84,11 @@ public:
 	Common::KeymapArray initKeymaps(const char *target) const override;
 };
 
-Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
+Common::KeymapArray XexMetaEngine::initKeymaps(const char *target) const {
 	using namespace Common;
-	using namespace Complet;
+	using namespace Xex;
 
-	Keymap *keymap = new Keymap(Keymap::kKeymapTypeGame, "complet-default", _("Default keymappings"));
+	Keymap *keymap = new Keymap(Keymap::kKeymapTypeGame, "xex-default", _("Default keymappings"));
 
 	// The controller's A button advances instead, as a click at the pointer could hit a menu item or button
 	Action *act = new Action(kStandardActionLeftClick, _("Left click"));
@@ -104,7 +104,7 @@ Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
 	struct ActionDef {
 		const char *id;
 		const char *description;
-		CompletAction action;
+		XexAction action;
 		const char *mappings[4];
 	};
 	static const ActionDef kActions[] = {
@@ -135,8 +135,8 @@ Common::KeymapArray CompletMetaEngine::initKeymaps(const char *target) const {
 	return Keymap::arrayOf(keymap);
 }
 
-#if PLUGIN_ENABLED_DYNAMIC(COMPLET)
-REGISTER_PLUGIN_DYNAMIC(COMPLET, PLUGIN_TYPE_ENGINE, CompletMetaEngine);
+#if PLUGIN_ENABLED_DYNAMIC(XEX)
+REGISTER_PLUGIN_DYNAMIC(XEX, PLUGIN_TYPE_ENGINE, XexMetaEngine);
 #else
-REGISTER_PLUGIN_STATIC(COMPLET, PLUGIN_TYPE_ENGINE, CompletMetaEngine);
+REGISTER_PLUGIN_STATIC(XEX, PLUGIN_TYPE_ENGINE, XexMetaEngine);
 #endif

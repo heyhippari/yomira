@@ -19,12 +19,12 @@
  *
  */
 
-#include "complet/complet.h"
-#include "complet/console.h"
+#include "xex/xex.h"
+#include "xex/console.h"
 
-namespace Complet {
+namespace Xex {
 
-Console::Console(CompletEngine *vm) : GUI::Debugger(), _vm(vm) {
+Console::Console(XexEngine *vm) : GUI::Debugger(), _vm(vm) {
 	registerCmd("scenario", WRAP_METHOD(Console, cmdScenario));
 	registerCmd("var", WRAP_METHOD(Console, cmdVar));
 	registerCmd("flag", WRAP_METHOD(Console, cmdFlag));
@@ -81,4 +81,4 @@ bool Console::cmdUnlockCg(int argc, const char **argv) {
 	return true;
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

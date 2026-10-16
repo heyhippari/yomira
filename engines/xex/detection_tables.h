@@ -19,19 +19,19 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_DETECTION_TABLES_H
-#define ENGINES_COMPLET_DETECTION_TABLES_H
+#ifndef ENGINES_XEX_DETECTION_TABLES_H
+#define ENGINES_XEX_DETECTION_TABLES_H
 
 #include "engines/advancedDetector.h"
 
-#include "complet/detection.h"
+#include "xex/detection.h"
 
-namespace Complet {
+namespace Xex {
 
 // Voices are digital, and the text is always shown
-#define COMPLET_GUIO GUIO_NOSFX GUIO_NOSUBTITLES GUIO_NOASPECT GUIO_NOLANG GAMEOPTION_TEXT_ANIMATION
+#define XEX_GUIO GUIO_NOSFX GUIO_NOSUBTITLES GUIO_NOASPECT GUIO_NOLANG GAMEOPTION_TEXT_ANIMATION
 
-static const CompletMenuStyle kPlainC4MenuStyle = {
+static const XexMenuStyle kPlainC4MenuStyle = {
 	0x170, 7, 14, 0x30,
 	0x11c, 16, 32, 6,
 	32, 16, 0, 0,
@@ -39,7 +39,7 @@ static const CompletMenuStyle kPlainC4MenuStyle = {
 	true, false, true, 30, 0, true, false
 };
 
-static const CompletMenuStyle kMattyMenuStyle = {
+static const XexMenuStyle kMattyMenuStyle = {
 	0x124, 7, 14, 42,
 	240, 14, 28, 0,
 	28, 16, 0, 0,
@@ -47,7 +47,7 @@ static const CompletMenuStyle kMattyMenuStyle = {
 	true, false, true, 26, 32, false, true
 };
 
-static const CompletMenuStyle kKexMenuStyle = {
+static const XexMenuStyle kKexMenuStyle = {
 	0x124, 7, 14, 42,
 	240, 14, 28, 0,
 	28, 16, 0, 0,
@@ -103,15 +103,15 @@ static const char *const kCase266CgNames[] = {
 };
 
 static const uint16 kCase266CgGroupEnds[] = {76};
-static const CompletGallery kCase266Gallery = {
+static const XexGallery kCase266Gallery = {
 	kCase266CgNames, ARRAYSIZE(kCase266CgNames), kCase266CgGroupEnds, ARRAYSIZE(kCase266CgGroupEnds)
 };
-static const CompletGallery kC4Gallery = {kC4CgNames, ARRAYSIZE(kC4CgNames), nullptr, 0};
-static const CompletGallery kCollectionGallery = {
+static const XexGallery kC4Gallery = {kC4CgNames, ARRAYSIZE(kC4CgNames), nullptr, 0};
+static const XexGallery kCollectionGallery = {
 	kCollectionCgNames, ARRAYSIZE(kCollectionCgNames), kCollectionCgGroupEnds, ARRAYSIZE(kCollectionCgGroupEnds)
 };
 
-static const CompletGameDescription gameDescriptions[] = {
+static const XexGameDescription gameDescriptions[] = {
 	{
 		{
 			"collection",
@@ -120,9 +120,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
+			GUIO3(XEX_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kCompletMapNone
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageFullScreen, 1, true, kCollectionGallery, kXexMapNone
 	},
 	{
 		{
@@ -132,9 +132,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
+			GUIO3(XEX_GUIO, GUIO_MIDIGM, GUIO_NOSPEECH)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kCompletMapCase266
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageFramedDialogue, 1, true, kCase266Gallery, kXexMapCase266
 	},
 	{
 		{
@@ -144,9 +144,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO3(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
+				GUIO3(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kCompletMapNone
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -156,9 +156,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO3(COMPLET_GUIO, GUIO_NOMIDI, GAMEOPTION_NAME_FRAME)
+				GUIO3(XEX_GUIO, GUIO_NOMIDI, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -168,9 +168,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapMht
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapMht
 	},
 	{
 		{
@@ -180,9 +180,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -193,9 +193,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kXexEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -206,9 +206,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		640, 480, kCompletEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		640, 480, kXexEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -218,9 +218,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kXexEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -230,9 +230,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kXexEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -242,9 +242,9 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kXexEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		{
@@ -254,16 +254,16 @@ static const CompletGameDescription gameDescriptions[] = {
 			Common::JA_JPN,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-				GUIO4(COMPLET_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
 		},
-		800, 600, kCompletEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kCompletMapNone
+		800, 600, kXexEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
 		AD_TABLE_END_MARKER,
-		0, 0, kCompletEngineC4, false, {}, kMessageDialogue, 0, false, {}, kCompletMapNone
+		0, 0, kXexEngineC4, false, {}, kMessageDialogue, 0, false, {}, kXexMapNone
 	}
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_DETECTION_TABLES_H
+#endif // ENGINES_XEX_DETECTION_TABLES_H

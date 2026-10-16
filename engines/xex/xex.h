@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_COMPLET_H
-#define ENGINES_COMPLET_COMPLET_H
+#ifndef ENGINES_XEX_XEX_H
+#define ENGINES_XEX_XEX_H
 
 #include "common/array.h"
 #include "common/events.h"
@@ -30,25 +30,25 @@
 #include "graphics/font.h"
 #include "graphics/pixelformat.h"
 
-#include "complet/audio.h"
-#include "complet/gd.h"
-#include "complet/script.h"
+#include "xex/audio.h"
+#include "xex/gd.h"
+#include "xex/script.h"
 
 namespace Graphics {
 struct Surface;
 }
 
-namespace Complet {
+namespace Xex {
 
-struct CompletMenuStyle;
-struct CompletGameDescription;
-struct CompletGallery;
+struct XexMenuStyle;
+struct XexGameDescription;
+struct XexGallery;
 
 enum {
 	kMaxCgCount = 256
 };
 
-enum CompletAction {
+enum XexAction {
 	kActionNone,
 	kActionAdvance,
 	kActionSkip,
@@ -64,10 +64,10 @@ enum CompletAction {
 	kActionAutoMode
 };
 
-class CompletEngine : public Engine, public Common::EventObserver {
+class XexEngine : public Engine, public Common::EventObserver {
 public:
-	CompletEngine(OSystem *system, const CompletGameDescription &description);
-	~CompletEngine() override;
+	XexEngine(OSystem *system, const XexGameDescription &description);
+	~XexEngine() override;
 
 	Common::Error run() override;
 	bool hasFeature(EngineFeature f) const override;
@@ -188,8 +188,8 @@ private:
 	Common::Array<byte> _bg;
 	Common::String _bgName;
 	bool _bgPending = false;
-	const CompletMenuStyle *_menuStyle = nullptr;
-	const CompletGallery *_gallery = nullptr;
+	const XexMenuStyle *_menuStyle = nullptr;
+	const XexGallery *_gallery = nullptr;
 	bool _case266Map = false;
 	bool _mhtMap = false;
 	bool _xexEngine = false;
@@ -261,6 +261,6 @@ private:
 	bool _seenCg[kMaxCgCount];
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_COMPLET_H
+#endif // ENGINES_XEX_XEX_H

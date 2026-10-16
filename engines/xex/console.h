@@ -19,18 +19,18 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_CONSOLE_H
-#define ENGINES_COMPLET_CONSOLE_H
+#ifndef ENGINES_XEX_CONSOLE_H
+#define ENGINES_XEX_CONSOLE_H
 
 #include "gui/debugger.h"
 
-namespace Complet {
+namespace Xex {
 
-class CompletEngine;
+class XexEngine;
 
 class Console : public GUI::Debugger {
 public:
-	explicit Console(CompletEngine *vm);
+	explicit Console(XexEngine *vm);
 
 private:
 	bool cmdScenario(int argc, const char **argv);
@@ -38,9 +38,9 @@ private:
 	bool cmdFlag(int argc, const char **argv);
 	bool cmdUnlockCg(int argc, const char **argv);
 
-	CompletEngine *_vm;
+	XexEngine *_vm;
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_CONSOLE_H
+#endif // ENGINES_XEX_CONSOLE_H

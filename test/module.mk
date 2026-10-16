@@ -40,9 +40,9 @@ endif
 # libcommon needs libformats and libformats needs libcommon: so libcommon is put twice
 TEST_LIBS +=	audio/libaudio.a math/libmath.a common/libcommon.a common/formats/libformats.a common/compression/libcompression.a common/libcommon.a image/libimage.a graphics/libgraphics.a
 
-ifeq ($(ENABLE_COMPLET), STATIC_PLUGIN)
-	TESTS += $(srcdir)/test/engines/complet/*.h
-	TEST_LIBS += engines/complet/gd.o
+ifeq ($(ENABLE_XEX), STATIC_PLUGIN)
+	TESTS += $(srcdir)/test/engines/xex/*.h
+	TEST_LIBS += engines/xex/gd.o
 endif
 
 ifeq ($(ENABLE_SYSTEM98), STATIC_PLUGIN)

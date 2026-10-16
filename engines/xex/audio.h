@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_AUDIO_H
-#define ENGINES_COMPLET_AUDIO_H
+#ifndef ENGINES_XEX_AUDIO_H
+#define ENGINES_XEX_AUDIO_H
 
 #include "audio/midiplayer.h"
 #include "audio/mixer.h"
@@ -30,7 +30,7 @@ namespace Audio {
 class SeekableAudioStream;
 }
 
-namespace Complet {
+namespace Xex {
 
 // Plays the Standard MIDI File versions of the music tracks
 class MusicMidiPlayer : public Audio::MidiPlayer {
@@ -77,6 +77,6 @@ private:
 	bool _musicLoop = false;
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_AUDIO_H
+#endif // ENGINES_XEX_AUDIO_H

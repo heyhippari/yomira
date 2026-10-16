@@ -21,9 +21,9 @@
 
 #include "common/file.h"
 
-#include "complet/gd.h"
+#include "xex/gd.h"
 
-namespace Complet {
+namespace Xex {
 
 namespace {
 
@@ -272,4 +272,4 @@ recordDone:
 	return true;
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

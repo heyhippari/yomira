@@ -1,8 +1,8 @@
-MODULE := engines/complet
+MODULE := engines/xex
 
 MODULE_OBJS := \
 	audio.o \
-	complet.o \
+	xex.o \
 	console.o \
 	gallery.o \
 	gd.o \
@@ -12,7 +12,7 @@ MODULE_OBJS := \
 	script.o
 
 # This module can be built as a plugin
-ifeq ($(ENABLE_COMPLET), DYNAMIC_PLUGIN)
+ifeq ($(ENABLE_XEX), DYNAMIC_PLUGIN)
 PLUGIN := 1
 endif
 

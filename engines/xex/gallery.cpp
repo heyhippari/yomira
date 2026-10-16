@@ -22,10 +22,10 @@
 #include "common/events.h"
 #include "common/system.h"
 
-#include "complet/complet.h"
-#include "complet/detection.h"
+#include "xex/xex.h"
+#include "xex/detection.h"
 
-namespace Complet {
+namespace Xex {
 
 enum {
 	kCellColumns = 10,
@@ -35,7 +35,7 @@ enum {
 };
 
 // Full-screen graphics shown through the script are what unlock gallery entries
-void CompletEngine::recordSeenCg(const Common::String &name) {
+void XexEngine::recordSeenCg(const Common::String &name) {
 	for (int i = 0; i < _gallery->count; i++) {
 		if (name.equalsIgnoreCase(_gallery->names[i])) {
 			if (!_seenCg[i]) {
@@ -47,14 +47,14 @@ void CompletEngine::recordSeenCg(const Common::String &name) {
 	}
 }
 
-void CompletEngine::unlockAllCgs() {
+void XexEngine::unlockAllCgs() {
 	for (int i = 0; i < _gallery->count; i++)
 		_seenCg[i] = true;
 	saveCommonData();
 }
 
 // Copies a rectangle of the frame image; source rows are bottom-up like the original's
-void CompletEngine::blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const {
+void XexEngine::blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const {
 	const byte *frame = _frameImage.getPixels();
 	for (int k = 0; k < h; k++) {
 		int topDownRow = dy + (h - 1 - k);
@@ -74,7 +74,7 @@ static void drawBox(Common::Array<byte> &buf, int width, int height, int x0, int
 }
 
 // Wait for a click or key; false on quit
-bool CompletEngine::waitAnyInput() {
+bool XexEngine::waitAnyInput() {
 	Common::Event event;
 	while (!shouldQuit()) {
 		while (g_system->getEventManager()->pollEvent(event)) {
@@ -90,7 +90,7 @@ bool CompletEngine::waitAnyInput() {
 	return false;
 }
 
-bool CompletEngine::runGroupedGallery(int group) {
+bool XexEngine::runGroupedGallery(int group) {
 	if (group < 0 || group >= _gallery->groupCount)
 		return true;
 	const int first = group ? _gallery->groupEnds[group - 1] + 1 : 0;
@@ -156,7 +156,7 @@ bool CompletEngine::runGroupedGallery(int group) {
 	return !interrupted();
 }
 
-bool CompletEngine::runMap() {
+bool XexEngine::runMap() {
 	if (_mhtMap)
 		return runMhtMap();
 
@@ -261,7 +261,7 @@ bool CompletEngine::runMap() {
 	return !interrupted();
 }
 
-bool CompletEngine::runMhtMap() {
+bool XexEngine::runMhtMap() {
 	struct MapRegion {
 		int left, top, right, bottom;
 	};
@@ -348,7 +348,7 @@ bool CompletEngine::runMhtMap() {
 	return !interrupted();
 }
 
-bool CompletEngine::runGallery() {
+bool XexEngine::runGallery() {
 	const int thumbWidth = _screenWidth / kCellColumns;
 	const int thumbHeight = _screenHeight / kCellColumns;
 	Common::Array<int> seen;
@@ -546,7 +546,7 @@ bool CompletEngine::runGallery() {
 			const Common::String imageName = _gallery->names[seen[page * kCellsPerPage + activated]];
 			if (image.loadFromName(imageName + ".gd")) {
 				if (image.getWidth() != _screenWidth || image.getHeight() != _screenHeight) {
-					warning("Complet: gallery image '%s' has incompatible dimensions", imageName.c_str());
+					warning("Xex: gallery image '%s' has incompatible dimensions", imageName.c_str());
 				} else {
 					presentBuffer(image.getPixels());
 					ok = waitAnyInput();
@@ -568,4 +568,4 @@ bool CompletEngine::runGallery() {
 	return ok;
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

@@ -34,11 +34,11 @@
 #include "graphics/wincursor.h"
 #include "graphics/surface.h"
 
-#include "complet/complet.h"
-#include "complet/console.h"
-#include "complet/detection.h"
+#include "xex/xex.h"
+#include "xex/console.h"
+#include "xex/detection.h"
 
-namespace Complet {
+namespace Xex {
 
 enum {
 	kFontSize = 24,
@@ -95,11 +95,11 @@ static const char *const kFontFiles[] = {
 	"NotoSerifCJK-Regular.ttc"
 };
 
-CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &description) :
+XexEngine::XexEngine(OSystem *system, const XexGameDescription &description) :
 		Engine(system), _menuStyle(&description.menuStyle), _gallery(&description.gallery),
-		_case266Map(description.mapLayout == kCompletMapCase266),
-		_mhtMap(description.mapLayout == kCompletMapMht),
-		_xexEngine(description.engineFamily == kCompletEngineXex),
+		_case266Map(description.mapLayout == kXexMapCase266),
+		_mhtMap(description.mapLayout == kXexMapMht),
+		_xexEngine(description.engineFamily == kXexEngineXex),
 		_showMessageButtons(description.showMessageButtons),
 		_fullScreenMessages(description.messageLayout == kMessageFullScreen),
 		_framedMessages(description.messageLayout == kMessageFramedDialogue), _waitUnitMillis(description.waitUnitMillis),
@@ -107,36 +107,36 @@ CompletEngine::CompletEngine(OSystem *system, const CompletGameDescription &desc
 		_audio(_mixer), _script(this) {
 }
 
-CompletEngine::~CompletEngine() {
+XexEngine::~XexEngine() {
 	g_system->getEventManager()->getEventDispatcher()->unregisterObserver(this);
 	if (_ownFont)
 		delete _font;
 	delete _menuFont;
 }
 
-bool CompletEngine::hasFeature(EngineFeature f) const {
+bool XexEngine::hasFeature(EngineFeature f) const {
 	return f == kSupportsReturnToLauncher || f == kSupportsLoadingDuringRuntime || f == kSupportsSavingDuringRuntime ||
 		f == kSupportsChangingOptionsDuringRuntime;
 }
 
-void CompletEngine::applyGameSettings() {
+void XexEngine::applyGameSettings() {
 	_animateText = ConfMan.getBool("text_animation");
 	_nameFrameEnabled = !_fullScreenMessages && !_framedMessages && ConfMan.getBool("name_frame");
 	_audio.setUseMidi(_midiOnly || ConfMan.getBool("midi_music"));
 }
 
-void CompletEngine::syncSoundSettings() {
+void XexEngine::syncSoundSettings() {
 	Engine::syncSoundSettings();
 	_audio.syncVolume();
 }
 
-void CompletEngine::pauseEngineIntern(bool pause) {
+void XexEngine::pauseEngineIntern(bool pause) {
 	Engine::pauseEngineIntern(pause);
 	_audio.pause(pause);
 }
 
 // Like the original, the pointer hides on keyboard input and comes back when the mouse moves
-bool CompletEngine::notifyEvent(const Common::Event &event) {
+bool XexEngine::notifyEvent(const Common::Event &event) {
 	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionAutoMode) {
 		_autoMode = !_autoMode;
 		if (_indicatorFrame >= 0 && !_showingBacklog)
@@ -160,7 +160,7 @@ bool CompletEngine::notifyEvent(const Common::Event &event) {
 	return false;
 }
 
-void CompletEngine::refreshCursor() {
+void XexEngine::refreshCursor() {
 	if (!_cursorRefreshPending)
 		return;
 
@@ -168,7 +168,7 @@ void CompletEngine::refreshCursor() {
 	g_system->updateScreen();
 }
 
-void CompletEngine::initCursor() {
+void XexEngine::initCursor() {
 	// Both engine executables store the arrow cursor as resource 104
 	Common::WinResources *exe = Common::WinResources::createFromEXE("c4.exe");
 	if (!exe)
@@ -188,7 +188,7 @@ void CompletEngine::initCursor() {
 	g_system->getEventManager()->getEventDispatcher()->registerObserver(this, 1, false);
 }
 
-Common::Error CompletEngine::run() {
+Common::Error XexEngine::run() {
 	_format = Graphics::PixelFormat::createFormatBGRA32();
 	initGame();
 	initGraphics(_screenWidth, _screenHeight, &_format);
@@ -205,7 +205,7 @@ Common::Error CompletEngine::run() {
 	loadFont();
 	initCursor();
 #ifndef USE_MAD
-	warning("Complet: built without MP3 support, voices and digital music are silent");
+	warning("Xex: built without MP3 support, voices and digital music are silent");
 #endif
 
 	_scene.resize(_screenWidth * _screenHeight * 3);
@@ -236,11 +236,11 @@ Common::Error CompletEngine::run() {
 	return Common::kNoError;
 }
 
-bool CompletEngine::interrupted() {
+bool XexEngine::interrupted() {
 	return shouldQuit() || _loadPending;
 }
 
-void CompletEngine::initGame() {
+void XexEngine::initGame() {
 	const Common::FSNode gameDataDir(ConfMan.getPath("path"));
 	// The detector already added mpx/, where the detection file lives
 	SearchMan.addSubDirectoryMatching(gameDataDir, "gds");
@@ -248,7 +248,7 @@ void CompletEngine::initGame() {
 	SearchMan.addSubDirectoryMatching(gameDataDir, "mus");
 }
 
-void CompletEngine::loadFont() {
+void XexEngine::loadFont() {
 	for (uint i = 0; i < ARRAYSIZE(kFontFiles) && !_font; i++) {
 		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[i]);
 		if (stream) {
@@ -278,11 +278,11 @@ void CompletEngine::loadFont() {
 		return;
 	}
 
-	warning("Complet: no Japanese font found, put one of the Noto CJK fonts in the extra path");
+	warning("Xex: no Japanese font found, put one of the Noto CJK fonts in the extra path");
 	_font = FontMan.getFontByUsage(Graphics::FontManager::kGUIFont);
 }
 
-bool CompletEngine::loadFrameImage() {
+bool XexEngine::loadFrameImage() {
 	// MESFRAME.GD holds the message frame and glyph sheet, NULL.GD is the fallback
 	const bool loaded = _frameImage.loadFromName("mesframe.gd") || _frameImage.loadFromName("null.gd");
 	if (!loaded)
@@ -290,7 +290,7 @@ bool CompletEngine::loadFrameImage() {
 
 	_blackKeySprites = isXexEngine();
 	if (_frameImage.getWidth() != _screenWidth || _frameImage.getHeight() != _screenHeight) {
-		warning("Complet: frame image dimensions do not match the detected game");
+		warning("Xex: frame image dimensions do not match the detected game");
 		return false;
 	}
 	return true;
@@ -302,7 +302,7 @@ enum {
 	kCommonFlagBits = 34
 };
 
-void CompletEngine::loadCommonData() {
+void XexEngine::loadCommonData() {
 	memset(_commonData, 0, sizeof(_commonData));
 	_commonData[0] = 1;
 	memset(_seenCg, 0, sizeof(_seenCg));
@@ -322,7 +322,7 @@ void CompletEngine::loadCommonData() {
 	delete file;
 }
 
-void CompletEngine::saveCommonData() {
+void XexEngine::saveCommonData() {
 	memset(_commonData + kCommonFlagBits, 0, 4);
 	for (int i = 0; i < 32; i++) {
 		if (_script.getFlag(i))
@@ -336,7 +336,7 @@ void CompletEngine::saveCommonData() {
 
 	Common::OutSaveFile *file = getSaveFileManager()->openForSaving(getCommonFileName(), false);
 	if (!file) {
-		warning("Complet: cannot write the common data file");
+		warning("Xex: cannot write the common data file");
 		return;
 	}
 
@@ -345,7 +345,7 @@ void CompletEngine::saveCommonData() {
 	delete file;
 }
 
-void CompletEngine::presentBuffer(const byte *bgr, int brightness) {
+void XexEngine::presentBuffer(const byte *bgr, int brightness) {
 	Graphics::Surface *screen = g_system->lockScreen();
 
 	// Source rows are bottom-up
@@ -361,7 +361,7 @@ void CompletEngine::presentBuffer(const byte *bgr, int brightness) {
 	_cursorRefreshPending = false;
 }
 
-void CompletEngine::present() {
+void XexEngine::present() {
 	// A loaded game shows up once its text has caught up
 	if (_replaying)
 		return;
@@ -382,7 +382,7 @@ void CompletEngine::present() {
 	_cursorRefreshPending = false;
 }
 
-void CompletEngine::drawOverlays(Graphics::Surface &screen) {
+void XexEngine::drawOverlays(Graphics::Surface &screen) {
 	if (!_messageHidden)
 		drawMessage(screen);
 	if (_indicatorFrame >= 0 && !_messageHidden) {
@@ -418,7 +418,7 @@ void CompletEngine::drawOverlays(Graphics::Surface &screen) {
 }
 
 // Copies a rectangle of the frame image, given in top-down coordinates; optionally black is transparent
-void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey) {
+void XexEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int w, int h, int dx, int dy, bool blackKey) {
 	const byte *frame = _frameImage.getPixels();
 	for (int y = 0; y < h; y++) {
 		const byte *src = frame + ((_screenHeight - 1 - (sy + y)) * _screenWidth + sx) * 3;
@@ -430,7 +430,7 @@ void CompletEngine::drawFrameRect(Graphics::Surface &screen, int sx, int sy, int
 	}
 }
 
-CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point &pos) const {
+XexEngine::MessageButton XexEngine::messageButtonAt(const Common::Point &pos) const {
 	if (!_showMessageButtons || !_messageVisible || _messageHidden || _menu)
 		return kButtonNone;
 	if (isXexEngine()) {
@@ -458,14 +458,14 @@ CompletEngine::MessageButton CompletEngine::messageButtonAt(const Common::Point 
 	return kButtonNone;
 }
 
-void CompletEngine::drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance) {
+void XexEngine::drawText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, uint32 color, int advance) {
 	for (uint i = 0; i < text.size(); i++) {
 		_font->drawChar(&screen, text[i], x, y, color);
 		x += text[i] < 0x100 ? advance / 2 : advance;
 	}
 }
 
-void CompletEngine::drawOutlinedText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, int advance, uint32 outline, uint32 fill) {
+void XexEngine::drawOutlinedText(Graphics::Surface &screen, const Common::U32String &text, int x, int y, int advance, uint32 outline, uint32 fill) {
 	for (int offsetY = -1; offsetY <= 1; offsetY++) {
 		drawText(screen, text, x - 1, y + offsetY, outline, advance);
 		drawText(screen, text, x + 1, y + offsetY, outline, advance);
@@ -478,7 +478,7 @@ static bool isSpeakerSpace(uint32 ch) {
 	return ch == ' ' || ch == 0x3000;
 }
 
-void CompletEngine::drawMessage(Graphics::Surface &screen) {
+void XexEngine::drawMessage(Graphics::Surface &screen) {
 	if (!_messageVisible)
 		return;
 	Common::U32String speaker = _messageSpeaker;
@@ -566,7 +566,7 @@ void CompletEngine::drawMessage(Graphics::Surface &screen) {
 	}
 }
 
-CompletEngine::MenuLayout CompletEngine::getMenuLayout() const {
+XexEngine::MenuLayout XexEngine::getMenuLayout() const {
 	int longest = 0;
 	for (uint i = 0; i < _menu->size(); i++) {
 		int length = (*_menu)[i].text.size();
@@ -595,9 +595,9 @@ static bool insideRoundRect(int x, int y, int w, int h, int r) {
 	return dx * dx + dy * dy <= r * r;
 }
 
-void CompletEngine::drawMenu(Graphics::Surface &screen) {
+void XexEngine::drawMenu(Graphics::Surface &screen) {
 	const MenuLayout layout = getMenuLayout();
-	const CompletMenuStyle &style = *_menuStyle;
+	const XexMenuStyle &style = *_menuStyle;
 	const int rowHeight = scaleY(style.rowHeight);
 	const int charAdvance = scaleX(style.charAdvance);
 	const uint32 fill = _format.RGBToColor((style.fillColor >> 16) & 0xff, (style.fillColor >> 8) & 0xff, style.fillColor & 0xff);
@@ -724,7 +724,7 @@ void CompletEngine::drawMenu(Graphics::Surface &screen) {
 	}
 }
 
-int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {
+int XexEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested) {
 	_menu = &items;
 	_hover = -1;
 	_messageVisible = false;
@@ -862,7 +862,7 @@ int CompletEngine::selectMenu(const Common::Array<MenuItem> &items, bool nested)
 }
 
 // Skipping lasts while the action is held; returns true if the event was a skip press or release
-bool CompletEngine::handleSkipAction(const Common::Event &event) {
+bool XexEngine::handleSkipAction(const Common::Event &event) {
 	if (event.type != Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.type != Common::EVENT_CUSTOM_ENGINE_ACTION_END)
 		return false;
 	if (event.customType != kActionSkip)
@@ -872,7 +872,7 @@ bool CompletEngine::handleSkipAction(const Common::Event &event) {
 	return true;
 }
 
-bool CompletEngine::delay(uint32 ms) {
+bool XexEngine::delay(uint32 ms) {
 	uint32 end = g_system->getMillis() + ms;
 	Common::Event event;
 
@@ -888,7 +888,7 @@ bool CompletEngine::delay(uint32 ms) {
 }
 
 // Handles the input available while text is shown; returns true when the player asks to go on
-bool CompletEngine::pollTextInput() {
+bool XexEngine::pollTextInput() {
 	bool advance = false;
 	Common::Event event;
 
@@ -954,7 +954,7 @@ bool CompletEngine::pollTextInput() {
 }
 
 // Keeps the message window hidden, and the script paused, until the next right click
-void CompletEngine::hideMessageWindow() {
+void XexEngine::hideMessageWindow() {
 	_messageHidden = true;
 	present();
 
@@ -978,7 +978,7 @@ void CompletEngine::hideMessageWindow() {
 }
 
 // Per-character delay; a click or key shows the rest of the text at once
-bool CompletEngine::waitTyping(uint32 ms) {
+bool XexEngine::waitTyping(uint32 ms) {
 	uint32 end = g_system->getMillis() + ms;
 	while (!interrupted() && !_fastText && !_skipMode && g_system->getMillis() < end) {
 		if (pollTextInput())
@@ -990,7 +990,7 @@ bool CompletEngine::waitTyping(uint32 ms) {
 }
 
 // %w: clicks do not shorten it, but skipping does
-bool CompletEngine::waitTimed(uint32 ms) {
+bool XexEngine::waitTimed(uint32 ms) {
 	uint32 end = g_system->getMillis() + ms;
 	while (!interrupted() && !_skipMode && !_replaying && g_system->getMillis() < end) {
 		pollTextInput();
@@ -999,7 +999,7 @@ bool CompletEngine::waitTimed(uint32 ms) {
 	return !interrupted();
 }
 
-bool CompletEngine::waitClick() {
+bool XexEngine::waitClick() {
 	if (_replaying)
 		return true;
 
@@ -1031,18 +1031,18 @@ bool CompletEngine::waitClick() {
 	return !interrupted();
 }
 
-void CompletEngine::setPersistentFlag(int number) {
+void XexEngine::setPersistentFlag(int number) {
 	if (_script.setFlag(number))
 		saveCommonData();
 }
 
 // Company logo: fade in, hold four seconds, fade out
-bool CompletEngine::showLogo() {
+bool XexEngine::showLogo() {
 	GdImage logo;
 	if (!logo.loadFromName("cplogo.gd"))
 		return true;
 	if (logo.getWidth() != _screenWidth || logo.getHeight() != _screenHeight) {
-		warning("Complet: company logo has incompatible dimensions");
+		warning("Xex: company logo has incompatible dimensions");
 		return true;
 	}
 
@@ -1065,7 +1065,7 @@ bool CompletEngine::showLogo() {
 	return true;
 }
 
-bool CompletEngine::fadeTo(const Common::Array<byte> &target) {
+bool XexEngine::fadeTo(const Common::Array<byte> &target) {
 	if (_replaying) {
 		_scene = target;
 		return true;
@@ -1092,16 +1092,16 @@ bool CompletEngine::fadeTo(const Common::Array<byte> &target) {
 }
 
 // A missing graphic falls back to NULL.GD, like the original
-bool CompletEngine::loadImage(const Common::String &name, Common::Array<byte> &out) {
+bool XexEngine::loadImage(const Common::String &name, Common::Array<byte> &out) {
 	debugC(1, kDebugGraphics, "Loading graphic '%s'", name.c_str());
 	GdImage image;
 	if (!image.loadFromName(name + ".gd") && !image.loadFromName("null.gd")) {
-		warning("Complet: cannot load graphic '%s'", name.c_str());
+		warning("Xex: cannot load graphic '%s'", name.c_str());
 		return false;
 	}
 
 	if (image.getWidth() != _screenWidth || image.getHeight() != _screenHeight) {
-		warning("Complet: graphic '%s' has incompatible dimensions", name.c_str());
+		warning("Xex: graphic '%s' has incompatible dimensions", name.c_str());
 		return false;
 	}
 	out.resize(_screenWidth * _screenHeight * 3);
@@ -1109,7 +1109,7 @@ bool CompletEngine::loadImage(const Common::String &name, Common::Array<byte> &o
 	return true;
 }
 
-void CompletEngine::overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite) {
+void XexEngine::overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite) {
 	const byte transparentGreen = _blackKeySprites ? 0 : 0xff;
 	for (uint i = 0; i + 2 < dst.size(); i += 3) {
 		if (sprite[i] != 0 || sprite[i + 1] != transparentGreen || sprite[i + 2] != 0)
@@ -1118,7 +1118,7 @@ void CompletEngine::overlaySprite(Common::Array<byte> &dst, const Common::Array<
 }
 
 // %g,name: replaces the whole screen, keeping the background layer untouched
-bool CompletEngine::showFullImage(const Common::String &name, bool fade) {
+bool XexEngine::showFullImage(const Common::String &name, bool fade) {
 	recordSeenCg(name);
 	Common::Array<byte> image;
 	if (!loadImage(name, image))
@@ -1136,7 +1136,7 @@ bool CompletEngine::showFullImage(const Common::String &name, bool fade) {
 }
 
 // %gb,name: only stages the next background, it appears with the following %gf
-void CompletEngine::stageBackground(const Common::String &name) {
+void XexEngine::stageBackground(const Common::String &name) {
 	if (name.equalsIgnoreCase(_bgName))
 		return;
 
@@ -1147,7 +1147,7 @@ void CompletEngine::stageBackground(const Common::String &name) {
 }
 
 // %gf,sprite[,sprite]: draws sprites over the staged background; "null" means none
-bool CompletEngine::showForeground(const Common::String &args) {
+bool XexEngine::showForeground(const Common::String &args) {
 	Common::Array<byte> target = _bg;
 	composeSprites(target, args);
 	_sceneFull.clear();
@@ -1166,7 +1166,7 @@ bool CompletEngine::showForeground(const Common::String &args) {
 	return ok;
 }
 
-void CompletEngine::composeSprites(Common::Array<byte> &dst, const Common::String &args) {
+void XexEngine::composeSprites(Common::Array<byte> &dst, const Common::String &args) {
 	Common::String names[2] = {args, "null"};
 	const char *comma = strchr(args.c_str(), ',');
 	if (comma) {
@@ -1181,7 +1181,7 @@ void CompletEngine::composeSprites(Common::Array<byte> &dst, const Common::Strin
 	}
 }
 
-void CompletEngine::clearMessage() {
+void XexEngine::clearMessage() {
 	_messageLines.clear();
 	_messageSpeaker.clear();
 	_messageVisible = false;
@@ -1189,11 +1189,11 @@ void CompletEngine::clearMessage() {
 	_readingSpeaker = false;
 }
 
-int CompletEngine::messageLineChars() const {
+int XexEngine::messageLineChars() const {
 	return _fullScreenMessages ? 21 : kMessageLineChars;
 }
 
-int CompletEngine::messageMaxLines() const {
+int XexEngine::messageMaxLines() const {
 	if (_fullScreenMessages)
 		return 18;
 	if (_framedMessages)
@@ -1201,7 +1201,7 @@ int CompletEngine::messageMaxLines() const {
 	return kMessageMaxLines;
 }
 
-void CompletEngine::newMessageLine() {
+void XexEngine::newMessageLine() {
 	if (_messageLines.size() >= (uint)messageMaxLines()) {
 		present();
 		if (!waitClick())
@@ -1217,7 +1217,7 @@ void CompletEngine::newMessageLine() {
 	}
 }
 
-void CompletEngine::printChar(uint32 ch) {
+void XexEngine::printChar(uint32 ch) {
 	bool capturedSpeaker = false;
 	if (_nameFrameEnabled && ch == 0x3010) {
 		_messageSpeaker.clear();
@@ -1265,7 +1265,7 @@ void CompletEngine::printChar(uint32 ch) {
 	waitTyping(kMessageCharDelay);
 }
 
-void CompletEngine::addBacklogChar(uint32 ch) {
+void XexEngine::addBacklogChar(uint32 ch) {
 	// Like the original, a line break is inserted before the 24th character after an explicit break
 	if (++_backlogLineChars >= (isXexEngine() ? 22 : kBacklogLineChars))
 		addBacklogBreak();
@@ -1281,7 +1281,7 @@ void CompletEngine::addBacklogChar(uint32 ch) {
 	}
 }
 
-void CompletEngine::addBacklogBreak() {
+void XexEngine::addBacklogBreak() {
 	_backlogLineChars = 0;
 	if (++_backlogLines >= (isXexEngine() ? 13 : kBacklogPageLines)) {
 		_backlogLines = 0;
@@ -1291,7 +1291,7 @@ void CompletEngine::addBacklogBreak() {
 	}
 }
 
-void CompletEngine::resetBacklog() {
+void XexEngine::resetBacklog() {
 	_backlog.clear();
 	_backlog.push_back(kBacklogPage);
 	_backlogLineChars = 0;
@@ -1299,7 +1299,7 @@ void CompletEngine::resetBacklog() {
 }
 
 // Mouse wheel or Page Up/Down browse the message history one page at a time
-void CompletEngine::showBacklog() {
+void XexEngine::showBacklog() {
 	if (_backlog.size() < 2)
 		return;
 
@@ -1344,7 +1344,7 @@ void CompletEngine::showBacklog() {
 	present();
 }
 
-void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
+void XexEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 	Graphics::Surface *screen = g_system->lockScreen();
 
 	screen->fillRect(Common::Rect(scaleX(10), scaleY(10), _screenWidth - scaleX(10), _screenHeight - scaleY(10)), _format.RGBToColor(0, 0, 0));
@@ -1402,7 +1402,7 @@ void CompletEngine::drawBacklogPage(uint start, int pageNumber, int pageCount) {
 	g_system->updateScreen();
 }
 
-void CompletEngine::runText(Script &script, const byte *text, uint32 textSize) {
+void XexEngine::runText(Script &script, const byte *text, uint32 textSize) {
 	clearMessage();
 	_fastText = false;
 	_inText = true;
@@ -1433,7 +1433,7 @@ void CompletEngine::runText(Script &script, const byte *text, uint32 textSize) {
 }
 
 // Handles one "%X[,arg;]" command and returns the position after it
-const byte *CompletEngine::runCommand(Script &script, const byte *p, const byte *end) {
+const byte *XexEngine::runCommand(Script &script, const byte *p, const byte *end) {
 	if (p + 1 >= end)
 		return end;
 	if (!p[1])
@@ -1485,7 +1485,7 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p, const byte 
 		else if (atoi(args.c_str()) == 11)
 			runGallery();
 		else if (atoi(args.c_str()) != 99)
-			warning("Complet: unimplemented effect %%e,%s", args.c_str());
+			warning("Xex: unimplemented effect %%e,%s", args.c_str());
 		break;
 	case 'g': {
 		bool restore = _messageVisible;
@@ -1593,4 +1593,4 @@ const byte *CompletEngine::runCommand(Script &script, const byte *p, const byte 
 	return q;
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

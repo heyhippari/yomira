@@ -22,16 +22,16 @@
 #include "base/plugins.h"
 #include "common/debug-channels.h"
 #include "engines/advancedDetector.h"
-#include "complet/detection_tables.h"
+#include "xex/detection_tables.h"
 
 static const DebugChannelDef debugFlagList[] = {
-	{Complet::kDebugScript, "script", "Script commands"},
-	{Complet::kDebugGraphics, "graphics", "Graphics loading"},
-	{Complet::kDebugAudio, "audio", "Music and voices"},
+	{Xex::kDebugScript, "script", "Script commands"},
+	{Xex::kDebugGraphics, "graphics", "Graphics loading"},
+	{Xex::kDebugAudio, "audio", "Music and voices"},
 	DEBUG_CHANNEL_END
 };
 
-static const PlainGameDescriptor completGames[] = {
+static const PlainGameDescriptor xexGames[] = {
 	{"collection", "Collection ~Shuushuu Sareta Akumu~"},
 	{"case266", "Case 266 ~266 Gou Jiken~"},
 	{"bokunohimitsutaiken", "Boku no Himitsu Taiken"},
@@ -45,18 +45,18 @@ static const PlainGameDescriptor completGames[] = {
 	{nullptr, nullptr}
 };
 
-class CompletMetaEngineDetection : public AdvancedMetaEngineDetection<Complet::CompletGameDescription> {
+class XexMetaEngineDetection : public AdvancedMetaEngineDetection<Xex::XexGameDescription> {
 public:
-	CompletMetaEngineDetection() : AdvancedMetaEngineDetection(Complet::gameDescriptions, completGames) {
+	XexMetaEngineDetection() : AdvancedMetaEngineDetection(Xex::gameDescriptions, xexGames) {
 		_flags = kADFlagMatchFullPaths;
 	}
 
 	const char *getName() const override {
-		return "complet";
+		return "xex";
 	}
 
 	const char *getEngineName() const override {
-		return "C4 Engine";
+		return "XEX Engine";
 	}
 
 	const char *getOriginalCopyright() const override {
@@ -68,4 +68,4 @@ public:
 	}
 };
 
-REGISTER_PLUGIN_STATIC(COMPLET_DETECTION, PLUGIN_TYPE_ENGINE_DETECTION, CompletMetaEngineDetection);
+REGISTER_PLUGIN_STATIC(XEX_DETECTION, PLUGIN_TYPE_ENGINE_DETECTION, XexMetaEngineDetection);

@@ -21,9 +21,9 @@
 
 #include "common/file.h"
 
-#include "complet/scenario.h"
+#include "xex/scenario.h"
 
-namespace Complet {
+namespace Xex {
 
 bool Scenario::load(const Common::String &name) {
 	Common::File file;
@@ -59,4 +59,4 @@ bool Scenario::load(const Common::String &name) {
 	return true;
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

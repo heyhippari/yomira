@@ -19,14 +19,14 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_SCENARIO_H
-#define ENGINES_COMPLET_SCENARIO_H
+#ifndef ENGINES_XEX_SCENARIO_H
+#define ENGINES_XEX_SCENARIO_H
 
 #include "common/array.h"
 #include "common/str.h"
 #include "common/types.h"
 
-namespace Complet {
+namespace Xex {
 
 // An "MPX" scenario file ("Mp17" magic):
 //   0x00  magic
@@ -61,6 +61,6 @@ private:
 	uint32 _localCount = 0;
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_SCENARIO_H
+#endif // ENGINES_XEX_SCENARIO_H

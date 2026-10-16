@@ -24,9 +24,9 @@
 #include "common/system.h"
 #include "common/translation.h"
 
-#include "complet/complet.h"
+#include "xex/xex.h"
 
-namespace Complet {
+namespace Xex {
 
 enum {
 	kSaveVersion = 1,
@@ -46,7 +46,7 @@ static Common::String readString(Common::ReadStream &stream) {
 	return stream.readString(0, size);
 }
 
-void CompletEngine::markResumePoint() {
+void XexEngine::markResumePoint() {
 	Common::MemoryWriteStreamDynamic stream(DisposeAfterUse::YES);
 	_script.saveState(stream);
 
@@ -64,18 +64,18 @@ void CompletEngine::markResumePoint() {
 	memcpy(_resumePoint.data(), stream.getData(), stream.size());
 }
 
-bool CompletEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+bool XexEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 	return _inputWait && !_replaying;
 }
 
-bool CompletEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+bool XexEngine::canSaveGameStateCurrently(Common::U32String *msg) {
 	// Like the original, the title and the recollection scenarios cannot be saved
 	const Common::String &scenario = _script.getScenarioName();
 	return _inputWait && !_replaying && !_resumePoint.empty() &&
 		!scenario.equalsIgnoreCase("startup") && !scenario.equalsIgnoreCase("kaisou");
 }
 
-Common::Error CompletEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
+Common::Error XexEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
 	stream->writeUint32BE(kSaveMagic);
 	stream->writeByte(kSaveVersion);
 	// Text position to come back to; zero when waiting in a menu
@@ -85,7 +85,7 @@ Common::Error CompletEngine::saveGameStream(Common::WriteStream *stream, bool is
 	return stream->err() ? Common::kWritingFailed : Common::kNoError;
 }
 
-Common::Error CompletEngine::loadGameStream(Common::SeekableReadStream *stream) {
+Common::Error XexEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	if (stream->readUint32BE() != kSaveMagic || stream->readByte() != kSaveVersion)
 		return Common::Error(Common::kReadingFailed, "Unsupported savegame");
 
@@ -106,7 +106,7 @@ Common::Error CompletEngine::loadGameStream(Common::SeekableReadStream *stream) 
 	return Common::kNoError;
 }
 
-bool CompletEngine::applyPendingLoad() {
+bool XexEngine::applyPendingLoad() {
 	_loadPending = false;
 
 	Common::MemoryReadStream stream(_pendingState.data(), _pendingState.size());
@@ -147,7 +147,7 @@ bool CompletEngine::applyPendingLoad() {
 }
 
 // Restores the background layer and the screen from the image names
-void CompletEngine::rebuildScene() {
+void XexEngine::rebuildScene() {
 	const uint size = _screenWidth * _screenHeight * 3;
 	_bg.resize(size);
 	memset(_bg.data(), 0, size);
@@ -165,7 +165,7 @@ void CompletEngine::rebuildScene() {
 	}
 }
 
-void CompletEngine::quickSave() {
+void XexEngine::quickSave() {
 	if (!canSaveGameStateCurrently()) {
 		g_system->displayMessageOnOSD(_("Saving game is currently unavailable"));
 		return;
@@ -177,7 +177,7 @@ void CompletEngine::quickSave() {
 		g_system->displayMessageOnOSD(_("Failed to save game"));
 }
 
-void CompletEngine::quickLoad() {
+void XexEngine::quickLoad() {
 	if (!canLoadGameStateCurrently() || !getSaveFileManager()->exists(getSaveStateName(kQuickSaveSlot))) {
 		g_system->displayMessageOnOSD(_("No quick save to load"));
 		return;
@@ -187,4 +187,4 @@ void CompletEngine::quickLoad() {
 		g_system->displayMessageOnOSD(_("Failed to load saved game"));
 }
 
-} // End of namespace Complet
+} // End of namespace Xex

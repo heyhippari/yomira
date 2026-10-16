@@ -19,24 +19,24 @@
  *
  */
 
-#ifndef ENGINES_COMPLET_SCRIPT_H
-#define ENGINES_COMPLET_SCRIPT_H
+#ifndef ENGINES_XEX_SCRIPT_H
+#define ENGINES_XEX_SCRIPT_H
 
 #include "common/array.h"
 #include "common/hash-str.h"
 #include "common/hashmap.h"
 #include "common/str.h"
 
-#include "complet/scenario.h"
+#include "xex/scenario.h"
 
 namespace Common {
 class ReadStream;
 class WriteStream;
 }
 
-namespace Complet {
+namespace Xex {
 
-class CompletEngine;
+class XexEngine;
 
 struct MenuItem {
 	Common::String text;
@@ -47,7 +47,7 @@ struct MenuItem {
 // Interpreter for the MPX command stream
 class Script {
 public:
-	explicit Script(CompletEngine *vm);
+	explicit Script(XexEngine *vm);
 
 	bool start(const Common::String &name);
 	bool isRunning() const { return _running; }
@@ -100,7 +100,7 @@ private:
 	void addMenuItem(uint16 textOffset);
 	int8 &counter(int16 index);
 
-	CompletEngine *_vm;
+	XexEngine *_vm;
 	Scenario _scenario;
 	bool _running = false;
 	uint32 _cur = 0;
@@ -121,6 +121,6 @@ private:
 	Common::Array<int16> *_currentLocals = nullptr;
 };
 
-} // End of namespace Complet
+} // End of namespace Xex
 
-#endif // ENGINES_COMPLET_SCRIPT_H
+#endif // ENGINES_XEX_SCRIPT_H
