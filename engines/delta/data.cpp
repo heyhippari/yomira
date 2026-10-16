@@ -21,10 +21,19 @@
 
 #include "delta/data.h"
 #include "common/memstream.h"
+#include "graphics/font.h"
+#include "graphics/managed_surface.h"
 #include "graphics/surface.h"
 #include "image/bmp.h"
 
 namespace Delta {
+
+void drawShadowedString(const Graphics::Font &font, Graphics::ManagedSurface &destination, const Common::U32String &text, int x, int y, int width, uint32 foreground, uint32 shadow) {
+	if (width <= 0)
+		return;
+	font.drawString(&destination, text, x + 2, y + 2, width, shadow);
+	font.drawString(&destination, text, x, y, width, foreground);
+}
 
 static bool readWithProgress(Common::ReadStream &stream, byte *data, uint32 size, LoadProgress *progress) {
 	for (uint32 position = 0; position < size;) {
@@ -159,9 +168,8 @@ bool readIafData(Common::SeekableReadStream &stream, Common::Array<byte> &data, 
 	return readPackedData(compressed, data, progress);
 }
 
-bool readIafImage(Common::SeekableReadStream &stream, Graphics::Surface &surface, const Graphics::PixelFormat &format, LoadProgress *progress) {
-	Common::Array<byte> data;
-	if (!readIafData(stream, data, progress) || data.size() < 54 || READ_BE_UINT16(data.begin()) != MKTAG16('B', 'M'))
+static bool decodeBitmap(const Common::Array<byte> &data, Graphics::Surface &surface, const Graphics::PixelFormat &format, LoadProgress *progress) {
+	if (data.size() < 54 || READ_BE_UINT16(data.begin()) != MKTAG16('B', 'M'))
 		return false;
 	const uint32 width = READ_LE_UINT32(&data[18]);
 	const uint32 height = READ_LE_UINT32(&data[22]);
@@ -192,6 +200,136 @@ bool readIafImage(Common::SeekableReadStream &stream, Graphics::Surface &surface
 	}
 	surface.copyFrom(converted);
 	converted.free();
+	return true;
+}
+
+bool readIafImage(Common::SeekableReadStream &stream, Graphics::Surface &surface, const Graphics::PixelFormat &format, LoadProgress *progress) {
+	Common::Array<byte> data;
+	return readIafData(stream, data, progress) && decodeBitmap(data, surface, format, progress);
+}
+
+static bool readSpriteBitmap(Common::SeekableReadStream &stream, uint32 offset, uint32 prefix, Graphics::Surface &image, const Graphics::PixelFormat &format, LoadProgress *progress) {
+	if (offset >= stream.size() || !stream.seek(offset) || stream.size() - stream.pos() < prefix + 8)
+		return false;
+	stream.skip(prefix);
+	const uint32 size = stream.readUint32LE();
+	const uint32 header = stream.readUint32LE();
+	if (!size || size > 16 * 1024 * 1024 || size > stream.size() - stream.pos())
+		return false;
+	Common::Array<byte> packed;
+	packed.resize(size + 4);
+	WRITE_LE_UINT32(packed.begin(), header);
+	if (!readWithProgress(stream, &packed[4], size, progress))
+		return false;
+	Common::MemoryReadStream input(packed.begin(), packed.size());
+	Common::Array<byte> data;
+	return readPackedData(input, data, progress) && decodeBitmap(data, image, format, progress);
+}
+
+bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, Graphics::Surface &color, Graphics::Surface &mask, const Graphics::PixelFormat &format, LoadProgress *progress, Common::Point *position) {
+	if (!stream.seek(0) || stream.size() < 4)
+		return false;
+	const uint32 count = stream.readUint32LE();
+	if (!count || count > 65536 || stream.size() < 4 + count * 32)
+		return false;
+	uint32 maskOffset = 0;
+	for (uint index = 0; index < count; ++index) {
+		if (progress && (index & 63) == 0 && !(*progress)())
+			return false;
+		char entry[28];
+		if (stream.read(entry, sizeof(entry)) != sizeof(entry))
+			return false;
+		const uint32 raw = stream.readUint32LE();
+		const uint32 offset = raw & 0x7fffffff;
+		if (offset < 4 + count * 32 || offset >= stream.size())
+			return false;
+		if (raw & 0x80000000)
+			maskOffset = offset;
+		uint length = 0;
+		while (length < sizeof(entry) && entry[length])
+			++length;
+		if (!(raw & 0x80000000) && Common::String(entry, length).equalsIgnoreCase(name)) {
+			if (!maskOffset || !stream.seek(maskOffset) || stream.size() - stream.pos() < 16)
+				return false;
+			const int32 left = stream.readSint32LE();
+			const int32 top = stream.readSint32LE();
+			if (left < -4096 || left > 4096 || top < -4096 || top > 4096 ||
+				!readSpriteBitmap(stream, offset, 0, color, format, progress) ||
+				!readSpriteBitmap(stream, maskOffset, 16, mask, format, progress))
+				return false;
+			if (position)
+				*position = Common::Point(left, top);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool readSpriteInfo(Common::SeekableReadStream &stream, const Common::String &name, Common::StringArray &layers, LoadProgress *progress) {
+	layers.clear();
+	if (!stream.seek(0) || stream.size() < 4)
+		return false;
+	const uint32 count = stream.readUint32LE();
+	if (count > 50000 || stream.size() < 4 + count * 84)
+		return false;
+	for (uint index = 0; index < count; ++index) {
+		if (progress && (index & 63) == 0 && !(*progress)())
+			return false;
+		byte record[84];
+		if (stream.read(record, sizeof(record)) != sizeof(record))
+			return false;
+		Common::String names[5];
+		for (uint field = 0; field < ARRAYSIZE(names); ++field) {
+			uint length = 0;
+			while (length < 16 && record[field * 16 + length])
+				++length;
+			names[field] = Common::String(reinterpret_cast<const char *>(record + field * 16), length);
+		}
+		if (names[0].equalsIgnoreCase(name)) {
+			const uint32 parts = READ_LE_UINT32(record + 80);
+			if (parts > 3 || names[1].empty())
+				return false;
+			layers.push_back(names[1]);
+			for (uint field = 0; field < parts; ++field) {
+				if (names[field + 2].empty())
+					return false;
+				layers.push_back(names[field + 2]);
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool compositeMasked(Graphics::Surface &destination, const Graphics::Surface &color, const Graphics::Surface &mask, LoadProgress *progress, const Common::Point &position, byte frameTransparency) {
+	if (color.w != mask.w || color.h != mask.h ||
+		destination.format != color.format || mask.format.bytesPerPixel < 2)
+		return false;
+	Common::Rect bounds(position.x, position.y, position.x + color.w, position.y + color.h);
+	bounds.clip(Common::Rect(destination.w, destination.h));
+	for (int row = bounds.top; row < bounds.bottom; ++row) {
+		if (progress && (row & 15) == 0 && !(*progress)())
+			return false;
+		for (int column = bounds.left; column < bounds.right; ++column) {
+			const int sourceX = column - position.x;
+			const int sourceY = row - position.y;
+			byte red, green, blue;
+			const uint32 opacity = mask.getPixel(sourceX, sourceY);
+			mask.format.colorToRGB(opacity, red, green, blue);
+			const uint32 maskValue = red == 1 ? frameTransparency : red;
+			if (!maskValue) {
+				destination.setPixel(column, row, color.getPixel(sourceX, sourceY));
+			} else if (maskValue != 255) {
+				byte oldRed, oldGreen, oldBlue, newRed, newGreen, newBlue;
+				destination.format.colorToRGB(destination.getPixel(column, row), oldRed, oldGreen, oldBlue);
+				color.format.colorToRGB(color.getPixel(sourceX, sourceY), newRed, newGreen, newBlue);
+				destination.setPixel(column, row, destination.format.RGBToColor(
+					(oldRed * maskValue + newRed * (255 - maskValue)) >> 8,
+					(oldGreen * maskValue + newGreen * (255 - maskValue)) >> 8,
+					(oldBlue * maskValue + newBlue * (255 - maskValue)) >> 8));
+			}
+		}
+	}
 	return true;
 }
 

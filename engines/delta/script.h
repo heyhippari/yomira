@@ -25,6 +25,7 @@
 #include "common/array.h"
 #include "common/str.h"
 #include "common/random.h"
+#include "common/stream.h"
 
 namespace Delta {
 
@@ -36,6 +37,7 @@ public:
 	Common::String readString();
 	bool seek(uint32 position);
 	uint32 position() const { return _position; }
+	uint32 size() const { return _code.size(); }
 	bool failed() const { return _failed; }
 
 private:
@@ -55,6 +57,9 @@ class Script {
 public:
 	explicit Script(const Common::Array<byte> &code, bool legacyOpcodes = false, Common::RandomSource *random = nullptr) : _reader(code), _legacyOpcodes(legacyOpcodes), _random(random) {}
 	bool next(ScriptCommand &command);
+	bool setVariable(uint16 variable, uint16 value);
+	bool saveState(Common::WriteStream &stream) const;
+	bool loadState(Common::SeekableReadStream &stream);
 	const Common::String &error() const { return _error; }
 	uint32 position() const { return _reader.position(); }
 
@@ -63,6 +68,9 @@ private:
 	bool _legacyOpcodes;
 	Common::RandomSource *_random;
 	uint16 _variables[1024] = {};
+	uint32 _checkpoints[2048] = {};
+	byte _seenEvents[2048] = {};
+	Common::Array<uint32> _returnStack;
 	Common::String _error;
 	bool evaluateCondition();
 };

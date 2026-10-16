@@ -126,6 +126,73 @@ bool Script::evaluateCondition() {
 	return result;
 }
 
+bool Script::setVariable(uint16 variable, uint16 value) {
+	if (!_error.empty() || variable >= ARRAYSIZE(_variables))
+		return false;
+	_variables[variable] = value;
+	return true;
+}
+
+bool Script::saveState(Common::WriteStream &stream) const {
+	if (!_error.empty() || _reader.failed())
+		return false;
+	stream.writeByte(3);
+	stream.writeByte(_legacyOpcodes);
+	stream.writeUint32LE(_reader.position());
+	for (uint index = 0; index < ARRAYSIZE(_variables); ++index)
+		stream.writeUint16LE(_variables[index]);
+	stream.writeByte(_returnStack.size());
+	for (uint index = 0; index < _returnStack.size(); ++index)
+		stream.writeUint32LE(_returnStack[index]);
+	for (uint index = 0; index < ARRAYSIZE(_checkpoints); ++index)
+		stream.writeUint32LE(_checkpoints[index]);
+	stream.write(_seenEvents, sizeof(_seenEvents));
+	return !stream.err();
+}
+
+bool Script::loadState(Common::SeekableReadStream &stream) {
+	if (stream.size() - stream.pos() < (int64)(5 + sizeof(_variables)))
+		return false;
+	const byte tag = stream.readByte();
+	if (tag > 3)
+		return false;
+	const byte legacy = tag >= 2 ? stream.readByte() : tag;
+	const uint32 position = stream.readUint32LE();
+	uint16 variables[1024];
+	for (uint index = 0; index < ARRAYSIZE(variables); ++index)
+		variables[index] = stream.readUint16LE();
+	Common::Array<uint32> returns;
+	uint32 checkpoints[2048] = {};
+	byte seenEvents[2048] = {};
+	if (tag >= 2) {
+		const byte depth = stream.readByte();
+		if (depth > 64 || stream.size() - stream.pos() < (int64)(depth * 4 + sizeof(checkpoints)))
+			return false;
+		for (uint index = 0; index < depth; ++index) {
+			const uint32 address = stream.readUint32LE();
+			if (address >= _reader.size())
+				return false;
+			returns.push_back(address);
+		}
+		for (uint index = 0; index < ARRAYSIZE(checkpoints); ++index)
+			checkpoints[index] = stream.readUint32LE();
+	}
+	if (tag == 3) {
+		if (stream.read(seenEvents, sizeof(seenEvents)) != sizeof(seenEvents))
+			return false;
+	}
+	if (stream.err() || legacy != _legacyOpcodes || position >= _reader.size())
+		return false;
+	if (!_reader.seek(position))
+		return false;
+	memcpy(_variables, variables, sizeof(_variables));
+	memcpy(_checkpoints, checkpoints, sizeof(_checkpoints));
+	memcpy(_seenEvents, seenEvents, sizeof(_seenEvents));
+	_returnStack = returns;
+	_error.clear();
+	return true;
+}
+
 bool Script::next(ScriptCommand &command) {
 	if (!_error.empty())
 		return false;
@@ -136,6 +203,76 @@ bool Script::next(ScriptCommand &command) {
 		++command.opcode;
 	uint wordCount = 0;
 	switch (command.opcode) {
+	case 0x21: {
+		const uint32 target = _reader.readDword();
+		if (_returnStack.size() >= 64) {
+			_error = "Script call stack overflow";
+			return false;
+		}
+		_returnStack.push_back(_reader.position());
+		command.arguments.push_back(target);
+		if (target != 0xffffffff)
+			_reader.seek(target);
+		break;
+	}
+	case 0x8a:
+		if (_returnStack.empty()) {
+			_error = "Script call stack underflow";
+			return false;
+		}
+		_reader.seek(_returnStack.back());
+		_returnStack.pop_back();
+		break;
+	case 0x3a:
+	case 0x3b: {
+		const uint16 event = _reader.readWord();
+		if (!event || event > ARRAYSIZE(_seenEvents)) {
+			_error = "Invalid seen-event number";
+			return false;
+		}
+		command.arguments.push_back(event);
+		if (command.opcode == 0x3b) {
+			const uint16 value = _reader.readWord();
+			_seenEvents[event - 1] = value;
+			command.arguments.push_back(value);
+		} else {
+			const uint16 variable = _reader.readWord();
+			if (variable >= ARRAYSIZE(_variables)) {
+				_error = "Invalid seen-event destination";
+				return false;
+			}
+			_variables[variable] = _seenEvents[event - 1] != 0;
+			command.arguments.push_back(variable);
+		}
+		break;
+	}
+	case 0x3f: {
+		const uint16 checkpoint = _reader.readWord();
+		const uint16 variable = _reader.readWord();
+		if (checkpoint >= ARRAYSIZE(_checkpoints) || variable >= ARRAYSIZE(_variables)) {
+			_error = "Invalid checkpoint query";
+			return false;
+		}
+		if (!checkpoint)
+			memset(_checkpoints, 0, sizeof(_checkpoints));
+		_variables[variable] = _checkpoints[checkpoint];
+		command.arguments.push_back(checkpoint);
+		command.arguments.push_back(variable);
+		break;
+	}
+	case 0x3e: {
+		const uint16 checkpoint = _reader.readWord();
+		if (checkpoint >= ARRAYSIZE(_checkpoints)) {
+			_error = "Invalid checkpoint number";
+			return false;
+		}
+		++_checkpoints[checkpoint];
+		command.arguments.push_back(checkpoint);
+		break;
+	}
+	case 0x61:
+		command.strings.push_back(_reader.readString());
+		break;
 	case 0x5e: {
 		const uint16 count = _reader.readWord();
 		const uint16 variable = _reader.readWord();
@@ -175,12 +312,28 @@ bool Script::next(ScriptCommand &command) {
 		command.strings.push_back(_reader.readString());
 		wordCount = 1;
 		break;
-	case 0x4b:
-		command.arguments.push_back(_reader.readWord());
+	case 0xb1:
 		command.strings.push_back(_reader.readString());
-		command.arguments.push_back(_reader.readWord());
-		command.arguments.push_back(_reader.readDword());
+		command.strings.push_back(_reader.readString());
+		wordCount = 1;
 		break;
+	case 0x4b: {
+		const uint16 count = _reader.readWord();
+		if (!count || count > 256) {
+			_error = "Invalid message token count";
+			return false;
+		}
+		command.arguments.push_back(count);
+		for (uint index = 0; index < count && !_reader.failed(); ++index) {
+			const Common::String token = _reader.readString();
+			command.strings.push_back(token);
+			if (!token.empty() && (token[0] == 'V' || token[0] == 'v')) {
+				command.arguments.push_back(_reader.readWord());
+				command.arguments.push_back(_reader.readDword());
+			}
+		}
+		break;
+	}
 	case 0x98:
 		command.strings.push_back(_reader.readString());
 		break;
@@ -218,6 +371,7 @@ bool Script::next(ScriptCommand &command) {
 	case 0x06:
 	case 0x0d:
 	case 0x48:
+	case 0x54:
 	case 0xa5:
 		break;
 	case 0x07:
@@ -225,7 +379,6 @@ bool Script::next(ScriptCommand &command) {
 	case 0x10:
 	case 0x14:
 	case 0x1e:
-	case 0x3e:
 	case 0x41:
 	case 0x5c:
 	case 0x60:
@@ -235,12 +388,18 @@ bool Script::next(ScriptCommand &command) {
 	case 0xae:
 		wordCount = 1;
 		break;
+	case 0x08:
+		wordCount = 3;
+		break;
 	case 0x12:
 	case 0x1c:
 	case 0x99:
+	case 0xa2:
 		wordCount = 3;
 		break;
 	case 0x18:
+	case 0x19:
+	case 0xa4:
 		wordCount = 7;
 		break;
 	case 0x91: {

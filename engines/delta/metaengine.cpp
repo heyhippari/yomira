@@ -42,7 +42,7 @@ Common::Error DeltaMetaEngine::createInstance(OSystem *syst, Engine **engine, co
 }
 
 bool DeltaMetaEngine::hasFeature(MetaEngineFeature f) const {
-	return false;
+	return checkExtendedSaves(f) || f == kSupportsLoadingDuringStartup;
 }
 
 Common::KeymapArray DeltaMetaEngine::initKeymaps(const char *target) const {

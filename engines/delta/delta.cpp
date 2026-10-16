@@ -23,12 +23,20 @@
 #include "delta/detection.h"
 #include "delta/console.h"
 #include "common/debug.h"
+#include "common/archive.h"
 #include "common/events.h"
 #include "common/file.h"
+#include "common/config-manager.h"
+#include "common/memstream.h"
+#include "common/translation.h"
 #include "common/substream.h"
 #include "common/system.h"
 #include "engines/util.h"
+#include "engines/dialogs.h"
+#include "gui/chooser.h"
+#include "gui/message.h"
 #include "graphics/cursorman.h"
+#include "graphics/fonts/ttf.h"
 
 namespace Delta {
 
@@ -42,6 +50,12 @@ DeltaEngine::~DeltaEngine() {
 		CursorMan.popCursorPalette();
 	}
 	delete _script;
+	delete _messageFont;
+	_messageBackground.free();
+	for (uint frame = 0; frame < ARRAYSIZE(_messageFrameColor); ++frame) {
+		_messageFrameColor[frame].free();
+		_messageFrameMask[frame].free();
+	}
 	_transitionFrom.free();
 	_transitionTo.free();
 	_transitionFrame.free();
@@ -92,6 +106,8 @@ Common::Error DeltaEngine::initialize() {
 		_configuration.scenarioNumber, _configuration.resourcePrefix.c_str(),
 		_configuration.scenarioFile.c_str(), _scenario.size(),
 		_configuration.stringTables.size(), _scriptPosition);
+	if (ConfMan.hasKey("save_slot") && ConfMan.getInt("save_slot") >= 0)
+		return loadGameState(ConfMan.getInt("save_slot"));
 	return Common::kNoError;
 }
 
@@ -112,12 +128,92 @@ Common::Error DeltaEngine::loadImage(const Common::String &name, Graphics::Surfa
 		return Common::Error(Common::kNoGameDataFoundError, filename);
 	uint32 offset = 0;
 	uint32 size = 0;
-	if (!findIafRecord(file, filename, offset, size, &progress))
-		return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kNoGameDataFoundError, filename);
+	if (!findIafRecord(file, filename, offset, size, &progress)) {
+		if (shouldQuit())
+			return Common::kUserCanceled;
+		Common::File eventBank;
+		Graphics::Surface color, mask;
+		Common::Point position;
+		if (eventBank.open("CG/EV.CGF") &&
+			readSpriteBankImage(eventBank, name, color, mask, _screen->format, &progress, &position)) {
+			image.copyFrom(_screen->rawSurface());
+			const int width = color.w;
+			const int height = color.h;
+			const bool composited = compositeMasked(image, color, mask, &progress, position);
+			color.free();
+			mask.free();
+			if (!composited)
+				return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kReadingFailed, "Invalid event sprite: " + name);
+			debug(1, "Delta event sprite: %s (%dx%d at %d,%d)", name.c_str(), width, height, position.x, position.y);
+			return Common::kNoError;
+		}
+		color.free();
+		mask.free();
+		if (name.size() != 8 || name[0] != 'E' || name[1] < '0' || name[1] > '9' ||
+			name[2] < '0' || name[2] > '9' || name.substr(6) == "00")
+			return Common::Error(Common::kNoGameDataFoundError, filename);
+		const Common::Error result = loadImage(name.substr(0, 6) + "00", image);
+		if (result.getCode() != Common::kNoError)
+			return result;
+		Common::StringArray layers;
+		if (name[6] != '0')
+			layers.push_back(name.substr(0, 4) + "00" + name.substr(6, 1) + "0");
+		if (name[7] != '0')
+			layers.push_back(name.substr(0, 3) + "A000" + name.substr(7, 1));
+		const Common::Error compositing = compositeLayers(image, layers, "CG/EV.CGF");
+		if (compositing.getCode() != Common::kNoError) {
+			image.free();
+			return compositing;
+		}
+		debug(1, "Delta event image: %s (%u layers)", name.c_str(), layers.size());
+		return Common::kNoError;
+	}
 	Common::SeekableSubReadStream member(&file, offset, offset + size);
 	if (!readIafImage(member, image, _screen->format, &progress))
 		return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kReadingFailed, filename);
 	debug(1, "Delta bank image: %s (%dx%d)", filename.c_str(), image.w, image.h);
+	return Common::kNoError;
+}
+
+Common::Error DeltaEngine::compositeForeground(Graphics::Surface &image, const Common::String &name) {
+	Common::Functor0Mem<bool, DeltaEngine> progress(this, &DeltaEngine::serviceInput);
+	Common::File metadata;
+	if (!metadata.open("CG/EVINFO.BIN"))
+		return Common::Error(Common::kNoGameDataFoundError, "CG/EVINFO.BIN");
+	Common::StringArray layers;
+	if (!readSpriteInfo(metadata, name, layers, &progress)) {
+		if (name.size() == 8 && name[0] == 'E' && name[1] >= '0' && name[1] <= '9' &&
+			name[2] >= '0' && name[2] <= '9')
+			layers.push_back(name);
+		else
+			layers.push_back(name + "_D");
+		const Common::Error result = compositeLayers(image, layers, "CG/EV.CGF");
+		if (result.getCode() == Common::kNoError)
+			debug(1, "Delta foreground: %s (direct layer)", name.c_str());
+		return result;
+	}
+	const Common::Error result = compositeLayers(image, layers, "CG/ST.CGF");
+	if (result.getCode() == Common::kNoError)
+		debug(1, "Delta foreground: %s (%u layers)", name.c_str(), layers.size());
+	return result;
+}
+
+Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Path &bankName) {
+	Common::Functor0Mem<bool, DeltaEngine> progress(this, &DeltaEngine::serviceInput);
+	for (uint index = 0; index < layers.size(); ++index) {
+		const Common::Path layerBank = layers[index].hasSuffix("_D") ? Common::Path("CG/EV.CGF") : bankName;
+		Common::File bank;
+		if (!bank.open(layerBank))
+			return Common::Error(Common::kNoGameDataFoundError, layerBank.toString());
+		Graphics::Surface color, mask;
+		Common::Point position;
+		const bool valid = readSpriteBankImage(bank, layers[index], color, mask, image.format, &progress, &position) &&
+			compositeMasked(image, color, mask, &progress, position);
+		color.free();
+		mask.free();
+		if (!valid)
+			return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kReadingFailed, "Invalid foreground layer: " + layers[index]);
+	}
 	return Common::kNoError;
 }
 
@@ -192,6 +288,13 @@ Common::Error DeltaEngine::enterMenu() {
 	CursorMan.showMouse(_input.mouseActive());
 	drawMenu();
 	_screen->update();
+	if (_titleState.empty()) {
+		Common::MemoryWriteStreamDynamic snapshot(DisposeAfterUse::YES);
+		if (saveGameStream(&snapshot).getCode() == Common::kNoError) {
+			_titleState.resize(snapshot.size());
+			memcpy(_titleState.begin(), snapshot.getData(), snapshot.size());
+		}
+	}
 	debug(1, "Delta title menu reached: %s at script offset 0x%x, %d buttons", getGameId().c_str(), _scriptPosition, count);
 	return Common::kNoError;
 }
@@ -211,9 +314,136 @@ void DeltaEngine::drawMenu() {
 	}
 }
 
-Common::Error DeltaEngine::advanceScript() {
-	if (_atMenu || updateTransition())
+Common::Error DeltaEngine::presentMessage() {
+	if (!_messageFont) {
+		const char *const names[] = { "NotoSansCJK-Regular.ttc", "NotoSansCJKjp-Regular.otf", "NotoSerifCJK-Regular.ttc" };
+		for (uint index = 0; index < ARRAYSIZE(names) && !_messageFont; ++index) {
+			Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(names[index]);
+			if (stream)
+				_messageFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 24, Graphics::kTTFSizeModeCharacter);
+		}
+		if (!_messageFont)
+			return Common::Error(Common::kNoGameDataFoundError, "A Japanese Noto CJK font is required in the game or extra path");
+	}
+	Common::U32String text;
+	bool boundary = false;
+	while (_messageTokenIndex < _messageTokens.size()) {
+		const Common::String &token = _messageTokens[_messageTokenIndex++];
+		if (token.empty())
+			continue;
+		const char prefix = token[0];
+		if (prefix == 'N' || prefix == 'n') {
+			_speaker = atoi(token.c_str() + 1);
+		} else if (prefix == 'M' || prefix == 'm' || prefix == '@') {
+			if (!text.empty()) {
+				boundary = true;
+				break;
+			}
+		} else if (prefix != 'V' && prefix != 'v' && prefix != 'W' && prefix != 'w') {
+			Common::U32String line = token.decode(Common::kWindows932);
+			bool blank = true;
+			for (uint index = 0; index < line.size(); ++index)
+				blank = blank && (line[index] == ' ' || line[index] == '\t' || line[index] == 0x3000);
+			if (!blank) {
+				if (!text.empty())
+					text += '\n';
+				text += line;
+			}
+		}
+	}
+	if (text.empty())
 		return Common::kNoError;
+	const Common::Error frameResult = loadMessageFrame(_speaker > 0 ? 1 : 0);
+	if (frameResult.getCode() != Common::kNoError)
+		return frameResult;
+	if (!_messageVisible)
+		_messageBackground.copyFrom(_screen->rawSurface());
+	_messageVisible = true;
+	_messageLines.clear();
+	_messageLineIndex = 0;
+	const int width = _configuration.messageRect.right - _configuration.textPosition.x - 8;
+	if (width <= 0)
+		return Common::Error(Common::kReadingFailed, "Invalid message text width");
+	_messageFont->wordWrapText(text, width, _messageLines);
+	_messageBoundary = boundary;
+	drawMessagePage();
+	debug(1, "Delta message page: %u lines, speaker %d, script offset 0x%x", _messageLines.size(), _speaker, _scriptPosition);
+	return Common::kNoError;
+}
+
+Common::Error DeltaEngine::loadMessageFrame(uint frame) {
+	if (_messageFrameColor[frame].getPixels())
+		return Common::kNoError;
+	Common::Functor0Mem<bool, DeltaEngine> progress(this, &DeltaEngine::serviceInput);
+	Common::File bank;
+	if (!bank.open("CG/ST.CGF"))
+		return Common::Error(Common::kNoGameDataFoundError, "CG/ST.CGF");
+	const Common::String name = Common::String::format("WAKU0%u", frame);
+	const Graphics::PixelFormat format(3, 8, 8, 8, 0, 16, 8, 0, 0);
+	Graphics::Surface color;
+	if (!readSpriteBankImage(bank, name, color, _messageFrameMask[frame], format, &progress, &_messageFramePosition[frame])) {
+		color.free();
+		_messageFrameMask[frame].free();
+		return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kReadingFailed, "Invalid message frame: " + name);
+	}
+	Graphics::Surface *converted = color.convertTo(_screen->format);
+	color.free();
+	if (!converted) {
+		_messageFrameMask[frame].free();
+		return Common::Error(Common::kReadingFailed, "Cannot convert message frame: " + name);
+	}
+	_messageFrameColor[frame].copyFrom(*converted);
+	converted->free();
+	delete converted;
+	debug(1, "Delta message frame: %s (%dx%d at %d,%d)", name.c_str(),
+		_messageFrameColor[frame].w, _messageFrameColor[frame].h,
+		_messageFramePosition[frame].x, _messageFramePosition[frame].y);
+	return Common::kNoError;
+}
+
+void DeltaEngine::drawMessagePage() {
+	_screen->blitFrom(_messageBackground);
+	const uint frame = _speaker > 0 ? 1 : 0;
+	const Common::Point position(_configuration.messageRect.left + _messageFramePosition[frame].x,
+		_configuration.messageRect.top + _messageFramePosition[frame].y);
+	compositeMasked(*_screen->surfacePtr(), _messageFrameColor[frame], _messageFrameMask[frame], nullptr, position, 255);
+	const int left = _configuration.textPosition.x;
+	const int right = _configuration.messageRect.right - 8;
+	int top = _configuration.textPosition.y;
+	const uint32 foreground = _screen->format.RGBToColor(255, 255, 255);
+	const uint32 shadow = _screen->format.RGBToColor(0, 0, 0);
+	Common::HashMap<Common::String, Common::StringArray>::const_iterator names = _configuration.stringTables.find("//NameStr");
+	if (names != _configuration.stringTables.end() && _speaker > 0 && _speaker < (int)names->_value.size())
+		drawShadowedString(*_messageFont, *_screen, names->_value[_speaker].decode(Common::kWindows932),
+			_configuration.messageRect.left + 8, _configuration.messageRect.top + 6, _configuration.messageRect.width() - 16,
+			foreground, shadow);
+	const int lineHeight = MAX(1, _messageFont->getFontHeight());
+	while (_messageLineIndex < _messageLines.size() && top + lineHeight <= _configuration.messageRect.bottom) {
+		drawShadowedString(*_messageFont, *_screen, _messageLines[_messageLineIndex++], left, top, right - left,
+			foreground, shadow);
+		top += lineHeight;
+	}
+	_messageWaiting = _messageBoundary || _messageLineIndex < _messageLines.size();
+}
+
+void DeltaEngine::advanceMessage() {
+	if (_messageLineIndex < _messageLines.size()) {
+		drawMessagePage();
+	} else {
+		_messageWaiting = false;
+	}
+}
+
+Common::Error DeltaEngine::advanceScript() {
+	if (_loadPending)
+		return applyPendingLoad();
+	if (_atMenu || _messageWaiting || updateTransition())
+		return Common::kNoError;
+	if (_messageTokenIndex < _messageTokens.size()) {
+		const Common::Error result = presentMessage();
+		if (result.getCode() != Common::kNoError || _messageWaiting)
+			return result;
+	}
 	if (_waiting) {
 		if ((int32)(_system->getMillis() - _waitUntil) < 0)
 			return Common::kNoError;
@@ -223,13 +453,48 @@ Common::Error DeltaEngine::advanceScript() {
 		ScriptCommand command;
 		if (!_script->next(command)) {
 			warning("Delta script stopped: %s", _script->error().c_str());
+			if (!_titleState.empty()) {
+				GUI::MessageDialog dialog(Common::U32String::format(_("This scenario command is not implemented yet: %s"), _script->error().c_str()));
+				_uiBusy = true;
+				runDialog(dialog);
+				_uiBusy = false;
+				_pendingState = _titleState;
+				_loadPending = true;
+				return Common::kNoError;
+			}
 			return Common::Error(Common::kReadingFailed, _script->error());
 		}
 		_scriptPosition = _script->position();
 		debug(2, "Delta command 0x%x at 0x%x", command.opcode, command.offset);
-		if (command.opcode == 0x7c) {
+		if (command.opcode == 0x0d) {
+			if (_messageVisible)
+				_screen->blitFrom(_messageBackground);
+			_messageVisible = false;
+			_messageWaiting = false;
+			_messageTokens.clear();
+			_messageLines.clear();
+			_messageTokenIndex = 0;
+		} else if (command.opcode == 0x4b) {
+			bool text = false;
+			for (uint index = 0; index < command.strings.size(); ++index) {
+				if (!command.strings[index].empty() && (byte)command.strings[index][0] >= 0x80)
+					text = true;
+			}
+			if (text) {
+				_messageTokens = command.strings;
+				_messageTokenIndex = 0;
+				const Common::Error result = presentMessage();
+				if (result.getCode() != Common::kNoError || _messageWaiting)
+					return result;
+			}
+		} else if (command.opcode == 0x54) {
+			_messageWaiting = _messageVisible;
+			if (_messageWaiting)
+				return Common::kNoError;
+		} else if (command.opcode == 0x7c) {
 			_menuConfig = command;
 		} else if (command.opcode == 0x67) {
+			_menuResultVariable = command.arguments[0];
 			return enterMenu();
 		} else if (command.opcode == 0x99) {
 			if (command.arguments[0]) {
@@ -238,7 +503,7 @@ Common::Error DeltaEngine::advanceScript() {
 				_waiting = true;
 				return Common::kNoError;
 			}
-		} else if (command.opcode == 0x23 || command.opcode == 0x26 || command.opcode == 0xb0) {
+		} else if (command.opcode == 0x23 || command.opcode == 0x26 || command.opcode == 0xb0 || command.opcode == 0xb1) {
 			Graphics::Surface image;
 			const Common::Error result = loadImage(command.strings[0], image);
 			if (result.getCode() != Common::kNoError)
@@ -247,15 +512,38 @@ Common::Error DeltaEngine::advanceScript() {
 				image.free();
 				return Common::Error(Common::kReadingFailed, "Unsupported partial background image");
 			}
+			if (command.opcode == 0xb1 && !command.strings[1].equalsIgnoreCase("TACLEAR")) {
+				const Common::Error compositing = compositeForeground(image, command.strings[1]);
+				if (compositing.getCode() != Common::kNoError) {
+					image.free();
+					return compositing;
+				}
+			}
 			startTransition(image, command.opcode == 0x23 ? 0 : 300);
+			_messageVisible = false;
 			image.free();
 			if (_transitionDuration)
 				return Common::kNoError;
-		} else if (command.opcode == 0xa5 || command.opcode == 0xae) {
+		} else if (command.opcode == 0xa5 || command.opcode == 0xae || command.opcode == 0x19 || command.opcode == 0xa4) {
 			Graphics::Surface black;
-			black.create(_screen->w, _screen->h, _screen->format);
-			black.fillRect(Common::Rect(black.w, black.h), 0);
-			startTransition(black, command.opcode == 0xae ? command.arguments[0] * 20 : 0);
+			uint32 duration = 0;
+			if (command.opcode == 0x19 || command.opcode == 0xa4) {
+				const int left = command.arguments[0];
+				const int top = command.arguments[1];
+				const int width = command.arguments[2];
+				const int height = command.arguments[3];
+				if (width <= 0 || height <= 0 || left + width > _screen->w || top + height > _screen->h)
+					return Common::Error(Common::kReadingFailed, "Invalid scene-clear rectangle");
+				black.copyFrom(_screen->rawSurface());
+				black.fillRect(Common::Rect(left, top, left + width, top + height),
+					command.opcode == 0xa4 ? _screen->format.RGBToColor(255, 255, 255) : 0);
+				duration = command.arguments[4] * 20;
+			} else {
+				black.create(_screen->w, _screen->h, _screen->format);
+				black.fillRect(Common::Rect(black.w, black.h), 0);
+				duration = command.opcode == 0xae ? command.arguments[0] * 20 : 0;
+			}
+			startTransition(black, duration);
 			black.free();
 			if (_transitionDuration)
 				return Common::kNoError;
@@ -264,13 +552,109 @@ Common::Error DeltaEngine::advanceScript() {
 	return Common::kNoError;
 }
 
+int DeltaEngine::menuItemAt(const Common::Point &point) const {
+	if (!_atMenu || _menuConfig.arguments.size() != 7)
+		return -1;
+	const int left = _menuConfig.arguments[2];
+	const int top = _menuConfig.arguments[3];
+	const int width = _menuConfig.arguments[4];
+	const int height = _menuConfig.arguments[5];
+	const int step = _menuConfig.arguments[6];
+	for (int index = 0; index < _menuConfig.arguments[1]; ++index) {
+		if (Common::Rect(left, top + index * step, left + width, top + index * step + height).contains(point))
+			return index;
+	}
+	return -1;
+}
+
+void DeltaEngine::showExtras() {
+	Common::U32StringArray choices;
+	choices.push_back(_("CG gallery"));
+	choices.push_back(_("Scene replay"));
+	choices.push_back(_("Music room"));
+	GUI::ChooserDialog chooser(_("Extras"));
+	chooser.setList(choices);
+	const int selection = runDialog(chooser);
+	if (selection >= 0 && selection < (int)choices.size()) {
+		GUI::MessageDialog notice(_("This extra mode is not implemented yet."));
+		runDialog(notice);
+	}
+}
+
+void DeltaEngine::activateMenuItem(int item) {
+	if (!_atMenu || _uiBusy || item < 0 || item >= _menuConfig.arguments[1])
+		return;
+	_menuPressed = -1;
+	_uiBusy = true;
+	debug(1, "Delta menu selection: %d", item + 1);
+	switch (item) {
+	case 0:
+		if (_script->setVariable(_menuResultVariable, 1))
+			_atMenu = false;
+		break;
+	case 1:
+		loadGameDialog();
+		break;
+	case 2: {
+		GUI::ConfigDialog dialog;
+		runDialog(dialog);
+		syncSoundSettings();
+		break;
+	}
+	case 3: {
+		GUI::MessageDialog dialog(_("Quit this game?"), _("Quit"), _("Cancel"));
+		if (runDialog(dialog) == GUI::kMessageOK)
+			quitGame();
+		break;
+	}
+	case 4:
+		if (getGameId() == "onegaitasukete")
+			break;
+		showExtras();
+		break;
+	case 5:
+		showExtras();
+		break;
+	default:
+		break;
+	}
+	_uiBusy = false;
+	CursorMan.showMouse(_input.mouseActive());
+	if (_atMenu)
+		drawMenu();
+}
+
 void DeltaEngine::handleInput(const Common::Event &event) {
 	if (_input.processEvent(event)) {
 		CursorMan.showMouse(_input.mouseActive());
 		debug(2, "Delta pointer: %s", _input.mouseActive() ? "visible (mouse)" : "hidden (keyboard/controller)");
 	}
+	if (_uiBusy || _loadPending)
+		return;
+	if (_messageWaiting && (event.type == Common::EVENT_LBUTTONUP ||
+		(event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionSelect))) {
+		advanceMessage();
+		return;
+	}
+	if (_atMenu && event.type == Common::EVENT_LBUTTONDOWN) {
+		_menuPressed = menuItemAt(event.mouse);
+		return;
+	}
+	if (_atMenu && event.type == Common::EVENT_LBUTTONUP) {
+		const int pressed = _menuPressed;
+		_menuPressed = -1;
+		if (pressed == menuItemAt(event.mouse))
+			activateMenuItem(pressed);
+		return;
+	}
 	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
-		if (event.customType == kActionMenu) {
+		if (_atMenu && event.customType == kActionSelect) {
+			activateMenuItem(_menuHover < 0 ? 0 : _menuHover);
+		} else if (_atMenu && event.customType == kActionCancel) {
+			_menuPressed = -1;
+			_menuHover = -1;
+			drawMenu();
+		} else if (event.customType == kActionMenu) {
 			openMainMenuDialog();
 			CursorMan.showMouse(_input.mouseActive());
 		} else if (_atMenu && (event.customType == kActionUp || event.customType == kActionDown ||
@@ -283,16 +667,7 @@ void DeltaEngine::handleInput(const Common::Event &event) {
 		}
 	}
 	if (_atMenu && event.type == Common::EVENT_MOUSEMOVE && _input.mouseActive()) {
-		const int left = _menuConfig.arguments[2];
-		const int top = _menuConfig.arguments[3];
-		const int width = _menuConfig.arguments[4];
-		const int height = _menuConfig.arguments[5];
-		const int step = _menuConfig.arguments[6];
-		_menuHover = -1;
-		for (int index = 0; index < _menuConfig.arguments[1]; ++index) {
-			if (Common::Rect(left, top + index * step, left + width, top + index * step + height).contains(event.mouse))
-				_menuHover = index;
-		}
+		_menuHover = menuItemAt(event.mouse);
 		drawMenu();
 	}
 }
@@ -333,8 +708,10 @@ Common::Error DeltaEngine::run() {
 			break;
 		if ((int32)(_system->getMillis() - nextFrame) >= 0) {
 			const Common::Error frameResult = advanceScript();
-			if (frameResult.getCode() != Common::kNoError)
+			if (frameResult.getCode() != Common::kNoError) {
+				warning("Delta execution stopped at 0x%x: %s", _scriptPosition, frameResult.getDesc().c_str());
 				return shouldQuit() ? Common::kNoError : frameResult;
+			}
 			_screen->update();
 			nextFrame = _system->getMillis() + 16;
 		}

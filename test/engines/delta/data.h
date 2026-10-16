@@ -23,9 +23,24 @@
 
 #include "common/memstream.h"
 #include "engines/delta/data.h"
+#include "graphics/font.h"
+#include "graphics/managed_surface.h"
 #include "graphics/surface.h"
 
 class DeltaDataTestSuite : public CxxTest::TestSuite {
+	class BlockFont : public Graphics::Font {
+	public:
+		int getFontHeight() const override { return 3; }
+		int getMaxCharWidth() const override { return 3; }
+		int getCharWidth(uint32 chr) const override { return 3; }
+		void drawChar(Graphics::Surface *destination, uint32 chr, int x, int y, uint32 color) const override {
+			Common::Rect bounds(x, y, x + 3, y + 3);
+			bounds.clip(Common::Rect(destination->w, destination->h));
+			if (!bounds.isEmpty())
+				destination->fillRect(bounds, color);
+		}
+	};
+
 	struct ProgressCounter {
 		uint32 calls = 0;
 		uint32 limit = 0xffffffff;
@@ -33,6 +48,43 @@ class DeltaDataTestSuite : public CxxTest::TestSuite {
 	};
 
 public:
+	void testMessageShadowOffsetAndDrawOrder() {
+		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+		Graphics::ManagedSurface destination(12, 10, format);
+		const BlockFont font;
+		destination.clear(0x1234);
+		Delta::drawShadowedString(font, destination, Common::U32String("A"), 2, 2, 8, 0xffff, 0);
+		for (int row = 0; row < destination.h; ++row) {
+			for (int column = 0; column < destination.w; ++column) {
+				uint32 expected = 0x1234;
+				if (column >= 4 && column < 7 && row >= 4 && row < 7)
+					expected = 0;
+				if (column >= 2 && column < 5 && row >= 2 && row < 5)
+					expected = 0xffff;
+				TS_ASSERT_EQUALS(destination.getPixel(column, row), expected);
+			}
+		}
+	}
+
+	void testMessageShadowClippingAndEmptyWidth() {
+		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+		Graphics::ManagedSurface destination(8, 6, format);
+		const BlockFont font;
+		destination.clear(0x1234);
+		Delta::drawShadowedString(font, destination, Common::U32String("A"), 6, 4, 8, 0xffff, 0);
+		for (int row = 0; row < destination.h; ++row) {
+			for (int column = 0; column < destination.w; ++column)
+				TS_ASSERT_EQUALS(destination.getPixel(column, row), column >= 6 && row >= 4 ? 0xffffU : 0x1234U);
+		}
+		destination.clear(0x1234);
+		Delta::drawShadowedString(font, destination, Common::U32String("A"), 0, 0, 0, 0xffff, 0);
+		Delta::drawShadowedString(font, destination, Common::U32String("A"), 0, 0, -1, 0xffff, 0);
+		for (int row = 0; row < destination.h; ++row) {
+			for (int column = 0; column < destination.w; ++column)
+				TS_ASSERT_EQUALS(destination.getPixel(column, row), 0x1234U);
+		}
+	}
+
 	void testRawLoadProgressAndCancellation() {
 		Common::Array<byte> packed;
 		packed.resize(4 + 49152);
@@ -289,6 +341,79 @@ public:
 		TS_ASSERT_EQUALS(surface.getPixel(0, 1), format.RGBToColor(0, 0, 255));
 		TS_ASSERT_EQUALS(surface.getPixel(1, 1), format.RGBToColor(255, 255, 255));
 		surface.free();
+	}
+
+	void testMaskedCompositing() {
+		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+		Graphics::Surface target, color, mask;
+		target.create(3, 1, format);
+		color.create(3, 1, format);
+		mask.create(3, 1, format);
+		for (int column = 0; column < 3; ++column)
+			target.setPixel(column, 0, 0x1234);
+		color.setPixel(0, 0, 0xffff);
+		mask.setPixel(0, 0, 0xffff);
+		color.setPixel(1, 0, 0xf800);
+		mask.setPixel(1, 0, 0);
+		color.setPixel(2, 0, 0x001f);
+		mask.setPixel(2, 0, 0x8410);
+		TS_ASSERT(Delta::compositeMasked(target, color, mask));
+		TS_ASSERT_EQUALS(target.getPixel(0, 0), 0x1234U);
+		TS_ASSERT_EQUALS(target.getPixel(1, 0), 0xf800U);
+		TS_ASSERT_EQUALS(target.getPixel(2, 0), 0x0919U);
+		target.free();
+		color.free();
+		mask.free();
+	}
+
+	void testFrameTransparencyPreservesMaskPrecision() {
+		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+		const Graphics::PixelFormat maskFormat(3, 8, 8, 8, 0, 16, 8, 0, 0);
+		Graphics::Surface target, color, mask;
+		target.create(4, 1, format);
+		color.create(4, 1, format);
+		mask.create(4, 1, maskFormat);
+		color.fillRect(Common::Rect(4, 1), 0xf800);
+		mask.setPixel(0, 0, maskFormat.RGBToColor(0, 0, 0));
+		mask.setPixel(1, 0, maskFormat.RGBToColor(1, 1, 1));
+		mask.setPixel(2, 0, maskFormat.RGBToColor(128, 128, 128));
+		mask.setPixel(3, 0, maskFormat.RGBToColor(255, 255, 255));
+		const byte transparency[] = { 0, 128, 255 };
+		const uint32 expected[] = { 0xf800, 0x780f, 0x001f };
+		for (uint index = 0; index < ARRAYSIZE(transparency); ++index) {
+			target.fillRect(Common::Rect(4, 1), 0x001f);
+			TS_ASSERT(Delta::compositeMasked(target, color, mask, nullptr, Common::Point(), transparency[index]));
+			TS_ASSERT_EQUALS(target.getPixel(0, 0), 0xf800U);
+			TS_ASSERT_EQUALS(target.getPixel(1, 0), expected[index]);
+			TS_ASSERT_EQUALS(target.getPixel(2, 0), 0x780fU);
+			TS_ASSERT_EQUALS(target.getPixel(3, 0), 0x001fU);
+			TS_ASSERT_EQUALS(mask.getPixel(1, 0), maskFormat.RGBToColor(1, 1, 1));
+		}
+		target.free();
+		color.free();
+		mask.free();
+	}
+
+	void testPartialMaskPlacementAndClipping() {
+		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+		Graphics::Surface target, color, mask;
+		target.create(3, 2, format);
+		color.create(2, 1, format);
+		mask.create(2, 1, format);
+		target.fillRect(Common::Rect(3, 2), 0x1234);
+		color.setPixel(0, 0, 0xf800);
+		color.setPixel(1, 0, 0x001f);
+		mask.fillRect(Common::Rect(2, 1), 0);
+		TS_ASSERT(Delta::compositeMasked(target, color, mask, nullptr, Common::Point(2, 1)));
+		TS_ASSERT_EQUALS(target.getPixel(2, 1), 0xf800U);
+		TS_ASSERT_EQUALS(target.getPixel(1, 1), 0x1234U);
+		TS_ASSERT_EQUALS(target.getPixel(2, 0), 0x1234U);
+		TS_ASSERT(Delta::compositeMasked(target, color, mask, nullptr, Common::Point(-1, 0)));
+		TS_ASSERT_EQUALS(target.getPixel(0, 0), 0x001fU);
+		TS_ASSERT_EQUALS(target.getPixel(1, 0), 0x1234U);
+		target.free();
+		color.free();
+		mask.free();
 	}
 
 	void testTallMenuSheet() {

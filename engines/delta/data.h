@@ -28,8 +28,11 @@
 #include "common/rect.h"
 #include "common/stream.h"
 #include "common/str-array.h"
+#include "common/ustr.h"
 
 namespace Graphics {
+class Font;
+class ManagedSurface;
 struct Surface;
 struct PixelFormat;
 }
@@ -59,6 +62,10 @@ bool readPackedData(Common::SeekableReadStream &stream, Common::Array<byte> &dat
 bool readIafData(Common::SeekableReadStream &stream, Common::Array<byte> &data, LoadProgress *progress = nullptr);
 bool readIafImage(Common::SeekableReadStream &stream, Graphics::Surface &surface, const Graphics::PixelFormat &format, LoadProgress *progress = nullptr);
 bool findIafRecord(Common::SeekableReadStream &stream, const Common::String &name, uint32 &offset, uint32 &size, LoadProgress *progress = nullptr);
+bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, Graphics::Surface &color, Graphics::Surface &mask, const Graphics::PixelFormat &format, LoadProgress *progress = nullptr, Common::Point *position = nullptr);
+bool readSpriteInfo(Common::SeekableReadStream &stream, const Common::String &name, Common::StringArray &layers, LoadProgress *progress = nullptr);
+bool compositeMasked(Graphics::Surface &destination, const Graphics::Surface &color, const Graphics::Surface &mask, LoadProgress *progress = nullptr, const Common::Point &position = Common::Point(), byte frameTransparency = 1);
+void drawShadowedString(const Graphics::Font &font, Graphics::ManagedSurface &destination, const Common::U32String &text, int x, int y, int width, uint32 foreground, uint32 shadow);
 bool readStartupConfig(Common::SeekableReadStream &stream, StartupConfig &config, LoadProgress *progress = nullptr);
 bool readScenarioData(Common::SeekableReadStream &stream, Common::Array<byte> &data, LoadProgress *progress = nullptr);
 
