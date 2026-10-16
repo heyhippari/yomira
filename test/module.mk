@@ -50,6 +50,11 @@ ifeq ($(ENABLE_SYSTEM98), STATIC_PLUGIN)
 	TEST_LIBS := engines/system98/mmd.o engines/system98/image.o engines/system98/resource.o $(TEST_LIBS)
 endif
 
+ifeq ($(ENABLE_DELTA), STATIC_PLUGIN)
+	TESTS += $(srcdir)/test/engines/delta/*.h
+	TEST_LIBS := engines/delta/data.o engines/delta/script.o $(TEST_LIBS)
+endif
+
 ifeq ($(ENABLE_WINTERMUTE), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/wintermute/*.h
 	TEST_LIBS += engines/wintermute/libwintermute.a
