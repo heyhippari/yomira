@@ -25,7 +25,7 @@
 // for dynamic engine plugins.
 // If you plan to use this code in another engine, you will have
 // to add the proper define check here.
-#if !(defined(ENABLE_KYRA) || defined(ENABLE_SCI) || defined(ENABLE_SCUMM) || defined(ENABLE_SAGA) || defined(ENABLE_AGOS) || defined(DYNAMIC_MODULES))
+#if !(defined(ENABLE_KYRA) || defined(ENABLE_SCI) || defined(ENABLE_SCUMM) || defined(ENABLE_SAGA) || defined(ENABLE_AGOS) || defined(ENABLE_SYSTEM98) || defined(DYNAMIC_MODULES))
 
 // If neither of the above mentioned is enabled, do not include the SJIS code.
 

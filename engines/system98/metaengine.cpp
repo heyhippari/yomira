@@ -19,7 +19,11 @@
  *
  */
 
+#include "backends/keymapper/action.h"
+#include "backends/keymapper/keymap.h"
+#include "backends/keymapper/standard-actions.h"
 #include "base/plugins.h"
+#include "common/translation.h"
 #include "engines/advancedDetector.h"
 #include "system98/system98.h"
 
@@ -33,7 +37,50 @@ public:
 		*engine = new System98::System98Engine(system);
 		return Common::kNoError;
 	}
+
+	Common::KeymapArray initKeymaps(const char *target) const override;
 };
+
+Common::KeymapArray System98MetaEngine::initKeymaps(const char *target) const {
+	using namespace Common;
+	using namespace System98;
+
+	Keymap *keymap = new Keymap(Keymap::kKeymapTypeGame, "system98-default", _("Default keymappings"));
+	Action *action = new Action(kStandardActionLeftClick, _("Left click"));
+	action->setLeftClickEvent();
+	action->addDefaultInputMapping("MOUSE_LEFT");
+	keymap->addAction(action);
+
+	action = new Action(kStandardActionRightClick, _("Right click"));
+	action->setRightClickEvent();
+	action->addDefaultInputMapping("MOUSE_RIGHT");
+	keymap->addAction(action);
+
+	struct ActionDef {
+		const char *id;
+		const char *description;
+		System98Action action;
+		const char *mappings[5];
+	};
+	static const ActionDef actions[] = {
+		{"ADVANCE", _s("Next message / Select"), kActionAdvance, {"RETURN", "SPACE", "KP_ENTER", "x", "JOY_A"}},
+		{"CANCEL", _s("Back / Cancel"), kActionCancel, {"ESCAPE", "z", "KP_DIVIDE", "KP0", "JOY_B"}},
+		{"UP", _s("Up"), kActionUp, {"UP", "KP8", "JOY_UP", nullptr, nullptr}},
+		{"DOWN", _s("Down"), kActionDown, {"DOWN", "KP2", "JOY_DOWN", nullptr, nullptr}},
+		{"LEFT", _s("Left"), kActionLeft, {"LEFT", "KP4", "JOY_LEFT", nullptr, nullptr}},
+		{"RIGHT", _s("Right"), kActionRight, {"RIGHT", "KP6", "JOY_RIGHT", nullptr, nullptr}},
+		{"SKIP", _s("Skip messages (hold)"), kActionSkip, {"LCTRL", "RCTRL", "JOY_RIGHT_TRIGGER", nullptr, nullptr}}
+	};
+	for (const ActionDef &definition : actions) {
+		action = new Action(definition.id, _(definition.description));
+		action->setCustomEngineActionEvent(definition.action);
+		for (const char *mapping : definition.mappings)
+			if (mapping)
+				action->addDefaultInputMapping(mapping);
+		keymap->addAction(action);
+	}
+	return Keymap::arrayOf(keymap);
+}
 
 #if PLUGIN_ENABLED_DYNAMIC(SYSTEM98)
 REGISTER_PLUGIN_DYNAMIC(SYSTEM98, PLUGIN_TYPE_ENGINE, System98MetaEngine);

@@ -1,7 +1,13 @@
 MODULE := engines/system98
 
 MODULE_OBJS := \
+	audio.o \
+	graphics.o \
+	image.o \
 	metaengine.o \
+	mmd.o \
+	resource.o \
+	script.o \
 	system98.o
 
 ifeq ($(ENABLE_SYSTEM98), DYNAMIC_PLUGIN)

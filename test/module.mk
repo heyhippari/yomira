@@ -45,6 +45,11 @@ ifeq ($(ENABLE_COMPLET), STATIC_PLUGIN)
 	TEST_LIBS += engines/complet/gd.o
 endif
 
+ifeq ($(ENABLE_SYSTEM98), STATIC_PLUGIN)
+	TESTS += $(srcdir)/test/engines/system98/*.h
+	TEST_LIBS := engines/system98/mmd.o engines/system98/image.o engines/system98/resource.o $(TEST_LIBS)
+endif
+
 ifeq ($(ENABLE_WINTERMUTE), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/wintermute/*.h
 	TEST_LIBS += engines/wintermute/libwintermute.a
