@@ -88,6 +88,8 @@ public:
 	void runText(Script &script, const byte *text, uint32 textSize);
 	// Shows the selection window; returns the chosen item, -2 to go back from a submenu or -1 on quit
 	int selectMenu(const Common::Array<MenuItem> &items, bool nested);
+	// Sleeps while pumping events; false when the engine must stop
+	bool delay(uint32 ms);
 
 	Script &getScript() { return _script; }
 	void unlockAllCgs();
@@ -133,12 +135,20 @@ private:
 	void recordSeenCg(const Common::String &name);
 	bool runGallery();
 	bool runGroupedGallery(int group);
+	struct MapRegion {
+		int left, top, right, bottom;
+	};
+	// Runs the map's pointer/keyboard selection; returns the accepted region or -1 on quit
+	template<class Redraw>
+	int selectMapRegion(const MapRegion *regions, int count, Redraw redraw);
 	bool runMap();
 	bool runMhtMap();
 	void blitFrame(Common::Array<byte> &dst, int sx, int sy, int w, int h, int dx, int dy) const;
 	bool waitAnyInput();
 
 	void presentBuffer(const byte *bgr, int brightness = 255);
+	void blitBgr(Graphics::Surface &screen, const byte *bgr, int brightness) const;
+	void dimRegion(Graphics::Surface &screen, int x, int y, int w, int h) const;
 	void present();
 	void drawOverlays(Graphics::Surface &screen);
 	void drawMessage(Graphics::Surface &screen);
@@ -170,7 +180,6 @@ private:
 	bool loadImage(const Common::String &name, Common::Array<byte> &out);
 	void overlaySprite(Common::Array<byte> &dst, const Common::Array<byte> &sprite);
 	bool fadeTo(const Common::Array<byte> &target);
-	bool delay(uint32 ms);
 	bool waitClick();
 
 	const byte *runCommand(Script &script, const byte *p, const byte *end);

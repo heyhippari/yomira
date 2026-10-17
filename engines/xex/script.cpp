@@ -67,12 +67,12 @@ bool Script::loadScenario(const Common::String &name) {
 	return true;
 }
 
-static void writeString(Common::WriteStream &stream, const Common::String &str) {
+void writeString(Common::WriteStream &stream, const Common::String &str) {
 	stream.writeUint16LE(str.size());
 	stream.writeString(str);
 }
 
-static Common::String readString(Common::ReadStream &stream) {
+Common::String readString(Common::ReadStream &stream) {
 	uint16 size = stream.readUint16LE();
 	return stream.readString(0, size);
 }
@@ -524,7 +524,7 @@ void Script::step() {
 		break;
 	case 0xff: {
 		if (_menus.empty() || _menus.back().empty()) {
-			g_system->delayMillis(16);
+			_vm->delay(16);
 			_cur = Scenario::kCommandsOffset;
 			break;
 		}

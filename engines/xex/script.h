@@ -38,6 +38,10 @@ namespace Xex {
 
 class XexEngine;
 
+// Length-prefixed (uint16 LE) string as stored in savegames
+void writeString(Common::WriteStream &stream, const Common::String &str);
+Common::String readString(Common::ReadStream &stream);
+
 struct MenuItem {
 	Common::String text;
 	// Command stream offset of the item's body

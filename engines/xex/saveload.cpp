@@ -36,16 +36,6 @@ enum {
 
 static const uint32 kSaveMagic = MKTAG('C', 'M', 'P', 'L');
 
-static void writeString(Common::WriteStream &stream, const Common::String &str) {
-	stream.writeUint16LE(str.size());
-	stream.writeString(str);
-}
-
-static Common::String readString(Common::ReadStream &stream) {
-	uint16 size = stream.readUint16LE();
-	return stream.readString(0, size);
-}
-
 void XexEngine::markResumePoint() {
 	Common::MemoryWriteStreamDynamic stream(DisposeAfterUse::YES);
 	_script.saveState(stream);

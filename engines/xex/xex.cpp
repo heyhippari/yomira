@@ -345,17 +345,19 @@ void XexEngine::saveCommonData() {
 	delete file;
 }
 
-void XexEngine::presentBuffer(const byte *bgr, int brightness) {
-	Graphics::Surface *screen = g_system->lockScreen();
-
+void XexEngine::blitBgr(Graphics::Surface &screen, const byte *bgr, int brightness) const {
 	// Source rows are bottom-up
 	for (int y = 0; y < _screenHeight; y++) {
 		const byte *row = bgr + (_screenHeight - 1 - y) * _screenWidth * 3;
-		uint32 *dst = (uint32 *)screen->getBasePtr(0, y);
+		uint32 *dst = (uint32 *)screen.getBasePtr(0, y);
 		for (int x = 0; x < _screenWidth; x++, row += 3)
 			*dst++ = _format.RGBToColor(row[2] * brightness / 255, row[1] * brightness / 255, row[0] * brightness / 255);
 	}
+}
 
+void XexEngine::presentBuffer(const byte *bgr, int brightness) {
+	Graphics::Surface *screen = g_system->lockScreen();
+	blitBgr(*screen, bgr, brightness);
 	g_system->unlockScreen();
 	g_system->updateScreen();
 	_cursorRefreshPending = false;
@@ -367,14 +369,7 @@ void XexEngine::present() {
 		return;
 
 	Graphics::Surface *screen = g_system->lockScreen();
-
-	const byte *bgr = _scene.data();
-	for (int y = 0; y < _screenHeight; y++) {
-		const byte *row = bgr + (_screenHeight - 1 - y) * _screenWidth * 3;
-		uint32 *dst = (uint32 *)screen->getBasePtr(0, y);
-		for (int x = 0; x < _screenWidth; x++, row += 3)
-			*dst++ = _format.RGBToColor(row[2], row[1], row[0]);
-	}
+	blitBgr(*screen, _scene.data(), 255);
 	drawOverlays(*screen);
 
 	g_system->unlockScreen();
@@ -478,6 +473,17 @@ static bool isSpeakerSpace(uint32 ch) {
 	return ch == ' ' || ch == 0x3000;
 }
 
+void XexEngine::dimRegion(Graphics::Surface &screen, int x, int y, int w, int h) const {
+	for (int row = y; row < y + h; row++) {
+		uint32 *p = (uint32 *)screen.getBasePtr(x, row);
+		for (int column = 0; column < w; column++, p++) {
+			byte r, g, b;
+			_format.colorToRGB(*p, r, g, b);
+			*p = _format.RGBToColor(r >> 2, g >> 2, b >> 1);
+		}
+	}
+}
+
 void XexEngine::drawMessage(Graphics::Surface &screen) {
 	if (!_messageVisible)
 		return;
@@ -492,14 +498,7 @@ void XexEngine::drawMessage(Graphics::Surface &screen) {
 	const int boxY = scaleMessageY(_fullScreenMessages ? 15 : kMessageBoxY);
 	const int boxWidth = scaleMessageX(_fullScreenMessages ? 600 : kMessageBoxWidth);
 	const int boxHeight = scaleMessageY(_fullScreenMessages ? 450 : kMessageBoxHeight);
-	for (int y = boxY; y < boxY + boxHeight; y++) {
-		uint32 *p = (uint32 *)screen.getBasePtr(boxX, y);
-		for (int x = 0; x < boxWidth; x++, p++) {
-			byte r, g, b;
-			_format.colorToRGB(*p, r, g, b);
-			*p = _format.RGBToColor(r >> 2, g >> 2, b >> 1);
-		}
-	}
+	dimRegion(screen, boxX, boxY, boxWidth, boxHeight);
 
 	if (_framedMessages)
 		drawFrameRect(screen, 0, scaleMessageY(318), scaleMessageX(640), scaleMessageY(162), 0, scaleMessageY(318), true);
@@ -514,12 +513,7 @@ void XexEngine::drawMessage(Graphics::Surface &screen) {
 		const int bevel = scaleMessageX(34);
 		for (int row = 0; row < frameHeight; row++) {
 			const int right = frameX + frameWidth - bevel + bevel * row / (frameHeight - 1);
-			uint32 *pixel = (uint32 *)screen.getBasePtr(frameX, frameY + row);
-			for (int column = 0; column < right - frameX; column++, pixel++) {
-				byte red, green, blue;
-				_format.colorToRGB(*pixel, red, green, blue);
-				*pixel = _format.RGBToColor(red >> 2, green >> 2, blue >> 1);
-			}
+			dimRegion(screen, frameX, frameY + row, right - frameX, 1);
 		}
 
 		int speakerX = messageX - scaleMessageX(7);

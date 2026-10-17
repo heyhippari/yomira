@@ -156,48 +156,20 @@ bool XexEngine::runGroupedGallery(int group) {
 	return !interrupted();
 }
 
-bool XexEngine::runMap() {
-	if (_mhtMap)
-		return runMhtMap();
-
-	struct MapRegion {
-		int left, top, right, bottom;
-		int previewX, previewY;
-	};
-	const MapRegion regions[] = {
-		{44, 112, 76, 164, 240, 180},
-		{76, 372, 139, 418, 240, 180},
-		{410, 386, 492, 424, 240, 180},
-		{370, 57, 450, 114, 190, 180},
-		{138, 90, 228, 138, 240, 180},
-		{170, 241, 262, 310, 280, 110},
-		{342, 166, 489, 249, 150, 20},
-		{490, 166, 639, 249, 170, 20},
-		{342, 250, 489, 328, 150, 40},
-		{490, 250, 639, 328, 170, 40},
-		{171, 361, 259, 414, 300, 180},
-		{323, 134, 353, 161, 150, 240}
-	};
+template<class Redraw>
+int XexEngine::selectMapRegion(const MapRegion *regions, int count, Redraw redraw) {
 	auto regionAt = [&](const Common::Point &point) {
-		for (uint region = 0; region < ARRAYSIZE(regions); region++) {
+		for (int region = 0; region < count; region++) {
 			const MapRegion &bounds = regions[region];
 			if (point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom)
-				return (int)region;
+				return region;
 		}
 		return -1;
 	};
 
-	const bool restoreMessage = _messageVisible;
-	_messageVisible = false;
-	_skipMode = false;
-	Common::Array<byte> previews;
-	if (!loadImage("pt01", previews) || !showFullImage("map", true)) {
-		_messageVisible = restoreMessage;
-		return false;
-	}
 	Common::Point pointer = g_system->getEventManager()->getMousePos();
 	int selected = regionAt(pointer);
-	bool redraw = true;
+	bool redrawPending = true;
 	bool accepted = false;
 	while (!accepted && !interrupted()) {
 		Common::Event event;
@@ -207,7 +179,7 @@ bool XexEngine::runMap() {
 			if (event.type == Common::EVENT_MOUSEMOVE || event.type == Common::EVENT_LBUTTONUP) {
 				pointer = event.mouse;
 				selected = regionAt(pointer);
-				redraw = true;
+				redrawPending = true;
 				accepted = event.type == Common::EVENT_LBUTTONUP && selected >= 0;
 			} else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
 				int direction = 0;
@@ -218,64 +190,90 @@ bool XexEngine::runMap() {
 				else if (event.customType == kActionAdvance)
 					accepted = selected >= 0;
 				if (direction) {
-					const int count = ARRAYSIZE(regions);
 					selected = selected < 0 ? (direction > 0 ? 0 : count - 1) : (selected + direction + count) % count;
 					const MapRegion &bounds = regions[selected];
 					pointer = Common::Point((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2);
-					redraw = true;
+					redrawPending = true;
 				}
 			}
 		}
-		if (redraw && !accepted && !interrupted()) {
-			Common::Array<byte> view = _scene;
-			if (selected >= 0) {
-				const MapRegion &region = regions[selected];
-				const int sourceX = (selected % 4) * 160;
-				const int sourceY = (selected / 4) * 120;
-				for (int row = 0; row < 120; row++) {
-					const byte *src = &previews[((_screenHeight - 1 - sourceY - row) * _screenWidth + sourceX) * 3];
-					byte *dst = &view[((_screenHeight - 1 - region.previewY - row) * _screenWidth + region.previewX) * 3];
-					memcpy(dst, src, 160 * 3);
-				}
-			}
-			const byte *frame = _frameImage.getPixels();
-			if (pointer.y >= 0 && pointer.y < _screenHeight)
-				memcpy(&view[(_screenHeight - 1 - pointer.y) * _screenWidth * 3], frame + 240 * _screenWidth * 3, _screenWidth * 3);
-			if (pointer.x >= 0 && pointer.x < _screenWidth) {
-				for (int row = 0; row < _screenHeight; row++) {
-					const byte *src = frame + ((399 - row % 160) * _screenWidth + 320) * 3;
-					memcpy(&view[((_screenHeight - 1 - row) * _screenWidth + pointer.x) * 3], src, 3);
-				}
-			}
-			presentBuffer(view.data());
-			redraw = false;
+		if (redrawPending && !accepted && !interrupted()) {
+			redraw(selected, pointer);
+			redrawPending = false;
 		}
 		refreshCursor();
 		if (!accepted)
 			g_system->delayMillis(10);
 	}
-	if (accepted)
-		_script.setVariable(0x1fe, selected + 1);
+	return accepted ? selected : -1;
+}
+
+bool XexEngine::runMap() {
+	if (_mhtMap)
+		return runMhtMap();
+
+	const MapRegion regions[] = {
+		{44, 112, 76, 164},
+		{76, 372, 139, 418},
+		{410, 386, 492, 424},
+		{370, 57, 450, 114},
+		{138, 90, 228, 138},
+		{170, 241, 262, 310},
+		{342, 166, 489, 249},
+		{490, 166, 639, 249},
+		{342, 250, 489, 328},
+		{490, 250, 639, 328},
+		{171, 361, 259, 414},
+		{323, 134, 353, 161}
+	};
+	const Common::Point previewPositions[ARRAYSIZE(regions)] = {
+		Common::Point(240, 180), Common::Point(240, 180), Common::Point(240, 180), Common::Point(190, 180),
+		Common::Point(240, 180), Common::Point(280, 110), Common::Point(150, 20), Common::Point(170, 20),
+		Common::Point(150, 40), Common::Point(170, 40), Common::Point(300, 180), Common::Point(150, 240)
+	};
+
+	const bool restoreMessage = _messageVisible;
+	_messageVisible = false;
+	_skipMode = false;
+	Common::Array<byte> previews;
+	if (!loadImage("pt01", previews) || !showFullImage("map", true)) {
+		_messageVisible = restoreMessage;
+		return false;
+	}
+	const int selection = selectMapRegion(regions, ARRAYSIZE(regions), [&](int selected, const Common::Point &pointer) {
+		Common::Array<byte> view = _scene;
+		if (selected >= 0) {
+			const Common::Point &preview = previewPositions[selected];
+			const int sourceX = (selected % 4) * 160;
+			const int sourceY = (selected / 4) * 120;
+			for (int row = 0; row < 120; row++) {
+				const byte *src = &previews[((_screenHeight - 1 - sourceY - row) * _screenWidth + sourceX) * 3];
+				byte *dst = &view[((_screenHeight - 1 - preview.y - row) * _screenWidth + preview.x) * 3];
+				memcpy(dst, src, 160 * 3);
+			}
+		}
+		const byte *frame = _frameImage.getPixels();
+		if (pointer.y >= 0 && pointer.y < _screenHeight)
+			memcpy(&view[(_screenHeight - 1 - pointer.y) * _screenWidth * 3], frame + 240 * _screenWidth * 3, _screenWidth * 3);
+		if (pointer.x >= 0 && pointer.x < _screenWidth) {
+			for (int row = 0; row < _screenHeight; row++) {
+				const byte *src = frame + ((399 - row % 160) * _screenWidth + 320) * 3;
+				memcpy(&view[((_screenHeight - 1 - row) * _screenWidth + pointer.x) * 3], src, 3);
+			}
+		}
+		presentBuffer(view.data());
+	});
+	if (selection >= 0)
+		_script.setVariable(0x1fe, selection + 1);
 	_messageVisible = restoreMessage;
 	present();
 	return !interrupted();
 }
 
 bool XexEngine::runMhtMap() {
-	struct MapRegion {
-		int left, top, right, bottom;
-	};
 	const MapRegion regions[] = {
 		{4, 16, 108, 66}, {105, 78, 184, 116}, {232, 213, 296, 254}, {302, 200, 362, 234},
 		{376, 122, 444, 174}, {512, 0, 630, 54}, {454, 160, 604, 190}, {536, 342, 638, 380}
-	};
-	auto regionAt = [&](const Common::Point &point) {
-		for (uint region = 0; region < ARRAYSIZE(regions); region++) {
-			const MapRegion &bounds = regions[region];
-			if (point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom)
-				return (int)region;
-		}
-		return -1;
 	};
 
 	const bool restoreMessage = _messageVisible;
@@ -289,10 +287,6 @@ bool XexEngine::runMhtMap() {
 	}
 	_scene = mapImage;
 	_sceneFull = "mhtmap";
-	Common::Point pointer = g_system->getEventManager()->getMousePos();
-	int selected = regionAt(pointer);
-	bool redraw = true;
-	bool accepted = false;
 	auto drawPreview = [&](const Common::Array<byte> &source, int sourceX, int sourceY, Common::Array<byte> &view) {
 		for (int row = 0; row < 120; row++) {
 			const byte *src = &source[((sourceY + 119 - row) * _screenWidth + sourceX) * 3];
@@ -301,48 +295,16 @@ bool XexEngine::runMhtMap() {
 		}
 	};
 
-	while (!accepted && !interrupted()) {
-		Common::Event event;
-		while (!accepted && g_system->getEventManager()->pollEvent(event)) {
-			if (handleSkipAction(event))
-				continue;
-			if (event.type == Common::EVENT_MOUSEMOVE || event.type == Common::EVENT_LBUTTONUP) {
-				pointer = event.mouse;
-				selected = regionAt(pointer);
-				redraw = true;
-				accepted = event.type == Common::EVENT_LBUTTONUP && selected >= 0;
-			} else if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
-				int direction = 0;
-				if (event.customType == kActionRight || event.customType == kActionDown)
-					direction = 1;
-				else if (event.customType == kActionLeft || event.customType == kActionUp)
-					direction = -1;
-				else if (event.customType == kActionAdvance)
-					accepted = selected >= 0;
-				if (direction) {
-					const int count = ARRAYSIZE(regions);
-					selected = selected < 0 ? (direction > 0 ? 0 : count - 1) : (selected + direction + count) % count;
-					const MapRegion &bounds = regions[selected];
-					pointer = Common::Point((bounds.left + bounds.right) / 2, (bounds.top + bounds.bottom) / 2);
-					redraw = true;
-				}
-			}
-		}
-		if (redraw && !accepted && !interrupted()) {
-			Common::Array<byte> view = mapImage;
-			if (selected >= 0)
-				drawPreview(parts, (selected % 4) * 160, (selected / 4) * 120, view);
-			else
-				drawPreview(mapImage, 8, 9, view);
-			presentBuffer(view.data());
-			redraw = false;
-		}
-		refreshCursor();
-		if (!accepted)
-			g_system->delayMillis(10);
-	}
-	if (accepted)
-		_script.setVariable(0x1fe, selected + 1);
+	const int selection = selectMapRegion(regions, ARRAYSIZE(regions), [&](int selected, const Common::Point &) {
+		Common::Array<byte> view = mapImage;
+		if (selected >= 0)
+			drawPreview(parts, (selected % 4) * 160, (selected / 4) * 120, view);
+		else
+			drawPreview(mapImage, 8, 9, view);
+		presentBuffer(view.data());
+	});
+	if (selection >= 0)
+		_script.setVariable(0x1fe, selection + 1);
 	_messageVisible = restoreMessage;
 	present();
 	return !interrupted();
