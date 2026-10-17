@@ -21,6 +21,7 @@
 
 #include "delta/delta.h"
 #include "common/memstream.h"
+#include "common/ptr.h"
 
 namespace Delta {
 
@@ -59,7 +60,7 @@ Common::Error DeltaEngine::saveGameStream(Common::WriteStream *stream, bool isAu
 	stream->writeSint16LE(_menuHover);
 	if (!_script->saveState(*stream))
 		return Common::kWritingFailed;
-	for (uint index = 0; index < 7; ++index)
+	for (uint index = 0; index < MenuLayout::kArgumentCount; ++index)
 		stream->writeSint32LE(_menuConfig.arguments[index]);
 	for (uint index = 0; index < 2; ++index)
 		writeSaveString(*stream, _menuConfig.strings[index]);
@@ -76,36 +77,31 @@ bool DeltaEngine::restoreSaveStream(Common::SeekableReadStream &stream, bool app
 	const uint32 seed = stream.readUint32LE();
 	const uint16 variable = stream.readUint16LE();
 	const int16 hover = stream.readSint16LE();
-	Script *script = new Script(_scenario, getGameId() == "onegaitasukete", &_randomSource);
-	if (!script->loadState(stream)) {
-		delete script;
+	Common::ScopedPtr<Script> script(new Script(_scenario, getGameId() == "onegaitasukete", &_randomSource));
+	if (!script->loadState(stream))
 		return false;
-	}
 	ScriptCommand menu;
-	for (uint index = 0; index < 7; ++index)
+	for (uint index = 0; index < MenuLayout::kArgumentCount; ++index)
 		menu.arguments.push_back(stream.readSint32LE());
 	for (uint index = 0; index < 2; ++index) {
 		Common::String name;
-		if (!readSaveString(stream, name) || name.empty() || name.contains('/') || name.contains('\\') || name.contains(':')) {
-			delete script;
+		if (!readSaveString(stream, name) || name.empty() || name.contains('/') || name.contains('\\') || name.contains(':'))
 			return false;
-		}
 		menu.strings.push_back(name);
 	}
-	bool valid = !stream.err() && !stream.eos() && variable < 1024 && menu.arguments[1] > 0 && menu.arguments[1] <= 16 &&
-		hover >= -1 && hover < menu.arguments[1];
-	for (uint index = 2; index < 7; ++index)
+	const MenuLayout layout(menu.arguments);
+	bool valid = !stream.err() && !stream.eos() && variable < 1024 && layout.hasButtons() &&
+		hover >= -1 && hover < layout.count;
+	for (uint index = 2; index < MenuLayout::kArgumentCount; ++index)
 		valid = valid && menu.arguments[index] >= 0 && menu.arguments[index] <= 800;
-	valid = valid && menu.arguments[4] > 0 && menu.arguments[5] > 0 && menu.arguments[6] > 0 &&
-		menu.arguments[2] + menu.arguments[4] <= 800 &&
-		menu.arguments[3] + (menu.arguments[1] - 1) * menu.arguments[6] + menu.arguments[5] <= 600;
-	if (!valid || !apply) {
-		delete script;
+	valid = valid && layout.step > 0 &&
+		layout.left + layout.width <= 800 &&
+		layout.top + (layout.count - 1) * layout.step + layout.height <= 600;
+	if (!valid || !apply)
 		return valid;
-	}
 	delete _script;
-	_script = script;
-	_scriptPosition = script->position();
+	_script = script.release();
+	_scriptPosition = _script->position();
 	_randomSource.setSeed(seed);
 	_menuConfig = menu;
 	_menuResultVariable = variable;

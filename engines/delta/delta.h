@@ -36,10 +36,24 @@ struct ADGameDescription;
 
 namespace Delta {
 
+// Button geometry of the 0x7c menu command; argument 0 is unused.
+struct MenuLayout {
+	static const uint kArgumentCount = 7;
+	int count, left, top, width, height, step;
+
+	explicit MenuLayout(const Common::Array<int32> &arguments) : count(arguments[1]), left(arguments[2]),
+		top(arguments[3]), width(arguments[4]), height(arguments[5]), step(arguments[6]) {}
+
+	bool hasButtons() const {
+		return count >= 1 && count <= 16 && width > 0 && height > 0;
+	}
+};
+
 class DeltaEngine : public Engine {
 private:
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
+	Common::Functor0Mem<bool, DeltaEngine> _progress;
 	StartupConfig _configuration;
 	Common::Array<byte> _scenario;
 	uint32 _scriptPosition = 0;
@@ -60,6 +74,7 @@ private:
 	InputState _input;
 	int _menuHover = -1;
 	int _menuPressed = -1;
+	bool _menuDirty = false;
 	uint16 _menuResultVariable = 0;
 	bool _uiBusy = false;
 	bool _loadPending = false;
@@ -78,6 +93,8 @@ private:
 	bool _messageVisible = false;
 	bool _messageWaiting = false;
 	bool _messageBoundary = false;
+	uint32 _nextInputUpdate = 0;
+	uint32 _nextPresent = 0;
 
 	Common::Error initialize();
 	Common::Error loadImage(const Common::String &name, Graphics::Surface &image);
@@ -89,11 +106,10 @@ private:
 	void handleInput(const Common::Event &event);
 	bool pollInput();
 	bool serviceInput();
-	uint32 _nextInputUpdate = 0;
-	uint32 _nextPresent = 0;
 	void startTransition(const Graphics::Surface &image, uint32 duration);
 	bool updateTransition();
 	int menuItemAt(const Common::Point &point) const;
+	MenuLayout menuLayout() const { return MenuLayout(_menuConfig.arguments); }
 	void activateMenuItem(int item);
 	void showExtras();
 	bool restoreSaveStream(Common::SeekableReadStream &stream, bool apply);

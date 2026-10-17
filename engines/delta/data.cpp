@@ -198,8 +198,8 @@ static bool decodeBitmap(const Common::Array<byte> &data, Graphics::Surface &sur
 		strip->free();
 		delete strip;
 	}
-	surface.copyFrom(converted);
-	converted.free();
+	surface.free();
+	surface = converted;
 	return true;
 }
 
