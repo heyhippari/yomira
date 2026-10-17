@@ -59,6 +59,12 @@ private:
 	void pauseEngineIntern(bool paused) override;
 	Common::Error initialize();
 	bool loadScene(const Common::String &name, uint bank);
+	// A script offset's bit 14 and above select the secondary bank; the low 14 bits address within it
+	static const uint kSceneBankSize = 0x4000;
+	static uint sceneBankOf(uint offset) { return offset >= kSceneBankSize; }
+	static uint sceneBankOffset(uint offset) { return offset & (kSceneBankSize - 1); }
+	const Common::Array<byte> &sceneBank(uint bank) const { return bank ? _secondaryScene : _scene; }
+	const Common::String &sceneBankName(uint bank) const { return bank ? _secondaryName : _sceneName; }
 	uint16 fetchWord();
 	uint16 sceneWord(uint offset) const;
 	Common::String sceneString(uint offset, bool fileName = false) const;

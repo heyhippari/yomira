@@ -264,6 +264,8 @@ bool System98Engine::waitForTextAdvance() {
 bool System98Engine::waitTextDelay(uint frames, bool &fastText) {
 	if (!frames || fastText)
 		return !shouldQuit();
+	// The glyph just drawn must be visible while the delay runs
+	present();
 	const uint32 start = _system->getMillis();
 	const uint32 duration = frames * 10000 / 564;
 	while (!shouldQuit() && _system->getMillis() - start < duration) {
@@ -286,8 +288,8 @@ void System98Engine::printText(uint box, uint offset) {
 	_keyPressed = false;
 	bool fastText = _skipMode || _skipRequested;
 	TextBox &textBox = _textBoxes[box];
-	const Common::Array<byte> &data = offset >= 0x4000 ? _secondaryScene : _scene;
-	uint position = offset & 0x3fff;
+	const Common::Array<byte> &data = sceneBank(sceneBankOf(offset));
+	uint position = sceneBankOffset(offset);
 	Common::String text;
 	while (position < data.size()) {
 		const byte value = data[position++];

@@ -31,7 +31,7 @@ namespace System98 {
 
 bool System98Engine::loadScene(const Common::String &name, uint bank) {
 	Common::Array<byte> data;
-	if (bank > 1 || !_resources.load(name, data) || data.size() < 0x102 || data.size() > 0x4000)
+	if (bank > 1 || !_resources.load(name, data) || data.size() < 0x102 || data.size() > kSceneBankSize)
 		return false;
 	for (uint offset = 0x100; offset < data.size(); ++offset)
 		data[offset] ^= 1;
@@ -49,15 +49,15 @@ bool System98Engine::loadScene(const Common::String &name, uint bank) {
 }
 
 uint16 System98Engine::sceneWord(uint offset) const {
-	const Common::Array<byte> &data = offset >= 0x4000 ? _secondaryScene : _scene;
-	offset &= 0x3fff;
+	const Common::Array<byte> &data = sceneBank(sceneBankOf(offset));
+	offset = sceneBankOffset(offset);
 	return offset + 2 <= data.size() ? READ_LE_UINT16(data.data() + offset) : 0;
 }
 
 uint16 System98Engine::fetchWord() {
-	_activeBank = _scriptOffset >= 0x4000;
-	const Common::Array<byte> &data = _activeBank ? _secondaryScene : _scene;
-	if ((_scriptOffset & 0x3fff) + 2U > data.size()) {
+	_activeBank = sceneBankOf(_scriptOffset);
+	const Common::Array<byte> &data = sceneBank(_activeBank);
+	if (sceneBankOffset(_scriptOffset) + 2U > data.size()) {
 		_scriptValid = false;
 		return 0;
 	}
@@ -67,8 +67,8 @@ uint16 System98Engine::fetchWord() {
 }
 
 Common::String System98Engine::sceneString(uint offset, bool fileName) const {
-	const Common::Array<byte> &data = offset >= 0x4000 ? _secondaryScene : _scene;
-	offset &= 0x3fff;
+	const Common::Array<byte> &data = sceneBank(sceneBankOf(offset));
+	offset = sceneBankOffset(offset);
 	if (fileName)
 		++offset;
 	Common::String result;
@@ -117,6 +117,7 @@ void System98Engine::updateMenu(const Common::Event &event) {
 
 void System98Engine::pollInput() {
 	Common::Event event;
+	bool menuChanged = false;
 	while (_system->getEventManager()->pollEvent(event)) {
 		const bool engineAction = event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START;
 		const bool engineActionEnd = event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_END;
@@ -125,7 +126,7 @@ void System98Engine::pollInput() {
 		const bool skipAction = event.customType == kActionSkip &&
 			(engineAction || engineActionEnd);
 		if (skipAction) {
-			_skipMode = event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START;
+			_skipMode = engineAction;
 			if (_skipMode)
 				_skipRequested = true;
 		}
@@ -164,8 +165,11 @@ void System98Engine::pollInput() {
 		}
 		updateMenu(event);
 		if (_menuEnabled && !_coordinateMenu && (event.type == Common::EVENT_MOUSEMOVE || engineAction))
-			present();
+			menuChanged = true;
 	}
+	// One redraw per drained burst; the highlight only depends on the final pointer position
+	if (menuChanged && _menuEnabled && !_coordinateMenu)
+		present();
 	_frameCounter = (_system->getMillis() - _frameEpoch) * 564 / 10000;
 }
 
@@ -184,7 +188,7 @@ bool System98Engine::waitFrames(uint frames) {
 bool System98Engine::execute() {
 	const uint16 position = _scriptOffset;
 	const uint16 opcode = fetchWord();
-	debug(2, "System98: %s:%04x opcode %02x", (_activeBank ? _secondaryName : _sceneName).c_str(), position, opcode);
+	debug(2, "System98: %s:%04x opcode %02x", sceneBankName(_activeBank).c_str(), position, opcode);
 	uint16 args[10] = {};
 	auto arguments = [&](uint count) {
 		for (uint index = 0; index < count; ++index)
@@ -311,14 +315,14 @@ bool System98Engine::execute() {
 	case 0x40: {
 		arguments(4);
 		_menu.clear();
-		for (uint offset = args[2]; (offset & 0x3fff) + 10U <= (_activeBank ? _secondaryScene : _scene).size() && sceneWord(offset); offset += 10) {
+		for (uint offset = args[2]; sceneBankOffset(offset) + 10U <= sceneBank(_activeBank).size() && sceneWord(offset); offset += 10) {
 			MenuItem item;
 			item.id = sceneWord(offset);
 			item.rect = Common::Rect(sceneWord(offset + 2), sceneWord(offset + 4), sceneWord(offset + 6), sceneWord(offset + 8));
 			_menu.push_back(item);
 		}
 		_menuRegisters[0] = args[0]; _menuRegisters[1] = args[1]; _menuJump = args[3]; _menuBank = _activeBank; _menuEnabled = true; _coordinateMenu = false;
-		debug(1, "System98: menu %u regions at %s:%04x", _menu.size(), _sceneName.c_str(), position);
+		debug(1, "System98: menu %u regions at %s:%04x", _menu.size(), sceneBankName(_activeBank).c_str(), position);
 		present();
 		break;
 	}
@@ -487,7 +491,7 @@ bool System98Engine::execute() {
 		_drawPage = 0;
 		break;
 	default:
-		warning("System98: unimplemented opcode %02x at %s:%04x", opcode, (_activeBank ? _secondaryName : _sceneName).c_str(), position);
+		warning("System98: unimplemented opcode %02x at %s:%04x", opcode, sceneBankName(_activeBank).c_str(), position);
 		_scriptValid = false;
 	}
 	return _scriptValid;

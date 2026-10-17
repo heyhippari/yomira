@@ -43,7 +43,12 @@ Sound::~Sound() {
 bool Sound::init() {
 	if (_open) return true;
 	createDriver();
-	if (_driver->open() != 0) return false;
+	if (_driver->open() != 0) {
+		// createDriver() would overwrite (and leak) it on the next retry
+		delete _driver;
+		_driver = nullptr;
+		return false;
+	}
 	if (_nativeMT32) _driver->sendMT32Reset();
 	else _driver->sendGMReset();
 	_open = true;
