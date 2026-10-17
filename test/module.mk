@@ -55,6 +55,11 @@ ifeq ($(ENABLE_DELTA), STATIC_PLUGIN)
 	TEST_LIBS := engines/delta/data.o engines/delta/script.o $(TEST_LIBS)
 endif
 
+ifeq ($(ENABLE_ILLUSION), STATIC_PLUGIN)
+	TESTS += $(srcdir)/test/engines/illusion/*.h
+	TEST_LIBS := engines/illusion/archive.o $(TEST_LIBS)
+endif
+
 ifeq ($(ENABLE_WINTERMUTE), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/wintermute/*.h
 	TEST_LIBS += engines/wintermute/libwintermute.a
