@@ -5,6 +5,11 @@
 - Keep contributions GPLv3+-compatible. For contribution process, portability, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - Follow the repository's [.editorconfig](.editorconfig) and [.clang-format](.clang-format). Avoid lengthy comments and unrelated changes.
 
+## Commit messages
+
+- Follow ScummVM's [commit message guidelines](https://wiki.scummvm.org/index.php/Commit_Guidelines).
+- Prefix engine-specific commits with the uppercase engine name and a colon, followed by a concise description (for example, `COMPLET: Add game detection`).
+
 ## Portability conventions
 
 From the wiki's [Coding Conventions](https://wiki.scummvm.org/index.php?title=Coding_Conventions) and [HOWTO-Open Files](https://wiki.scummvm.org/index.php?title=HOWTO-Open_Files):
