@@ -30,7 +30,8 @@ From the wiki's [Coding Conventions](https://wiki.scummvm.org/index.php?title=Co
 ## Repository layout
 
 - Shared runtime code is organized by subsystem in `common/`, `audio/`, `graphics/`, `image/`, `math/`, `video/`, and `gui/`; platform integration lives in `backends/`.
-- Game-specific implementations live under `engines/`. Before changing an engine, inspect its local `module.mk` and configure metadata as well as nearby implementations and tests.
+- Game-specific implementations live under `engines/`. Before changing an engine, read its `engines/<engine>/README.md` for existing technical documentation, then inspect its local `module.mk` and configure metadata as well as nearby implementations and tests. Treat the engine README as the home for engine-specific technical documentation and keep it current when work adds or changes relevant knowledge.
+- For reverse-engineering work on an engine or its games, document the discoveries, supporting evidence, limitations, and results in `engines/<engine>/README.md`. Use the technical-writer agent to draft or update this documentation from the investigation findings, and verify it accurately reflects the evidence before finishing.
 - Build options and engine registration are generated/configured through the repository build system; avoid assuming a source file is automatically part of every build.
 
 For product context and user-facing documentation, start with [README.md](README.md). Use the project documentation and developer wiki linked there rather than duplicating their content here.
