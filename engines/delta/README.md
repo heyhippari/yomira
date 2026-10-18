@@ -22,7 +22,71 @@ incomplete; unsupported commands report their position and restore the title
 checkpoint. Message voice/effect playback and voice-token timing are not
 implemented. Cross-fades remain an approximation of the original effects and
 timing. Windows installation paths and INI preferences are not imported or
-modified. No game files are written.
+modified. No game files are written. Both detection entries carry the
+`ADGF_UNSTABLE` flag.
+
+## Build And Setup
+
+The engine is built by default. To enable it explicitly, use:
+
+```sh
+./configure --enable-engine=delta
+make
+```
+
+`configure.engine` requires the `16bit`, `highres`, and `freetype2` features.
+The engine can also be built as a dynamic plugin; `./configure --help` lists
+the matching option. It requests an 800x600 RGB565 screen and rejects 8-bit
+color modes.
+
+Game files are read through ScummVM's search path (`SearchMan`). The code
+opens:
+
+- `ms.mhu` and the scenario file named in its header (`OLV_DLN.SD` for One
+  Lover, `PHMN.SD` for PHM).
+- `CG/EVB.CGF`, `CG/EV.CGF`, and `CG/ST.CGF`, the image banks. A missing bank
+  causes a load error when an image needs it.
+- `CG/EVINFO.BIN`, which foreground command `0xb1` requires.
+- Loose `IAF` images in the game root or `CG/`, when present.
+
+Message text uses the first available Noto CJK font from
+`NotoSansCJK-Regular.ttc`, `NotoSansCJKjp-Regular.otf`, or
+`NotoSerifCJK-Regular.ttc`, at size 24. Place one of these in the game
+directory or in an added search path.
+
+## Controls
+
+The `delta-default` keymap maps:
+
+- Select: Return, Space, Keypad Enter, or joystick A. Activates the focused menu
+  row or advances a waiting message page.
+- Back / Cancel: Escape or joystick B. Clears menu focus.
+- Focus movement: arrow keys, keypad 8/2/4/6, the joystick D-pad, and both
+  analog sticks.
+- Game menu: F5 or joystick Start. Opens ScummVM's main menu.
+- Left mouse: a press and release on the same menu row activates it; a left
+  click advances a waiting message page.
+
+Keyboard and controller input hide the pointer, and mouse input shows it again.
+Joystick axes use a ±8000 deadzone.
+
+## Architecture
+
+- `delta.cpp` owns `DeltaEngine`: startup, resource lookup, the per-frame script
+  runner, transitions, message presentation, title-menu interaction, and input
+  dispatch.
+- `data.cpp` reads the startup configuration and scenario data, decompresses
+  packed blocks, decodes IAF and sprite-bank images, and provides masked
+  compositing and shadowed text drawing.
+- `script.cpp` implements the bounds-checked bytecode reader and interpreter.
+  It converts operands into `ScriptCommand` records and owns variables, event
+  flags, checkpoint counters, and the bounded return stack. The PHM dialect
+  adjustment is selected when the engine creates the interpreter.
+- `saveload.cpp` serializes and validates ScummVM save payloads. The runtime
+  currently applies them only at supported title-menu checkpoints.
+- `input.h` tracks pointer activity; `metaengine.cpp` registers engine
+  features and keymaps; `detection.cpp` and `detection_tables.h` identify game
+  releases; `console.cpp` provides the engine debugger command.
 
 ## Recovered Startup
 
@@ -96,20 +160,30 @@ the table's handlers establishes the implemented startup slice:
 | `0x3c` | Evaluate high-bit-tagged Boolean/comparison tokens |
 | `0x22`, `0x3d` | Jump to a bounded absolute byte offset |
 | `0x5e`, `0x95` | Random choice and one-based indexed branch |
-| `0x23`, `0x26`, `0xb0`, `0xb1` | Load backgrounds and layered foregrounds |
-| `0x19`, `0xa4` | Clear a bounded scene rectangle toward black or white |
+| `0x23` | Load a full-screen image with an instant cut |
+| `0x26`, `0xb0` | Load a full-screen image with a 300 ms transition |
+| `0xb1` | Same as `0x26`, plus a foreground layer set unless its second name is `TACLEAR` |
+| `0x0d` | Clear the message window and restore the background behind it |
+| `0x19`, `0xa4` | Clear a scene rectangle to black (`0x19`) or white (`0xa4`); duration is argument 4 x 20 ms |
+| `0xa5` | Clear the screen to black immediately |
+| `0xae` | Fade the screen to black; duration is argument 0 x 20 ms |
 | `0x21`, `0x8a` | Bounded script calls and returns |
 | `0x3a`, `0x3b`, `0x3e`, `0x3f`, `0x61` | Event flags, checkpoint counters, and title strings |
-| `0x4b`, `0x54` | Decode message tokens and wait for text-page input |
+| `0x4b`, `0x54` | `0x4b` presents message tokens that contain text; `0x54` waits for input on a visible page |
 | `0xa2` | Decode a three-word sound command; audio playback is not implemented |
-| `0x99` | Arm a deadline in 100 ms units or wait across frames |
-| `0xae` | Clear/fade toward black |
+| `0x99` | A nonzero argument 0 arms a deadline of argument 1 x 100 ms without waiting; zero waits until the most recently armed deadline passes |
 | `0x67` | Enter the title menu and suspend scenario execution |
 
 The runner processes at most 64 commands per frame, keeping events responsive
 even for a script loop. Unsupported commands and invalid operands stop with a
 diagnostic containing the script position. Conditions and jumps determine the
 startup path; no offsets are scanned heuristically to find the menu.
+
+Parser limits are enforced while reading: 1024 variables, a return stack of 64
+entries, up to 127 random-selection options, up to 32 indexed-branch entries,
+and up to 256 message tokens per command. Packed and unpacked data blocks are
+capped at 16 MiB, decoded BMP images at 4096x4096 pixels and 4 M pixels, and
+bank directory entry counts at 65536.
 
 `CG/EVB.CGF` contains a 32-bit entry count followed by 20-byte records: a
 16-byte filename and a 32-bit absolute offset. Records are bounded by the next
@@ -118,6 +192,20 @@ offset or EOF and contain the same IAF wrapper as loose files. One Lover's
 banks support recovered character and event layers, including partial images
 with stored origins. Event-specific effects and animation timing remain
 incomplete.
+
+Foreground and event images resolve in this order: a loose `IAF` in the game
+root or `CG/`, then the `CG/EVB.CGF` record, then the `CG/EV.CGF` sprite bank,
+then an E-prefixed event composition. For an event composition, the base image
+is the first six characters of the name plus `00`, and the layers come from
+characters 6 and 7. Backgrounds that are not 800x600 are rejected as unsupported
+partial images.
+
+`CG/EVINFO.BIN` maps a foreground name to its layer names. Layers are read from
+`CG/ST.CGF`, except names ending in `_D`, which come from `CG/EV.CGF`. A name
+missing from `EVINFO.BIN` is treated as a direct layer: an eight-character
+`E##` name, or `name_D` from `CG/EV.CGF`. Layer masks are decoded in the active
+screen format (RGB565), whereas message-frame masks keep 24-bit precision, so
+mask values that depend on the finer precision may differ from the original.
 
 Opcode `0x7c` supplies the menu and button-sheet names, count, position, width,
 row height, and row spacing. Normal button rows occupy the first vertical
@@ -166,6 +254,13 @@ INI. Speaker zero does not draw a name. Transparent framing alone is not the
 original text presentation: the first implementation omitted the text-shadow
 pass and consequently left white glyphs without sufficient contrast.
 
+Message tokens are read in order. `N` or `n` sets the speaker index, and speaker
+zero draws no name. `M`, `m`, and `@` end the current page, but only after text
+has been collected on that page. `V`/`v` tokens carry a word and a dword
+argument in the scenario and are not displayed, and `W`/`w` tokens are not
+displayed either. Other tokens are decoded as Windows-932 (Shift-JIS), and blank
+lines are dropped.
+
 The follow-up REA investigation establishes the missing effect:
 
 - `0x40e760` stores the font family, size, weight, foreground color, and
@@ -211,26 +306,30 @@ REA evidence records:
 ## Menu And Save Integration
 
 Both supplied scripts use menu opcode `0x67` (PHM raw `0x66`) with destination
-variable 6, followed by the one-based `0x95` branch table. Its first four
-results enter Start, Load, Settings, and Quit branches. One Lover's result 5
-enters Extras and result 6 returns to the title loop. PHM uses result 5 for the
-title return and result 6 for Extras. The UI uses ScummVM dialogs for the host
+variable 6. Menu rows are zero-based internally, and the scenario sees the
+one-based result. Start sets the result variable to 1 and resumes the scenario.
+Load, Settings, and Quit are handled by the port and do not set the variable.
+One Lover has five buttons, so result 5 enters Extras and there is no result 6.
+PHM has six buttons: result 5 has no action (the menu stays open), and result 6
+enters Extras. The UI uses ScummVM dialogs for the host
 operations instead of recreating the original Windows save/options screens.
 
 The native handler entries inspected for these branches are `0x40407b` (load),
 `0x408747` (options), and `0x401e2f` (exit). The original save/load implementation
 and original save files are not reused.
 
-Delta implements AdvancedMetaEngine extended saves, including launcher loading,
-listing, thumbnails, timestamps, playtime, descriptions, and deletion. Saving
+Delta's metaengine derives from `AdvancedMetaEngine`, which reports the extended
+save features: extended format, simple save names, save listing, deletion, save
+metadata, thumbnails, creation date, and play time. Saving
 and in-game loading are currently restricted to stable title-menu checkpoints;
 they do not imply support for saving unfinished story execution. The global
 ScummVM menu exposes Save and Load, and the original title Load option opens the
 same restore chooser.
 
 The engine payload starts with `DLTA` and format version 1. It stores the game
-ID, scenario size and number, random seed, interpreter dialect/cursor and 1024
-variables, and title-menu resource/geometry/focus state. Invalid versions,
+ID, scenario size and number, random seed, interpreter dialect and cursor,
+1024 variables, the return stack (up to 64 entries), 2048 checkpoint counters,
+2048 seen-event flags, and title-menu resource, geometry, and focus state. Invalid versions,
 different games/dialects, truncated state, invalid cursors, resource paths, and
 menu geometry are rejected before replacing the active interpreter. Loads are
 queued and applied outside dialog/input dispatch, then menu artwork is rebuilt.
@@ -249,3 +348,20 @@ REA evidence records:
 - Script string reader: `ev_7ef83d94d9a51e7b14605b4b5edde31c8d91ac2f663bb4978d37eb8447e72f7e`
 - Menu asset references: `ev_dc07aa706b7fda6617b35c551866a2c215991f6ec8bad5adcd2f14e5012d9c72`
 - Packed PHM overview: `ev_5a637af28131e3cfbf5a2cfc55351273299604f7b48bc88f5e01c791a15ebf77`
+
+## Debugging And Tests
+
+- Console: the engine console provides a `test` command. No other engine-specific
+  console commands are defined.
+- Logging: `debug(1, ...)` reports major steps such as initialization, image and
+  font loads, and menu selections. `debug(2, ...)` traces each script command,
+  pointer mode, and menu focus.
+- Declared but unused: `detection.cpp` declares the `Graphics`, `Path`,
+  `FilePath`, `Scan`, and `Script` debug channels, and
+  `GAMEOPTION_ORIGINAL_SAVELOAD`. No code checks them, so enabling them has no
+  effect.
+- Tests: CxxTest suites are in `test/engines/delta/` (`data.h`, `script.h`,
+  `input.h`). `test/module.mk` adds them to `make test` only when `ENABLE_DELTA`
+  is `STATIC_PLUGIN`, and links `engines/delta/data.o` and
+  `engines/delta/script.o`. There are no runtime tests. The REA-derived runtime
+  claims above were not rerun for this documentation update.
