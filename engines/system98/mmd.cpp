@@ -77,7 +77,7 @@ bool addSysEx(const Common::Array<byte> &source, uint &offset, uint32 tick, byte
 		if (value == 0x80) value = first;
 		else if (value == 0x81) value = second;
 		else if (value == 0x82) value = channel;
-		else if (value == 0x84) value = (-checksum) & 127;
+		else if (value == 0x84) value = (0U - checksum) & 127;
 		if (value >= 128)
 			return false;
 		payload.push_back(value);

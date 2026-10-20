@@ -181,7 +181,7 @@ bool Script::loadState(Common::SeekableReadStream &stream) {
 		if (stream.read(seenEvents, sizeof(seenEvents)) != sizeof(seenEvents))
 			return false;
 	}
-	if (stream.err() || legacy != _legacyOpcodes || position >= _reader.size())
+	if (stream.err() || legacy != byte(_legacyOpcodes) || position >= _reader.size())
 		return false;
 	if (!_reader.seek(position))
 		return false;
