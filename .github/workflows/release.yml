@@ -1,0 +1,189 @@
+name: Release
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    # Only successful CI runs from pushes to this repository; never from pull requests or forks.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    outputs:
+      kind: ${{ steps.kind.outputs.kind }}
+      version: ${{ steps.kind.outputs.version }}
+      sha: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Determine release kind
+        id: kind
+        env:
+          REF_NAME: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          kind=none
+          version=
+          if [ "$REF_NAME" = master ]; then
+            kind=dev
+            version="dev-${SHA:0:8}"
+          elif [[ "$REF_NAME" =~ ^v[0-9]+(\.[0-9]+)*$ ]] \
+            && [ "$(git rev-parse -q --verify "refs/tags/$REF_NAME^{commit}")" = "$SHA" ] \
+            && git merge-base --is-ancestor "$SHA" origin/master; then
+            kind=stable
+            version="$REF_NAME"
+          fi
+          echo "Release kind: $kind ($version)"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Linux x86_64
+    needs: prepare
+    if: needs.prepare.outputs.kind != 'none'
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install liba52-dev libcurl4-openssl-dev libfaad-dev libflac-dev libfluidsynth-dev libfreetype6-dev libfribidi-dev libgif-dev libgtk-3-dev libjpeg-turbo8-dev libmad0-dev libmikmod-dev libmpeg2-4-dev libogg-dev libpng-dev libsdl2-dev libsdl2-net-dev libsndio-dev libspeechd-dev libtheora-dev libvorbis-dev libvpx-dev zlib1g-dev
+      - name: Call configure
+        run: |
+          ./configure --enable-release --enable-all-engines
+      - name: Build scummvm
+        run: |
+          make -j4
+          make dist-generic DIST_FILES_DOCS="$(echo AUTHORS COPYING COPYRIGHT README.md CONTRIBUTING.md LICENSES/*)"
+      - name: Package
+        run: |
+          name=scummvm-${{ needs.prepare.outputs.version }}-linux-x86_64
+          mv dist-generic/scummvm "dist-generic/$name"
+          tar -C dist-generic -cJf "$name.tar.xz" "$name"
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: scummvm-*.tar.xz
+
+  windows:
+    name: Windows x64
+    needs: prepare
+    if: needs.prepare.outputs.kind != 'none'
+    runs-on: windows-2025-vs2026
+    env:
+      CONFIGURATION: Release
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/.github/vcpkg-ports
+      GIT_VCPKG_COMMIT: 9e593bb18ea69cc5095e012465dcd675a822ed0d
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Install vcpkg
+        uses: lukka/run-vcpkg@v11
+        id: runvcpkg
+        with:
+          vcpkgGitCommitId: ${{ env.GIT_VCPKG_COMMIT }}
+      - name: Integrate vcpkg
+        run: |
+          ${{ steps.runvcpkg.outputs.RUNVCPKG_VCPKG_ROOT_OUT }}/vcpkg integrate install
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ env.GIT_VCPKG_COMMIT }}-x64-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ env.GIT_VCPKG_COMMIT }}-x64-windows-
+      - name: Build create_project
+        run: |
+          cd devtools/create_project/cmake
+          cmake .
+          cmake --build . -j 2
+      - name: Call create_project
+        run: |
+          mkdir build-scummvm
+          cd build-scummvm
+          ../devtools/create_project/cmake/Debug/create_project.exe .. --msvc --vcpkg --enable-all-engines --enable-faad --enable-gif --enable-mikmod --enable-mpeg2 --enable-vpx
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+      - name: Install vcpkg packages
+        run: |
+          vcpkg install
+      - name: Build scummvm
+        run: |
+          cd build-scummvm
+          msbuild scummvm.sln /m /p:VcpkgEnableManifest=true /p:BuildInParallel=true /p:Configuration=${{ env.CONFIGURATION }} /p:PreferredToolArchitecture=x64 /p:Platform=x64 /v:minimal
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "scummvm-${{ needs.prepare.outputs.version }}-windows-x64"
+          New-Item -ItemType Directory -Path $name/doc | Out-Null
+          Copy-Item build-scummvm/${{ env.CONFIGURATION }}x64/scummvm.exe $name/
+          Copy-Item ${{ env.VCPKG_INSTALLED_DIR }}/x64-windows/bin/*.dll $name/
+          Copy-Item AUTHORS, COPYING, COPYRIGHT, README.md, LICENSES/* $name/doc/
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: scummvm-*.zip
+
+  publish:
+    name: Publish
+    needs: [prepare, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      SHA: ${{ needs.prepare.outputs.sha }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: packages
+          merge-multiple: true
+      - name: Publish development build
+        if: needs.prepare.outputs.kind == 'dev'
+        run: |
+          gh release delete dev --cleanup-tag --yes || true
+          gh release create dev packages/* \
+            --target "$SHA" \
+            --prerelease \
+            --title "Development build ($VERSION)" \
+            --notes "Automated development build of master at $SHA. Not intended for general use."
+      - name: Publish stable release
+        if: needs.prepare.outputs.kind == 'stable'
+        run: |
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            gh release upload "$VERSION" packages/* --clobber
+          else
+            gh release create "$VERSION" packages/* \
+              --verify-tag \
+              --latest \
+              --title "$VERSION" \
+              --generate-notes
+          fi
