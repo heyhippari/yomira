@@ -138,6 +138,8 @@ void XexEngine::pauseEngineIntern(bool pause) {
 // Like the original, the pointer hides on keyboard input and comes back when the mouse moves
 bool XexEngine::notifyEvent(const Common::Event &event) {
 	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionAutoMode) {
+		if (_clickGameActive)
+			return true;
 		_autoMode = !_autoMode;
 		if (_indicatorFrame >= 0 && !_showingBacklog)
 			present();
@@ -1059,6 +1061,85 @@ bool XexEngine::showLogo() {
 	return true;
 }
 
+bool XexEngine::runClickGame() {
+	const Common::Array<byte> mask = _scene;
+	auto updateGauge = [&](int score) {
+		if (!score)
+			return;
+		const byte level = MIN(255, 127 + 3 * score);
+		for (int row = scaleMessageY(210); row < scaleMessageY(270); row++) {
+			for (int column = scaleMessageX(13); column < scaleMessageX(19 + 6 * score); column++) {
+				const uint offset = ((_screenHeight - 1 - row) * _screenWidth + column) * 3;
+				if (mask[offset] == 0 && mask[offset + 1] == 2 && mask[offset + 2] == 2) {
+					_scene[offset + 1] = level;
+					_scene[offset + 2] = level;
+				}
+			}
+		}
+	};
+
+	if (_replaying) {
+		updateGauge(CLIP<int>(_script.getVariable(0x1fd), 0, 99));
+		return true;
+	}
+
+	Graphics::Font *clickFont = nullptr;
+	for (uint index = 0; index < ARRAYSIZE(kFontFiles) && !clickFont; index++) {
+		Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(kFontFiles[index]);
+		if (stream)
+			clickFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, scaleMessageY(56), Graphics::kTTFSizeModeCell);
+	}
+	const Graphics::Font *font = clickFont ? clickFont : _font;
+	const char *const labels[] = {
+		"\x82\xe6\x82\xa4\x82\xa2",
+		"\x82\xcd\x82\xb6\x82\xdf\x81\x49",
+		"\x82\xbb\x82\xb1\x82\xdc\x82\xc5\x81\x49"
+	};
+	const uint32 durations[] = {1000, 5000, 2000};
+	auto redraw = [&](uint phase) {
+		Graphics::Surface *screen = g_system->lockScreen();
+		blitBgr(*screen, _scene.data(), 255);
+		const Common::U32String label(labels[phase], Common::kWindows932);
+		for (uint index = 0; index < label.size(); index++)
+			font->drawChar(screen, label[index], scaleMessageX(36 + 56 * index), scaleMessageY(340), _format.RGBToColor(255, 255, 255));
+		g_system->unlockScreen();
+		g_system->updateScreen();
+		_cursorRefreshPending = false;
+	};
+
+	_clickGameActive = true;
+	int score = 0;
+	for (uint phase = 0; phase < ARRAYSIZE(durations) && !interrupted(); phase++) {
+		redraw(phase);
+		const uint32 start = g_system->getMillis();
+		while (!interrupted() && g_system->getMillis() - start < durations[phase]) {
+			const int previous = score;
+			Common::Event event;
+			while (!interrupted() && g_system->getMillis() - start < durations[phase] && g_system->getEventManager()->pollEvent(event)) {
+				if (handleSkipAction(event))
+					continue;
+				if (phase == 1 && event.type == Common::EVENT_LBUTTONUP) {
+					const bool shift = g_system->getEventManager()->getModifierState() & Common::KBD_SHIFT;
+					score = MIN(99, score + (shift ? 2 : 1));
+				}
+			}
+			if (score != previous) {
+				updateGauge(score);
+				redraw(phase);
+			}
+			refreshCursor();
+			g_system->delayMillis(phase == 1 ? 4 : 8);
+		}
+	}
+	_clickGameActive = false;
+	delete clickFont;
+	if (!interrupted()) {
+		_script.setVariable(0x1fd, score);
+		present();
+	}
+	return !interrupted();
+}
+
 bool XexEngine::fadeTo(const Common::Array<byte> &target) {
 	if (_replaying) {
 		_scene = target;
@@ -1470,6 +1551,10 @@ const byte *XexEngine::runCommand(Script &script, const byte *p, const byte *end
 
 	switch (command) {
 	case 'e':
+		if (atoi(args.c_str()) == 12) {
+			runClickGame();
+			break;
+		}
 		if (_replaying)
 			break;
 		if (atoi(args.c_str()) == 1 && (_case266Map || _mhtMap))

@@ -173,6 +173,7 @@ private:
 	void drawBacklogPage(uint start, int pageNumber, int pageCount);
 
 	bool showLogo();
+	bool runClickGame();
 	bool showFullImage(const Common::String &name, bool fade);
 	void stageBackground(const Common::String &name);
 	bool showForeground(const Common::String &args);
@@ -253,12 +254,14 @@ private:
 	// Set while waiting for a click or a menu choice, the points where saving is allowed
 	bool _inputWait = false;
 	bool _showingBacklog = false;
+	bool _clickGameActive = false;
 	// Frame of the click indicator while waiting for a click, -1 when hidden
 	int _indicatorFrame = -1;
 	// Loaded state applied once the interpreter has unwound
 	bool _loadPending = false;
 	Common::Array<byte> _pendingState;
 	uint32 _pendingTextPos = 0;
+	int16 _pendingClickScore = 0;
 	// After loading, the text is run silently up to this offset
 	bool _replaying = false;
 	uint32 _replayEnd = 0;

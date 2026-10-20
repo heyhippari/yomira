@@ -18,6 +18,7 @@ All currently detected releases are Japanese Windows versions.
 | `collection` | Collection ~Shuushuu Sareta Akumu~ | 640x480 |
 | `case266` | Case 266 ~266 Gou Jiken~ | 640x480 |
 | `bokunohimitsutaiken` | Boku no Himitsu Taiken | 640x480 |
+| `theguts` | The Guts! | 640x480 |
 | `koisuruscience` | Koi Suru Science | 640x480 |
 | `mottohimitsutaiken` | Motto! Himitsu Taiken | 640x480 |
 | `boseimamaclub` | Bosei ~Mama Club~ | 640x480 |
@@ -99,7 +100,7 @@ quick save, and quick load.
 
 ### Save Data
 
-- ScummVM save files begin with the big-endian magic `CMPL` and version byte 1, followed by the text position, the resume-state size, and the resume state.
+- ScummVM save files begin with the big-endian magic `CMPL` and version byte 2, followed by the text position, the signed 16-bit click-minigame score, the resume-state size, and the resume state. Version 1 saves remain loadable and default the score to zero.
 - Quick save uses slot 99. Saving is unavailable in the `startup` and `kaisou` scenarios.
 - The `<target>.common` file is 41 bytes. Byte 0 is 1 by default, bytes 1 to 32 hold one bit per gallery CG that has been seen, and bytes 34 to 37 hold the 32 persistent flags.
 
@@ -108,6 +109,79 @@ quick save, and quick load.
 - The non-framed message advance indicator cycles through 8 frames, one every 128 ms. The framed dialogue used by Case 266 cycles through 48 phases, one every 30 ms.
 - Auto mode advances once the voice has finished and at least 128 ms per character shown has passed.
 - Pixel-level layout, such as font size, indicator position, and frame artwork, has not yet been verified against every release.
+
+## The Guts! Clicking Minigame
+
+`%e,12;` starts a modal rapid-click minigame, not a graphics transition.
+The engine implements the timed interaction and exposes the completed score
+through `Script::getValue()` at variable index `0x1fd`.
+
+### Original Behavior
+
+Static analysis of the supplied x86 `XEX.EXE` established the following
+sequence. Times are nominal, derived from the original polling loops:
+
+| Phase | Duration | Behavior |
+| --- | --- | --- |
+| Ready | 1 second | Draw the CP932 label "youi" at (36, 340). |
+| Start | 20 ticks of 250 ms | Draw "hajime!", reset the score to zero, and update the gauge while accepting clicks. |
+| Stop | 2 seconds | Draw "sokomade!", retain the score at the end of the scoring phase, then resume the script. |
+
+These labels mean "Ready", "Start!", and "Stop!". The original draws their
+double-byte characters at 56-pixel horizontal intervals. The ready and stop
+loops sleep for 8 ms per iteration; the scoring loop sleeps for 4 ms.
+
+- Score left-button **releases**, not presses or held-button frames. The
+	scoring branch does not test the pointer position.
+- Each release adds one point, or two while Shift is held (`MK_SHIFT`,
+	`wParam & 4`), capped at 99. Keyboard input does not enter this scoring path.
+- The score is held at executable address `0x442868`. The VM variable resolver
+	exposes its low 16 bits as index `0x1fd` (encoded reference `0xfe02`).
+- The routine snapshots the score before the stop pause and restores that
+	snapshot on completion, so releases during the pause do not change the result.
+- The gauge uses the existing graphics as a mask, recoloring only BGR
+	`(0, 2, 2)` pixels. For nonzero score, it visits 60 rows at screen y 210..269,
+	starting at x 13, and `6 * (score + 1)` columns. Its replacement BGR color is
+	`(0, g, g)`, where `g = min(255, 127 + 3 * score)`, producing yellow in RGB.
+	The invalidated rectangle is `(12, 210, 19 + 6 * score, 270)`.
+
+The six script call sites are in decoded text in `DAY01.MPX` at text-relative
+offsets 56568, 56734, and 56900, and `DAY02.MPX` at 24754, 24920, and 25086.
+Each follows `%gf,ga_clk1,renw;`, `%gf,ga_clk2,renw;`, or
+`%gf,ga_clk3,renw;`, respectively. The script supplies the artwork; the effect
+does not select one of these backgrounds itself.
+
+### Evidence and Implementation Boundary
+
+The analyzed executable has SHA-256
+`a416bb90fb03afb153d8b6f950e759c7aebe3b3c6cd6d930e6d5a26e312cdddb`.
+Addresses below are virtual addresses with image base `0x400000`:
+
+- Effect dispatch: parser `0x4083c0`, `%e` branch `0x408e08`, numeric dispatch
+	`0x408e43`, case 12 at `0x408ea4`, callback `0x4074d0`, and main routine
+	`0x4026e0`. The callback sets modal mode `0x4428e8` to 3 and resumes the
+	script after the routine returns.
+- Input: `WM_LBUTTONUP` (`0x202`) at `0x40bbf2` reaches `0x40c9b7`; modal
+	jump table `0x40d568` maps mode 3 to score increment code `0x40cb65`.
+- Result: resolver `0x4033c0` reads the score for index `0x1fd` at `0x403425`.
+- REA/Ghidra 12.1.2 evidence: effect switch
+	`ev_d2a21afd25a5d9942eb5cd621c40ca635f1943dba2f1da09a3d16054bffff7f5`,
+	main routine
+	`ev_e5090ee7ff118466426347fede959c6f7b0434f39526a3d2346224458f4dc36b`,
+	and result resolver
+	`ev_7527758024da873a5ee382816faea5d58740d4727168601a8b8416993a8e04c5`.
+	Undefined callback and window-procedure boundaries were checked against raw
+	disassembly of the same executable.
+
+The implementation uses a modal event loop with the existing image buffers
+and Japanese font, suppresses normal advance/skip/auto and menu actions, and
+supports quit. Save/load preserves the completed score; replay restores the
+gauge without playing the minigame again. User testing confirmed that the
+minigame works and the game can be completed.
+
+The original-executable investigation is static only and specific to this executable. Original
+Windows execution, actual timing, and pixel-for-pixel rendering have not been
+validated; these findings should not be generalized to every XEX release.
 
 ## References
 

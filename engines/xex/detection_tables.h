@@ -150,6 +150,18 @@ static const XexGameDescription gameDescriptions[] = {
 	},
 	{
 		{
+			"theguts",
+			"Voiced",
+			AD_ENTRY1s("mpx/startup.mpx", "0c21c51a477539dc99488fef7b901c68", 1984),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+				GUIO3(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_NAME_FRAME)
+		},
+		640, 480, kXexEngineXex, false, kKexMenuStyle, kMessageDialogue, 100, true, kC4Gallery, kXexMapNone
+	},
+	{
+		{
 			"koisuruscience",
 			nullptr,
 			AD_ENTRY1s("mpx/startup.mpx", "d5aa4f549eb99b106efc3ce304252251", 1957),

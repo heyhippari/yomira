@@ -225,7 +225,7 @@ int16 Script::getValue(int16 ref) {
 	if (index == 0x1fe)
 		return _globals[index];
 	if (index == 0x1fd)
-		return 0;
+		return _globals[index];
 	if (index >= kFlagBase && index < kFlagBase + kFlagCount)
 		return _flags[index - kFlagBase];
 	// Key states

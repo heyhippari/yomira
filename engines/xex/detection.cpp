@@ -35,6 +35,7 @@ static const PlainGameDescriptor xexGames[] = {
 	{"collection", "Collection ~Shuushuu Sareta Akumu~"},
 	{"case266", "Case 266 ~266 Gou Jiken~"},
 	{"bokunohimitsutaiken", "Boku no Himitsu Taiken"},
+	{"theguts", "The Guts!"},
 	{"koisuruscience", "Koi Suru Science"},
 	{"mottohimitsutaiken", "Motto! Himitsu Taiken"},
 	{"boseimamaclub", "Bosei ~Mama Club~"},

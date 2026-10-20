@@ -29,7 +29,7 @@
 namespace Xex {
 
 enum {
-	kSaveVersion = 1,
+	kSaveVersion = 2,
 	// The original's quick save has its own file next to the 20 numbered slots
 	kQuickSaveSlot = 99
 };
@@ -70,16 +70,23 @@ Common::Error XexEngine::saveGameStream(Common::WriteStream *stream, bool isAuto
 	stream->writeByte(kSaveVersion);
 	// Text position to come back to; zero when waiting in a menu
 	stream->writeUint32LE(_inText ? _textPos : 0);
+	stream->writeSint16LE(_script.getVariable(0x1fd));
 	stream->writeUint32LE(_resumePoint.size());
 	stream->write(_resumePoint.data(), _resumePoint.size());
 	return stream->err() ? Common::kWritingFailed : Common::kNoError;
 }
 
 Common::Error XexEngine::loadGameStream(Common::SeekableReadStream *stream) {
-	if (stream->readUint32BE() != kSaveMagic || stream->readByte() != kSaveVersion)
+	if (stream->readUint32BE() != kSaveMagic)
+		return Common::Error(Common::kReadingFailed, "Unsupported savegame");
+	const byte version = stream->readByte();
+	if (version < 1 || version > kSaveVersion)
 		return Common::Error(Common::kReadingFailed, "Unsupported savegame");
 
 	uint32 textPos = stream->readUint32LE();
+	int16 clickScore = version >= 2 ? stream->readSint16LE() : 0;
+	if (clickScore < 0 || clickScore > 99)
+		return Common::kReadingFailed;
 	uint32 size = stream->readUint32LE();
 	if (stream->err() || size > stream->size() - stream->pos())
 		return Common::kReadingFailed;
@@ -91,6 +98,7 @@ Common::Error XexEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	// The interpreter may be deep inside a text; it unwinds before the state is applied
 	_pendingState = state;
 	_pendingTextPos = textPos;
+	_pendingClickScore = clickScore;
 	_loadPending = true;
 	_script.stop();
 	return Common::kNoError;
@@ -102,6 +110,7 @@ bool XexEngine::applyPendingLoad() {
 	Common::MemoryReadStream stream(_pendingState.data(), _pendingState.size());
 	if (!_script.loadState(stream))
 		return false;
+	_script.setVariable(0x1fd, _pendingClickScore);
 
 	_sceneFull = readString(stream);
 	_sceneBg = readString(stream);
