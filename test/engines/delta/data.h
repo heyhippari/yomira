@@ -394,6 +394,32 @@ public:
 		mask.free();
 	}
 
+	void testFrameTransparencyUsesNativeBlendBranchesAndRounding() {
+		const Graphics::PixelFormat format(4, 8, 8, 8, 0, 16, 8, 0, 0);
+		Graphics::Surface target, color, mask;
+		target.create(4, 1, format);
+		color.create(4, 1, format);
+		mask.create(4, 1, format);
+		color.fillRect(Common::Rect(4, 1), 0xffffff);
+		mask.setPixel(0, 0, 0);
+		mask.setPixel(1, 0, 0x010101);
+		mask.setPixel(2, 0, 0x808080);
+		mask.setPixel(3, 0, 0xffffff);
+		const byte transparency[] = { 0, 128, 255 };
+		const uint32 expected[] = { 0xfefefe, 0xfdfdfd, 0xfefefe };
+		for (uint index = 0; index < ARRAYSIZE(transparency); ++index) {
+			target.fillRect(Common::Rect(4, 1), 0xffffff);
+			TS_ASSERT(Delta::compositeMasked(target, color, mask, nullptr, Common::Point(), transparency[index]));
+			TS_ASSERT_EQUALS(target.getPixel(0, 0), 0xffffffU);
+			TS_ASSERT_EQUALS(target.getPixel(1, 0), expected[index]);
+			TS_ASSERT_EQUALS(target.getPixel(2, 0), 0xfdfdfdU);
+			TS_ASSERT_EQUALS(target.getPixel(3, 0), 0xffffffU);
+		}
+		target.free();
+		color.free();
+		mask.free();
+	}
+
 	void testPartialMaskPlacementAndClipping() {
 		const Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
 		Graphics::Surface target, color, mask;

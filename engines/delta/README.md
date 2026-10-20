@@ -54,6 +54,22 @@ Message text uses the first available Noto CJK font from
 `NotoSerifCJK-Regular.ttc`, at size 24. Place one of these in the game
 directory or in an added search path.
 
+Message frame style and transparency are ScummVM engine settings. Game-specific
+keys are recommended in `scummvm.ini`:
+
+```ini
+[onelover]
+delta_window_style=0
+delta_window_transparency=0
+
+[onegaitasukete]
+delta_window_style=0
+delta_window_transparency=0
+```
+
+`delta_window_style` is clamped to 0-1 (default 0). `delta_window_transparency`
+is clamped to 0-255 (default 0). The original Windows INI is not imported.
+
 ## Controls
 
 The `delta-default` keymap maps:
@@ -123,6 +139,41 @@ The production decoder/parser also reads the second supplied game's `ms.mhu`:
 
 PHM is detected as `onegaitasukete` (Package Edition) using its `PHMN.SD`
 scenario file. The supplied directory contains the original disc contents.
+
+### Native Windows Font Check
+
+Static REA analysis of `OLV_DL.EXE` (SHA-256
+`031aac508a173f698151ac8c35198c1dc1879ed6b61901e88e511bb3fe73eb81`) shows a
+startup check of installed Windows GDI fonts. It is not a game-directory font
+or Noto/`encoding.dat` check.
+
+- `0x426d90` gets the window DC, zeroes a 0x3c-byte `LOGFONTA`, sets `lfCharSet`
+  to `SHIFTJIS_CHARSET` (0x80), and resets `DAT_0067ba70` to 0.
+- For each of the two pointers at `0x466870` and `0x466874`, it calls
+  `EnumFontFamiliesExA` with callback `0x423980` and flags 0. The pointers name
+  the localized MS Gothic and MS Mincho families (Shift-JIS bytes, decoded as
+  full-width names).
+- The callback only increments `DAT_0067ba70` and returns 1. It does not check
+  `FontType` or which family matched.
+- After `ReleaseDC`, a count below 2 shows the message "Font data required for a
+  display is not found." (`0x45c850`) through `0x418990` and returns 0 before
+  `ShowWindow` and the main loop. The trigger is fewer than two total callbacks,
+  not two separate per-family checks, since one family can report several styles.
+- The original code has no fallback enumeration and no `CreateFontA` failure check here.
+
+No Windows runtime run was performed, and the host state is unknown. Practical
+troubleshooting inference, not a verified fix: install the Windows Optional
+Feature "Japanese Supplemental Fonts," which Microsoft lists as providing MS
+Gothic and MS Mincho ([Windows missing fonts](https://learn.microsoft.com/windows/deployment/windows-missing-fonts)).
+If the check still fails, check the Japanese non-Unicode (ANSI) code page and the
+beta UTF-8 option, because the names pass through the A API
+([EnumFontFamiliesExA](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-enumfontfamiliesexa)).
+
+Evidence records:
+
+- Startup check: `ev_595f600ea67f890da5643a9786ab3d4a2f6dcdd36901c474f9c39818e5871afa`
+- Callback: `ev_c8fcfdc1cfb1f42270544a4ab5fa3f331f1246c7ceba8b6bc50a0f89d08a998b`
+- Font-name bytes: `ev_dd6d3a7ac33202b7d73f862a9a93cd0462dd68eb9e2699fd7c5be7acffc9f233`
 
 ## IAF Images
 
@@ -245,13 +296,17 @@ REA/Ghidra analysis of the One Lover executable above establishes:
 - `0x420790` also uses `WAKUB` during refresh. `0x420950` contains window
   movement and text redraw paths; these are not reproduced by static framing.
 
-Following the game-developer agent's design, Delta caches separate narration
-and named-dialogue frame surfaces, preserves the masks at 24-bit precision,
-and composites onto the clean scene snapshot on every page. It uses style 0
-and transparency 255, matching the supplied One Lover preferences
-(`WINDWALLP=0`, `WINDWPNTR=255`), without importing or changing the Windows
-INI. Speaker zero does not draw a name. Transparent framing alone is not the
-original text presentation: the first implementation omitted the text-shadow
+Following the game-developer agent's design, Delta caches four frame surfaces
+(`WAKU00`, `WAKU01`, `WAKU10`, and `WAKU11`), selected by
+`style * 2 + (speaker > 0 ? 1 : 0)`. Each is loaded from `CG/ST.CGF` as
+`WAKU%u%u` using `frame / 2` and `frame % 2`, keeps its stored origin and
+24-bit masks, and is composited onto the clean scene snapshot on every page.
+Style and transparency come from the ScummVM keys under Build And Setup, with
+port defaults of 0 and 0. Transparency 0 is an intentional, visible, almost
+opaque frame; it is not a claimed native default. The supplied One Lover
+preferences (`WINDWALLP=0`, `WINDWPNTR=255`) are historical evidence of the
+original settings and are not imported. Speaker zero does not draw a name.
+Transparent framing alone is not the original text presentation: the first implementation omitted the text-shadow
 pass and consequently left white glyphs without sufficient contrast.
 
 Message tokens are read in order. `N` or `n` sets the speaker index, and speaker
@@ -276,19 +331,21 @@ The follow-up REA investigation establishes the missing effect:
   glyph and adjusts edge coverage; `0x40f180` smooths a native-size glyph.
 - The supplied preferences enable `FONTSHADOW=1` and `FONTSMTH=1`.
   `CCOLOR=16777215,0` supplies white foreground and black secondary color.
-  Thus an invisible window interior is not evidence that plain white text is
-  faithful to this configuration.
+  Thus a hidden window frame is not evidence that plain white text is
+  faithful to this configuration. Transparency hides the whole mask-controlled
+  panel, not only its interior.
 
 Following the game-developer agent's correction design, both speaker names
 and dialogue now use a shared black (2, 2) shadow pass followed by white text,
 without moving the foreground, changing wrapping, or darkening the scene.
 Noto's antialiasing, metrics, and regular weight remain approximations of the
 Windows glyph rasterizer and fonts. Alternate outline mode, per-state text
-colors, preference controls, alternate window styles, window animation, and
-wait-indicator behavior remain unimplemented. This investigation is static
-evidence from One Lover, not a
-runtime comparison with the original Windows renderer or an independent
-verification of the packed second game's drawing code.
+colors, WAKU20/WAKU21 override, window animation, and wait-indicator behavior
+remain unimplemented. Window styles 0 and 1 are implemented; runtime graphical
+preference controls are not. This investigation is static
+evidence from One Lover, not a runtime comparison with the original Windows
+renderer or an independent verification of the packed second game's drawing
+code.
 
 REA evidence records:
 
@@ -302,6 +359,88 @@ REA evidence records:
 - Smoothed text and speaker-name shadow: `ev_b91ee5b74bc8f68a1d7fd3f803b9ea17d6aaa3c942e9243165141a116ce4ddfa`
 - Supersampled glyph raster: `ev_6ab7cb56a5c9c06bd83b755e28369f90382aa589049d056a9b44a9c817ea9a62`
 - Native-size glyph raster: `ev_b9a13166610380c49cd35c40702ce236e628b419689989071c7063839ce528b5`
+
+### Window Transparency Follow-up
+
+This follows static REA analysis of the One Lover executable (SHA256
+`031aac508a173f698151ac8c35198c1dc1879ed6b61901e88e511bb3fe73eb81`) and offline
+decoding of the supplied assets. No native game was run and no runtime
+screenshot was taken.
+
+- Preference path: the loader at `0x410ab0` sets a special flag when the asset
+  basename starts with `WAKU`. `0x423e70` reads the saved transparency with
+  `atol` directly, `0x42e150` applies options without inversion, and the slider
+  at `0x42ee20` ranges from 0 to 255. The supplied `WINDWPNTR=255` is the value
+  saved in the supplied One Lover INI; it is not a native default.
+- Compositing: `0x415f40` copies the source for raw mask 0 and the destination
+  for raw mask 255. For intermediate mask 1, the mask is replaced by the
+  transparency value (`DAT_0068758c`), then blended as
+  `floor(D*T/256) + floor(S*(255-T)/256)`, with each product shifted right by 8
+  before the sum. D is the scene and S is the frame. `compositeMasked` now
+  follows this order: raw 0 copies the source, raw 255 preserves the
+  destination, and mask 1 is substituted before the intermediate blend. At
+  substituted endpoints this gives T=0 `floor(S*255/256)` and T=255
+  `floor(D*255/256)`. Unlike the old port, substituted endpoints are not treated
+  as raw-mask copy/preserve shortcuts.
+- Whole panel: each game's `WAKU00`, `WAKU01`, `WAKU10`, and `WAKU11` is 792x132
+  at origin 0,0. All eight color BMPs from the two supplied `CG/ST.CGF` files are
+  byte-identical (SHA256 `f4d83f658d7b6764282da7aea4d0c426e64804b1736fb308b8c280e5884329bd`),
+  and all eight masks are byte-identical (SHA256
+  `0463178bf173e752e0803384ddad3a988e14f3f0d2dbb97ab9d1fe51d54c6500`). Each mask
+  uses an 8-bit identity gray palette, and all 104544 pixels map to index 1,
+  RGB(1,1,1). Transparency therefore controls the entire panel, including the thin
+  light border and top-right close box, not only the interior. The color art has
+  a black interior (100768 black pixels). Hiding the frame blends the art out; it
+  does not remove art from the asset.
+- Other asset: `CG/WAKUB.IAF` decodes to 560x32. `0x420790` loads it through
+  `0x414c60` into buffer 1, while the main masked frame is drawn to destination
+  -2. Its artwork is a control-button strip, not the full panel, and its other
+  uses are not all known.
+- Implementation: `delta.cpp` reads `delta_window_style` and
+  `delta_window_transparency` from ScummVM configuration. Original INI import and
+  runtime preference controls are not implemented. PHM settings are not inferred
+  from One Lover.
+- Verification: the current build compiles, and the unit tests
+  `testFrameTransparencyUsesNativeBlendBranchesAndRounding`,
+  `testFrameTransparencyPreservesMaskPrecision`, and
+  `testPartialMaskPlacementAndClipping` pass. `make -j2 test` passes all 519
+  configured tests. Real-data One Lover runs reach the first named dialogue
+  page and load `WAKU01` at default settings and `WAKU11` with style 1 and
+  transparency 128. Screenshots confirm the 792x132 panel at (4,468), with
+  visible border and text over opaque and translucent backgrounds respectively.
+  Narration variants and PHM dialogue were not checked in these runtime runs.
+- PHM: the executable (SHA256 `997ab8f035690302c85410dab4a568c1fa7bc819253c7101f93c67c5e6e56523`)
+  is packed and not recognized by the installed UPX (`upx -t` rejected it).
+  REA finds 27 procedures. Its
+  entry at `0x43efd3` goes to self-modifying code at `0xbac000`, which reaches
+  `0xbac111` and a page transform at `0x6e5000`. An offline partial decoding
+  probe did not establish unpacked renderers. A recursive inventory of the game
+  tree found no PHM INI. The shared art supports a shared-asset inference only;
+  PHM's compositor and default transparency are not independently verified.
+- Alternate NoDVD PHM: `PHM.EXE` (SHA256
+  `99382a9c429b2ce8d4233ad7094f31ef93e8f2928da333f941e9517a85749cb5`, 5287936
+  bytes, same size as the original) reports the same 27 procedures. Its entry at
+  `0x43efd3` still calls `0xbac000`, and `0xbac111` has the same decoding stub as
+  the original. A read-only byte comparison finds exactly 3 differing bytes, at
+  file offsets `0x265083`-`0x265085`; all other bytes are identical. It is not an
+  unpacked executable, and PHM's compositor and default transparency remain
+  unresolved.
+
+Evidence records for this follow-up:
+
+| Finding | Evidence record |
+| --- | --- |
+| WAKU loader flag | `ev_65ad176e23a64dcb6a08469a4f9e670e090c14ff0c147a5200b3c59feb64c9cb` |
+| Saved preference loader | `ev_4074293a557b03f9a7691fe77b128e3aadaaa33b16f356041e62cd794c1191f9` |
+| Options apply | `ev_b19ec9498158d7103778c88e8685c6176c2cf9aff03ab6d49b8deb12dbdcd9fc` |
+| Transparency slider | `ev_38be6e706ca513178ed9e44694a7a5b2f44d69d0e13f0acf63cde5ac11deb4a2` |
+| WAKUB buffer load | `ev_83af6d4d47b015d4306a647b7355d88ac4a55a54ce298e27c6a520af1f9ca26d`, `ev_0aebbfa05a48d7f055fe677c0074fa92dbecaefaeea6e6672c1dec2a000ad041` |
+| PHM entry | `ev_9446bd4ffed61469add993a64e2f9312858b932d1ad1c4a6495e3b27ac64780a` |
+| Alternate NoDVD PHM overview | `ev_a1bdf7e809b7a3cd8582af9ba62888e1a572ca626986854b1636e9867c6c9b9e` |
+| Alternate NoDVD PHM entry and decoding stub | `ev_24111d9e4f17c9b6d31120c70c334162960ed0411b30994b25e18b64eb58ebd4`, `ev_33effcb39e48640d08675b33757b619f4a1582f5ee578891b28afd6b6f2dbfaf` |
+
+The stored-origin and mask compositing record above also applies to the
+compositing bullet.
 
 ## Menu And Save Integration
 

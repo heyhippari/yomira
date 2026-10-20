@@ -82,9 +82,11 @@ private:
 	Common::Array<byte> _titleState;
 	Graphics::Font *_messageFont = nullptr;
 	Graphics::Surface _messageBackground;
-	Graphics::Surface _messageFrameColor[2];
-	Graphics::Surface _messageFrameMask[2];
-	Common::Point _messageFramePosition[2];
+	Graphics::Surface _messageFrameColor[4];
+	Graphics::Surface _messageFrameMask[4];
+	Common::Point _messageFramePosition[4];
+	byte _messageFrameStyle = 0;
+	byte _messageFrameTransparency = 0;
 	Common::StringArray _messageTokens;
 	uint _messageTokenIndex = 0;
 	Common::Array<Common::U32String> _messageLines;

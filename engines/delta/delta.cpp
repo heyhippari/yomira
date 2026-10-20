@@ -85,6 +85,10 @@ Common::Error DeltaEngine::initialize() {
 	_cursorInstalled = true;
 	_input.setMousePosition(_system->getEventManager()->getMousePos());
 	syncSoundSettings();
+	if (ConfMan.hasKey("delta_window_style"))
+		_messageFrameStyle = CLIP(ConfMan.getInt("delta_window_style"), 0, 1);
+	if (ConfMan.hasKey("delta_window_transparency"))
+		_messageFrameTransparency = CLIP(ConfMan.getInt("delta_window_transparency"), 0, 255);
 
 	Common::File file;
 	if (!file.open("ms.mhu"))
@@ -344,7 +348,7 @@ Common::Error DeltaEngine::presentMessage() {
 	}
 	if (text.empty())
 		return Common::kNoError;
-	const Common::Error frameResult = loadMessageFrame(_speaker > 0 ? 1 : 0);
+	const Common::Error frameResult = loadMessageFrame(_messageFrameStyle * 2 + (_speaker > 0 ? 1 : 0));
 	if (frameResult.getCode() != Common::kNoError)
 		return frameResult;
 	if (!_messageVisible)
@@ -368,7 +372,7 @@ Common::Error DeltaEngine::loadMessageFrame(uint frame) {
 	Common::File bank;
 	if (!bank.open("CG/ST.CGF"))
 		return Common::Error(Common::kNoGameDataFoundError, "CG/ST.CGF");
-	const Common::String name = Common::String::format("WAKU0%u", frame);
+	const Common::String name = Common::String::format("WAKU%u%u", frame / 2, frame % 2);
 	const Graphics::PixelFormat format(3, 8, 8, 8, 0, 16, 8, 0, 0);
 	Graphics::Surface color;
 	if (!readSpriteBankImage(bank, name, color, _messageFrameMask[frame], format, &_progress, &_messageFramePosition[frame])) {
@@ -392,10 +396,10 @@ Common::Error DeltaEngine::loadMessageFrame(uint frame) {
 
 void DeltaEngine::drawMessagePage() {
 	_screen->blitFrom(_messageBackground);
-	const uint frame = _speaker > 0 ? 1 : 0;
+	const uint frame = _messageFrameStyle * 2 + (_speaker > 0 ? 1 : 0);
 	const Common::Point position(_configuration.messageRect.left + _messageFramePosition[frame].x,
 		_configuration.messageRect.top + _messageFramePosition[frame].y);
-	compositeMasked(*_screen->surfacePtr(), _messageFrameColor[frame], _messageFrameMask[frame], nullptr, position, 255);
+	compositeMasked(*_screen->surfacePtr(), _messageFrameColor[frame], _messageFrameMask[frame], nullptr, position, _messageFrameTransparency);
 	const int left = _configuration.textPosition.x;
 	const int right = _configuration.messageRect.right - 8;
 	int top = _configuration.textPosition.y;

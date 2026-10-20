@@ -317,16 +317,16 @@ bool compositeMasked(Graphics::Surface &destination, const Graphics::Surface &co
 			const uint32 opacity = mask.getPixel(sourceX, sourceY);
 			mask.format.colorToRGB(opacity, red, green, blue);
 			const uint32 maskValue = red == 1 ? frameTransparency : red;
-			if (!maskValue) {
+			if (!red) {
 				destination.setPixel(column, row, color.getPixel(sourceX, sourceY));
-			} else if (maskValue != 255) {
+			} else if (red != 255) {
 				byte oldRed, oldGreen, oldBlue, newRed, newGreen, newBlue;
 				destination.format.colorToRGB(destination.getPixel(column, row), oldRed, oldGreen, oldBlue);
 				color.format.colorToRGB(color.getPixel(sourceX, sourceY), newRed, newGreen, newBlue);
 				destination.setPixel(column, row, destination.format.RGBToColor(
-					(oldRed * maskValue + newRed * (255 - maskValue)) >> 8,
-					(oldGreen * maskValue + newGreen * (255 - maskValue)) >> 8,
-					(oldBlue * maskValue + newBlue * (255 - maskValue)) >> 8));
+					((oldRed * maskValue) >> 8) + ((newRed * (255 - maskValue)) >> 8),
+					((oldGreen * maskValue) >> 8) + ((newGreen * (255 - maskValue)) >> 8),
+					((oldBlue * maskValue) >> 8) + ((newBlue * (255 - maskValue)) >> 8)));
 			}
 		}
 	}
