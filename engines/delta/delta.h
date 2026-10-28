@@ -30,6 +30,7 @@
 
 #include "delta/data.h"
 #include "delta/input.h"
+#include "delta/options.h"
 #include "delta/script.h"
 
 struct ADGameDescription;
@@ -97,6 +98,15 @@ private:
 	bool _messageBoundary = false;
 	uint32 _nextInputUpdate = 0;
 	uint32 _nextPresent = 0;
+	OptionsSettings _settings;
+	OptionsScreen _options;
+	bool _optionsActive = false;
+	bool _optionsDirty = false;
+	int _optionsLoadedPage = -1;
+	Graphics::Surface _optionsImages[3];
+	Graphics::Surface _optionsThumb, _optionsThumbMask;
+	Graphics::Surface _optionsDigits, _optionsDigitsMask;
+	Graphics::Font *_optionsFont = nullptr;
 
 	Common::Error initialize();
 	Common::Error loadImage(const Common::String &name, Graphics::Surface &image);
@@ -120,6 +130,15 @@ private:
 	Common::Error loadMessageFrame(uint frame);
 	void drawMessagePage();
 	void advanceMessage();
+	Graphics::Font *loadFont(int size);
+	void loadSettings();
+	void saveSettings();
+	bool openOptions();
+	bool loadOptionsPage();
+	void closeOptions();
+	void drawOptions();
+	void drawDisplayOptions();
+	void handleOptionsInput(const Common::Event &event);
 
 protected:
 	Common::Error run() override;

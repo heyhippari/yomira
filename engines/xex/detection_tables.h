@@ -271,6 +271,18 @@ static const XexGameDescription gameDescriptions[] = {
 		800, 600, kXexEngineC4, true, kPlainC4MenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
 	},
 	{
+		{
+			"thegutsmaximummaternity",
+			nullptr,
+			AD_ENTRY1s("mpx/startup.mpx", "4ebdaa659dd032f2ed27fe21ca06e59e", 3183),
+			Common::JA_JPN,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+				GUIO4(XEX_GUIO, GUIO_MIDIGM, GAMEOPTION_MIDI_MUSIC, GAMEOPTION_NAME_FRAME)
+		},
+		640, 480, kXexEngineXex, true, kMattyMenuStyle, kMessageDialogue, 100, false, kC4Gallery, kXexMapNone
+	},
+	{
 		AD_TABLE_END_MARKER,
 		0, 0, kXexEngineC4, false, {}, kMessageDialogue, 0, false, {}, kXexMapNone
 	}

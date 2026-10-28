@@ -52,7 +52,7 @@ endif
 
 ifeq ($(ENABLE_DELTA), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/delta/*.h
-	TEST_LIBS := engines/delta/data.o engines/delta/script.o $(TEST_LIBS)
+	TEST_LIBS := engines/delta/data.o engines/delta/script.o engines/delta/options.o $(TEST_LIBS)
 endif
 
 ifeq ($(ENABLE_ILLUSION), STATIC_PLUGIN)

@@ -23,7 +23,6 @@
 #include "delta/detection.h"
 #include "delta/console.h"
 #include "common/debug.h"
-#include "common/archive.h"
 #include "common/events.h"
 #include "common/file.h"
 #include "common/config-manager.h"
@@ -36,7 +35,6 @@
 #include "gui/chooser.h"
 #include "gui/message.h"
 #include "graphics/cursorman.h"
-#include "graphics/fonts/ttf.h"
 
 namespace Delta {
 
@@ -51,6 +49,13 @@ DeltaEngine::~DeltaEngine() {
 	}
 	delete _script;
 	delete _messageFont;
+	delete _optionsFont;
+	for (uint state = 0; state < ARRAYSIZE(_optionsImages); ++state)
+		_optionsImages[state].free();
+	_optionsThumb.free();
+	_optionsThumbMask.free();
+	_optionsDigits.free();
+	_optionsDigitsMask.free();
 	_messageBackground.free();
 	for (uint frame = 0; frame < ARRAYSIZE(_messageFrameColor); ++frame) {
 		_messageFrameColor[frame].free();
@@ -89,6 +94,7 @@ Common::Error DeltaEngine::initialize() {
 		_messageFrameStyle = CLIP(ConfMan.getInt("delta_window_style"), 0, 1);
 	if (ConfMan.hasKey("delta_window_transparency"))
 		_messageFrameTransparency = CLIP(ConfMan.getInt("delta_window_transparency"), 0, 255);
+	loadSettings();
 
 	Common::File file;
 	if (!file.open("ms.mhu"))
@@ -310,16 +316,10 @@ void DeltaEngine::drawMenu() {
 }
 
 Common::Error DeltaEngine::presentMessage() {
-	if (!_messageFont) {
-		const char *const names[] = { "NotoSansCJK-Regular.ttc", "NotoSansCJKjp-Regular.otf", "NotoSerifCJK-Regular.ttc" };
-		for (uint index = 0; index < ARRAYSIZE(names) && !_messageFont; ++index) {
-			Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(names[index]);
-			if (stream)
-				_messageFont = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 24, Graphics::kTTFSizeModeCharacter);
-		}
-		if (!_messageFont)
-			return Common::Error(Common::kNoGameDataFoundError, "A Japanese Noto CJK font is required in the game or extra path");
-	}
+	if (!_messageFont)
+		_messageFont = loadFont(24);
+	if (!_messageFont)
+		return Common::Error(Common::kNoGameDataFoundError, "A Japanese Noto CJK font is required in the game or extra path");
 	Common::U32String text;
 	bool boundary = false;
 	while (_messageTokenIndex < _messageTokens.size()) {
@@ -405,6 +405,8 @@ void DeltaEngine::drawMessagePage() {
 	int top = _configuration.textPosition.y;
 	const uint32 foreground = _screen->format.RGBToColor(255, 255, 255);
 	const uint32 shadow = _screen->format.RGBToColor(0, 0, 0);
+	const uint32 textColor = _settings.colors[0];
+	const uint32 text = _screen->format.RGBToColor(textColor >> 16, (textColor >> 8) & 0xff, textColor & 0xff);
 	Common::HashMap<Common::String, Common::StringArray>::const_iterator names = _configuration.stringTables.find("//NameStr");
 	if (names != _configuration.stringTables.end() && _speaker > 0 && _speaker < (int)names->_value.size())
 		drawShadowedString(*_messageFont, *_screen, names->_value[_speaker].decode(Common::kWindows932),
@@ -412,8 +414,11 @@ void DeltaEngine::drawMessagePage() {
 			foreground, shadow);
 	const int lineHeight = MAX(1, _messageFont->getFontHeight());
 	while (_messageLineIndex < _messageLines.size() && top + lineHeight <= _configuration.messageRect.bottom) {
-		drawShadowedString(*_messageFont, *_screen, _messageLines[_messageLineIndex++], left, top, right - left,
-			foreground, shadow);
+		if (_settings.fontShadow)
+			drawShadowedString(*_messageFont, *_screen, _messageLines[_messageLineIndex], left, top, right - left, text, shadow);
+		else
+			_messageFont->drawString(_screen, _messageLines[_messageLineIndex], left, top, right - left, text);
+		++_messageLineIndex;
 		top += lineHeight;
 	}
 	_messageWaiting = _messageBoundary || _messageLineIndex < _messageLines.size();
@@ -585,12 +590,14 @@ void DeltaEngine::activateMenuItem(int item) {
 	case 1:
 		loadGameDialog();
 		break;
-	case 2: {
-		GUI::ConfigDialog dialog;
-		runDialog(dialog);
-		syncSoundSettings();
+	case 2:
+		if (!openOptions()) {
+			GUI::ConfigDialog dialog;
+			runDialog(dialog);
+			syncSoundSettings();
+			loadSettings();
+		}
 		break;
-	}
 	case 3: {
 		GUI::MessageDialog dialog(_("Quit this game?"), _("Quit"), _("Cancel"));
 		if (runDialog(dialog) == GUI::kMessageOK)
@@ -610,7 +617,7 @@ void DeltaEngine::activateMenuItem(int item) {
 	}
 	_uiBusy = false;
 	CursorMan.showMouse(_input.mouseActive());
-	if (_atMenu)
+	if (_atMenu && !_optionsActive)
 		drawMenu();
 }
 
@@ -621,6 +628,10 @@ void DeltaEngine::handleInput(const Common::Event &event) {
 	}
 	if (_uiBusy || _loadPending)
 		return;
+	if (_optionsActive) {
+		handleOptionsInput(event);
+		return;
+	}
 	if (_messageWaiting && (event.type == Common::EVENT_LBUTTONUP ||
 		(event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionSelect))) {
 		advanceMessage();
@@ -671,7 +682,9 @@ bool DeltaEngine::pollInput() {
 		handleInput(event);
 	}
 	// The redraw depends only on the final hover state, so it runs once per drained burst
-	if (_menuDirty && _atMenu && !_uiBusy) {
+	if (_optionsActive && _optionsDirty && !_uiBusy) {
+		drawOptions();
+	} else if (_menuDirty && _atMenu && !_uiBusy && !_optionsActive) {
 		_menuDirty = false;
 		drawMenu();
 	}

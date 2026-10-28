@@ -12,8 +12,8 @@ Both detected games execute their startup scenarios through the logos and
 warning screens to the title menu, using their original artwork at 800x600.
 Menu button hover states are drawn from the original sprite sheets. Mouse
 release on the pressed row and mapped Select actions activate menu options.
-Load uses ScummVM's chooser, Settings uses its in-game options dialog, and Quit
-asks for confirmation. Extras presents the three mode choices, but the gallery,
+Load uses ScummVM's chooser, Settings opens a reconstruction of the original
+three-page options screen (see Options Screen), and Quit asks for confirmation. Extras presents the three mode choices, but the gallery,
 scene replay, and music room themselves are not implemented. Start feeds the
 original menu-result variable and resumes the scenario. One Lover has been
 exercised through opening scenes with Japanese text pages, character poses,
@@ -54,8 +54,9 @@ Message text uses the first available Noto CJK font from
 `NotoSerifCJK-Regular.ttc`, at size 24. Place one of these in the game
 directory or in an added search path.
 
-Message frame style and transparency are ScummVM engine settings. Game-specific
-keys are recommended in `scummvm.ini`:
+Message frame style and transparency are ScummVM engine settings. The title
+menu's Settings screen edits the transparency and the other original options
+(see Options Screen). Game-specific keys are recommended in `scummvm.ini`:
 
 ```ini
 [onelover]
@@ -82,6 +83,10 @@ The `delta-default` keymap maps:
 - Game menu: F5 or joystick Start. Opens ScummVM's main menu.
 - Left mouse: a press and release on the same menu row activates it; a left
   click advances a waiting message page.
+- On the options screen, the mouse behaves as in the original. Up/Down moves a
+  focus outline between controls, Left/Right moves it sideways or steps a
+  focused slider, Select activates the focused control, and Back / Cancel
+  closes the screen without saving the current page.
 
 Keyboard and controller input hide the pointer, and mouse input shows it again.
 Joystick axes use a ±8000 deadzone.
@@ -100,6 +105,10 @@ Joystick axes use a ±8000 deadzone.
   adjustment is selected when the engine creates the interpreter.
 - `saveload.cpp` serializes and validates ScummVM save payloads. The runtime
   currently applies them only at supported title-menu checkpoints.
+- `options.cpp` holds the recovered options-page tables and the
+  hit-test, radio, slider, and page-switch behaviour, independent of the
+  engine. `optionsmenu.cpp` loads the page artwork, draws the screen, routes
+  input, and stores settings through `ConfMan`.
 - `input.h` tracks pointer activity; `metaengine.cpp` registers engine
   features and keymaps; `detection.cpp` and `detection_tables.h` identify game
   releases; `console.cpp` provides the engine debugger command.
@@ -336,13 +345,15 @@ The follow-up REA investigation establishes the missing effect:
   panel, not only its interior.
 
 Following the game-developer agent's correction design, both speaker names
-and dialogue now use a shared black (2, 2) shadow pass followed by white text,
+and dialogue use a shared black (2, 2) shadow pass followed by the foreground
+text. Speaker names are white. Dialogue uses the options screen's normal text
+color (`CCOLOR`, default white), and its shadow pass follows the shadow option,
 without moving the foreground, changing wrapping, or darkening the scene.
 Noto's antialiasing, metrics, and regular weight remain approximations of the
 Windows glyph rasterizer and fonts. Alternate outline mode, per-state text
 colors, WAKU20/WAKU21 override, window animation, and wait-indicator behavior
-remain unimplemented. Window styles 0 and 1 are implemented; runtime graphical
-preference controls are not. This investigation is static
+remain unimplemented. Window styles 0 and 1 are implemented, but the options
+screen does not offer a style choice (`WINDWALLP` is not on it). This investigation is static
 evidence from One Lover, not a runtime comparison with the original Windows
 renderer or an independent verification of the packed second game's drawing
 code.
@@ -448,10 +459,12 @@ Both supplied scripts use menu opcode `0x67` (PHM raw `0x66`) with destination
 variable 6. Menu rows are zero-based internally, and the scenario sees the
 one-based result. Start sets the result variable to 1 and resumes the scenario.
 Load, Settings, and Quit are handled by the port and do not set the variable.
+Settings opens the Options Screen below. If its artwork cannot be loaded, it
+falls back to ScummVM's options dialog.
 One Lover has five buttons, so result 5 enters Extras and there is no result 6.
 PHM has six buttons: result 5 has no action (the menu stays open), and result 6
-enters Extras. The UI uses ScummVM dialogs for the host
-operations instead of recreating the original Windows save/options screens.
+enters Extras. Load and Quit use ScummVM dialogs instead of recreating the original Windows
+screens.
 
 The native handler entries inspected for these branches are `0x40407b` (load),
 `0x408747` (options), and `0x401e2f` (exit). The original save/load implementation
@@ -488,6 +501,166 @@ REA evidence records:
 - Menu asset references: `ev_dc07aa706b7fda6617b35c551866a2c215991f6ec8bad5adcd2f14e5012d9c72`
 - Packed PHM overview: `ev_5a637af28131e3cfbf5a2cfc55351273299604f7b48bc88f5e01c791a15ebf77`
 
+## Options Screen
+
+### Recovered Original Behaviour
+
+The original options screen is drawn in the game window, not built from Win32
+dialog controls. `OLV_DL.EXE` still contains a `SYSTEMオプション` dialog
+template (resource 403). Most of its controls have no `WS_VISIBLE` style, and
+no code path to it was found in this investigation. It is not the screen
+players see. Static REA/Ghidra analysis of `OLV_DL.EXE` (SHA-256
+`031aac508a173f698151ac8c35198c1dc1879ed6b61901e88e511bb3fe73eb81`) recovered
+the following. No native game was run.
+
+- Three pages are separate objects with constructors `0x42ee20` (display,
+  mode 0x16), `0x431510` (sound, mode 0x17), and `0x431d90` (controls,
+  mode 0x15). Each loads `MENUS_x1` (normal), `MENUS_x2` (selected), and
+  `MENUS_x3` (hover) for x = `D`, `N`, or `Y`. These are full 800x600 images
+  from `CG/EVB.CGF`. PHM ships them as loose IAF files, and its sound page as
+  `MENUS_N1A`-`MENUS_N3A` (an alternative `B` set is also present).
+- `0x42d540` builds a list of 36-byte control records from three static
+  tables: rectangles (x, y, width, height), types, and (count, first) groups.
+  Type 1 is a push button, 2 a radio button within its group, and 4 a slider.
+  One Lover's tables are display `0x465848`/`0x465ab8`/`0x465b38` (31
+  controls, 17 groups), sound `0x465e68`/`0x466200`/`0x4662b8` (46, 34), and
+  controls `0x4663e0`/`0x466628`/`0x4666a0` (29, 12). They are transcribed in
+  `options.cpp`.
+- Drawing (`0x42d3b0`-`0x42d450`): a selected radio button copies its
+  rectangle from the selected image. Hovering a push button or an unselected
+  radio button copies it from the hover image. Otherwise the normal image is
+  shown.
+- Input: `0x42dbe0` is the first-match hit test. `0x42dc80` (button down)
+  starts a slider drag only on the 16-pixel thumb. `0x42ddc0` (move) drags the
+  slider and updates hover. `0x42dcd0` (button up) ends a drag, selects an
+  unselected radio button (a selected one does nothing), returns push buttons,
+  or steps a slider when the click lands beside its thumb.
+- Sliders (`0x432570`-`0x4329b0`): the thumb is the `CURSOR` sprite in
+  `CG/ST.CGF`, drawn at x + (value - min) x (width - 16) / (max - min). The
+  step is range / 16 when that divides evenly (a range of 255 counts as 256),
+  otherwise range / 8, otherwise range / 10. A click left of the thumb steps
+  down to the previous multiple of the step. A click right of it steps up with
+  the original's rounding, which can skip a step from an unaligned value.
+- Each page's click handler (`0x42f200`, `0x431b60`, `0x4323e0`) maps a control
+  back to its group. Tabs apply the page and open another page (routed by
+  `0x42b7e0`). 決定 (OK) applies and closes, 取り消し (Cancel) closes, and
+  初期化 (Reset) restores only that page's defaults (`0x42ec70`, `0x430e30`,
+  `0x432160`). Applying (`0x42e150`, `0x431270`, `0x432250`) writes changed
+  values to the `[OPTION]` INI keys through `0x418810`.
+- Display-page extras: `0x42e9d0` fills three 32x24 color swatches and shows
+  "文字色/テスト" in the selected color, in 18-pixel heavy type in the
+  four-diagonal outline mode. `0x42e4c0` shows "文字に影有無テスト" with the
+  (2, 2) shadow. `0x42e5a0` draws the transparency percentage
+  (T x 100 / 255) with glyphs from the `MENUSYS1B1` sheet. The native code
+  addresses that sheet bottom-up, so digit d starts at top-down row
+  252 + 24d. `0x4143b0` darkens the sample picture by T / 256 per channel,
+  which is how a black window interior blends at transparency T.
+- The controls page keeps at least one of the wheel and right-click bindings
+  on メニュー (`0x4320f0`, `0x432120`). The display page refuses
+  `DXSHOW` changes during backlog or rewind. The port has no backlog or
+  rewind, so that restriction never applies.
+
+| Page | Original control | INI key | Reset value |
+| --- | --- | --- | --- |
+| Display | Fullscreen / window | `FULLSCREEN` | window |
+| Display | Text colors (normal, read, backlog) | `CCOLOR`, `KCOLOR`, `RCOLOR` | FFFFFF, FFFFC0, 00FFFF (RGB) |
+| Display | Text speed, auto-advance speed | `SPEED`, `ASPEED` | normal |
+| Display | Cross-section view (OLV) / movie playback (PHM) | `NOMOVIE` | on |
+| Display | Screen effects: normal, fast, off | `EFFECT` (1, 2, 0) | normal |
+| Display | Antialiasing, text shadow | `FONTSMTH`, `FONTSHADOW` | on, on |
+| Display | Window transparency, 0-255 | `WINDWPNTR` | 128 |
+| Display | Wheel: backlog/rewind (OLV) / DirectShow (PHM) | `DXSHOW` | first choice |
+| Sound | Master, voice-ducking sliders, 0-100 | `VOLUMEALL`, `VOLUMEDWN` | 100, 71 |
+| Sound | Music, effect sliders, -30-0 dB | `VOLUMEMUS`, `VOLUMESND` (x100) | -9 dB |
+| Sound | Voice slider, 0-100 | `VOLUMEVIC` | 81 |
+| Sound | Music, effect, voice on/off | `BGM`, `SE`, `VOICE` | on |
+| Sound | Voice interruption, DirectSound | `VOICECUT`, `DSNOUSE` | on, unchanged |
+| Sound | Per-character voice on/off and volume | `VOLUMEC01`... | on, 0 dB |
+| Controls | Skip unread, skip read | `MIDOKU`, `KIDOKU` | off |
+| Controls | Stop skip or auto mode at choices | `SKIPSTOP`, `AUTOSTOP` | on, off |
+| Controls | Skip key Ctrl / Shift | `SKIPKEY` (17, 16) | Ctrl |
+| Controls | Cursor auto-follow | `AUTOMCUR` | off |
+| Controls | Wheel button, right click (6 actions) | `WHEELBTN`, `RBTNCLICK` | settings, menu |
+
+PHM's executable is packed, so its code was not inspected. The port applies
+One Lover's tables to PHM after comparing each control's rectangle with the
+difference between PHM's normal and hover images. Every PHM control matches
+except display buttons 24-25: PHM draws them at (648, 500) and (712, 500),
+each 40x20. PHM's sound artwork shows four character-voice rows; One Lover's
+shows none. The port therefore enables 4 and 0 rows. The native source of that
+count (`DAT_0067bba8`) was not traced.
+
+### Port Implementation
+
+Settings on the title menu opens the display page. Rendering, input and
+paging follow the recovered behaviour above, and Reset uses the original
+defaults. Values are stored in the active `ConfMan` domain when a tab or OK
+applies a page. The original Windows INI is not read or written.
+
+- Applied now: window transparency (`delta_window_transparency`), the normal
+  text color (`delta_text_color`), the text shadow (`delta_font_shadow`), and
+  fullscreen (the ScummVM `fullscreen` feature). The music, effect and voice
+  sliders and their on/off buttons map to ScummVM's `music_volume`,
+  `sfx_volume`, and `speech_volume` keys and their `*_mute` counterparts.
+  Decibels convert as 256 x 10^(dB / 20). A ScummVM level is rewritten only
+  when its whole-decibel step changes, so opening and closing the screen does
+  not change it.
+- Stored only, because the engine does not implement the feature yet:
+  `delta_read_color`, `delta_backlog_color`, `delta_text_speed`,
+  `delta_auto_speed`, `delta_no_movie`, `delta_effect`,
+  `delta_font_smoothing`, `delta_wheel_mode`, `delta_volume_all`,
+  `delta_voice_duck`, `delta_voice_cut`, `delta_no_directsound`,
+  `delta_character_voice_off_N`, `delta_character_volume_N`,
+  `delta_unread_skip`, `delta_read_skip`, `delta_skip_stop`,
+  `delta_auto_stop`, `delta_skip_key`, `delta_auto_cursor`,
+  `delta_wheel_button`, and `delta_right_click`. Antialiasing does not change
+  the Noto rasterizer.
+- When `delta_window_transparency` is absent, the port default stays 0; the
+  in-game Reset sets 128.
+- Not reproduced: the text-speed demonstrations in the two gray preview boxes
+  (`0x42e350`, `0x42e3f0`), the sample-playback (●) buttons, and DirectSound
+  availability checks that disable the sound sliders. The original's
+  "restart required" message boxes are also not reproduced.
+- Port additions: keyboard and controller navigation with a white focus
+  outline, since the original screen is mouse-only. If the page artwork,
+  `CURSOR`, or `MENUSYS1B1` cannot be loaded, Settings falls back to ScummVM's
+  options dialog.
+- The options screen is reachable only from the title menu, the only
+  checkpoint the engine supports. Saving and loading are disabled while it is
+  open.
+
+`CURSOR`'s mask in `CG/ST.CGF` decodes one byte past its stated size. The
+native RLE decoder (`0x418c60`) writes every run in full and stops once the
+output reaches the stated size. `readPackedData` now keeps only the bytes up
+to the stated size instead of rejecting the record.
+
+Verification: `make test` passes all 530 tests, including the
+`DeltaOptionsTestSuite` cases for the recovered stepping, paging, reset, and
+binding rules. A temporary, uncommitted harness ran both games from the
+title-menu checkpoint into the options screen. It drove the screen through the
+engine's input path and saved screenshots. It confirmed the artwork, hover and
+selected states, thumbs, percentage digits, transparency sample, page
+switches, keyboard focus, and values persisted through `ConfMan`, with PHM
+using `MENUS_N*A`. Message text in the new color was not checked at runtime.
+
+REA evidence records:
+
+| Finding | Evidence record |
+| --- | --- |
+| Dialog resource inventory | `ev_89c21367117cad3f810cbb7d8c05c1fec594958cd1f7178525ad28bc262c1d0d` |
+| Page artwork names | `ev_fc4582bd7ac622da4e647f725e2eda283cbac875dbb9ada2c8442d150843c8fe` |
+| Display constructor, apply, INI loader | `ev_2c123236c3dbf85a4a35e1df353f227b394b062218620afc5d97a52051ca885b` |
+| Control list, radio state, slider setup, previews | `ev_d00312d72b064d9ef4a6f6c6c4bc1b052ac0916561305435d6846c45251ccbe3` |
+| Sound and controls constructors | `ev_c5b83f95f73d210a272b7ad2a5adf80df4dae747c8a10a89192c114b40fad6b3` |
+| Hit test, press, release, hover | `ev_e2e628903f98e06061c55432e5e0a645a4cff4c14325700b30fb758dc468cdf1` |
+| State drawing and slider class | `ev_69f35cc294d0804bda8c5c875c46e61cef209e553ccfdcd0dbf6f43169ed485f` |
+| Display handlers and reset | `ev_cd88af570a12db4894be65951ebbaa3e4886f907758d0f36b3ba8908a23e5fff` |
+| Page click handlers | `ev_564c4b069804e13604747fda6d9836e422750268efb753278e205e2d414b6099` |
+| Sound and controls apply and reset | `ev_b5cb1fa561f7bdd49c4ef9d6c8077de6aeac03c27acc1faea952df96666f7c6d` |
+| Transparency sample, swatch, speed demo | `ev_4a78e6443ef527c2427b3a0499f87fac766aa3885be903956d1f03601772ba9a` |
+| Page routing | `ev_00dfa43ddb71bac0ddcf9e083d52a3b5f487f6ee19a4fb57e84dc1e1a95376a0` |
+| RLE decoder | `ev_48d919e3c9da05017791f938c5938dfb8965c2c5cedb0145162a6c8b9cb955e1` |
+
 ## Debugging And Tests
 
 - Console: the engine console provides a `test` command. No other engine-specific
@@ -500,7 +673,7 @@ REA evidence records:
   `GAMEOPTION_ORIGINAL_SAVELOAD`. No code checks them, so enabling them has no
   effect.
 - Tests: CxxTest suites are in `test/engines/delta/` (`data.h`, `script.h`,
-  `input.h`). `test/module.mk` adds them to `make test` only when `ENABLE_DELTA`
-  is `STATIC_PLUGIN`, and links `engines/delta/data.o` and
-  `engines/delta/script.o`. There are no runtime tests. The REA-derived runtime
+  `input.h`, `options.h`). `test/module.mk` adds them to `make test` only when
+  `ENABLE_DELTA` is `STATIC_PLUGIN`, and links `engines/delta/data.o`,
+  `engines/delta/script.o`, and `engines/delta/options.o`. There are no runtime tests. The REA-derived runtime
   claims above were not rerun for this documentation update.

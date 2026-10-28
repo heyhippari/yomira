@@ -40,7 +40,7 @@ static bool readSaveString(Common::SeekableReadStream &stream, Common::String &t
 }
 
 bool DeltaEngine::canLoadGameStateCurrently(Common::U32String *msg) {
-	return _script && _atMenu && !_loadPending && !_transitionDuration;
+	return _script && _atMenu && !_optionsActive && !_loadPending && !_transitionDuration;
 }
 
 bool DeltaEngine::canSaveGameStateCurrently(Common::U32String *msg) {

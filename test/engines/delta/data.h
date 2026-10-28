@@ -190,6 +190,20 @@ public:
 		TS_ASSERT_SAME_DATA(data.begin(), "XXXYZ", 5);
 	}
 
+	void testRleClipsFinalRunLikeNativeDecoder() {
+		const byte filled[] = { 1, 0, 0, 0x80, 2, 'A' };
+		Common::MemoryReadStream fillStream(filled, sizeof(filled));
+		Common::Array<byte> data;
+		TS_ASSERT(Delta::readPackedData(fillStream, data));
+		TS_ASSERT_EQUALS(data.size(), 1U);
+		TS_ASSERT_EQUALS(data[0], 'A');
+		const byte literal[] = { 2, 0, 0, 0x80, 0, 3, 'A', 'B', 'C' };
+		Common::MemoryReadStream literalStream(literal, sizeof(literal));
+		TS_ASSERT(Delta::readPackedData(literalStream, data));
+		TS_ASSERT_EQUALS(data.size(), 2U);
+		TS_ASSERT_SAME_DATA(data.begin(), "AB", 2);
+	}
+
 	void testTruncatedData() {
 		const byte examples[][8] = {
 			{ 0, 0, 0 },
@@ -210,7 +224,6 @@ public:
 		const byte examples[][6] = {
 			{ 0, 0, 0, 0 },
 			{ 1, 0, 0, 1 },
-			{ 1, 0, 0, 0x80, 2, 'A' },
 			{ 1, 0, 0, 0x80, 0, 0 }
 		};
 		for (uint index = 0; index < ARRAYSIZE(examples); ++index) {

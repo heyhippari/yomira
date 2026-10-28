@@ -4,6 +4,8 @@ MODULE_OBJS = \
 	delta.o \
 	data.o \
 	script.o \
+	options.o \
+	optionsmenu.o \
 	saveload.o \
 	console.o \
 	metaengine.o

@@ -43,6 +43,7 @@ static const PlainGameDescriptor xexGames[] = {
 	{"yagai", "Yagai Gakushuu"},
 	{"mamatuma", "Mama! Tsuma?"},
 	{"mousugunatsuyasumi", "Mousugu Natsuyasumi!"},
+	{"thegutsmaximummaternity", "The Guts! -Maximum Maternity!-"},
 	{nullptr, nullptr}
 };
 

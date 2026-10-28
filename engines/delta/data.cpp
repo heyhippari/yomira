@@ -94,14 +94,16 @@ bool readPackedData(Common::SeekableReadStream &stream, Common::Array<byte> &dat
 			const byte count = stream.readByte();
 			const byte value = stream.readByte();
 			const uint32 length = count ? count : value;
-			if (!length || length > size - position)
+			if (!length)
 				return false;
+			// The native decoder (0x418c60) writes whole runs, so the final run may overshoot the stated size.
+			const uint32 kept = MIN(length, size - position);
 			if (count) {
-				memset(&data[position], value, length);
-			} else if (stream.read(&data[position], length) != length) {
+				memset(&data[position], value, kept);
+			} else if (stream.read(&data[position], kept) != kept || !stream.skip(length - kept)) {
 				return false;
 			}
-			position += length;
+			position += kept;
 		}
 		return !stream.err();
 	}

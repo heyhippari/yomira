@@ -26,6 +26,7 @@ All currently detected releases are Japanese Windows versions.
 | `yagai` | Yagai Gakushuu | 800x600 |
 | `mamatuma` | Mama! Tsuma? | 800x600 |
 | `mousugunatsuyasumi` | Mousugu Natsuyasumi! | 800x600 |
+| `thegutsmaximummaternity` | The Guts! -Maximum Maternity!- | 800x600 |
 
 Matty and Mama! Tsuma? each have an additional detected `Updated` variant.
 Detection matches `mpx/startup.mpx` by size and MD5, using ScummVM's default

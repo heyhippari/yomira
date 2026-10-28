@@ -35,3 +35,14 @@ From the wiki's [Coding Conventions](https://wiki.scummvm.org/index.php?title=Co
 - Build options and engine registration are generated/configured through the repository build system; avoid assuming a source file is automatically part of every build.
 
 For product context and user-facing documentation, start with [README.md](README.md). Use the project documentation and developer wiki linked there rather than duplicating their content here.
+
+## Machine-local development environment
+
+When working on legacy game engines, game compatibility,
+or testing with original game assets, read `AGENTS.local.md`
+if it exists.
+
+It contains machine-specific paths and environment details.
+Do not assume those paths exist on other machines, and do
+not copy machine-specific paths into tracked files unless
+explicitly required.
