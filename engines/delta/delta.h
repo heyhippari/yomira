@@ -32,6 +32,7 @@
 #include "delta/input.h"
 #include "delta/options.h"
 #include "delta/script.h"
+#include "delta/transition.h"
 
 struct ADGameDescription;
 
@@ -61,6 +62,9 @@ private:
 	Graphics::Screen *_screen = nullptr;
 	Script *_script = nullptr;
 	ScriptCommand _menuConfig;
+	Common::String _characterNames[3];
+	Common::String _characterBackground;
+	Common::String _backgroundName;
 	Graphics::Surface _transitionFrom;
 	Graphics::Surface _transitionTo;
 	Graphics::Surface _transitionFrame;
@@ -68,6 +72,12 @@ private:
 	Graphics::Surface _menuButtons;
 	uint32 _transitionStart = 0;
 	uint32 _transitionDuration = 0;
+	TransitionEffect _transitionEffect = kTransitionCrossFade;
+	Common::Rect _transitionArea;
+	int _transitionStep = -1;
+	bool _transitionSkippable = false;
+	bool _transitionSkipped = false;
+	int _transitionResult = -1;
 	uint32 _waitUntil = 0;
 	bool _waiting = false;
 	bool _atMenu = false;
@@ -110,16 +120,19 @@ private:
 
 	Common::Error initialize();
 	Common::Error loadImage(const Common::String &name, Graphics::Surface &image);
-	Common::Error compositeForeground(Graphics::Surface &image, const Common::String &name);
-	Common::Error compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Path &bankName);
+	Common::Error compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset = Common::Point());
+	Common::Error compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset = Common::Point());
+	Common::Error showCharacters(const ScriptCommand &command);
 	Common::Error advanceScript();
 	Common::Error enterMenu();
 	void drawMenu();
 	void handleInput(const Common::Event &event);
 	bool pollInput();
 	bool serviceInput();
-	void startTransition(const Graphics::Surface &image, uint32 duration);
+	void startTransition(const Graphics::Surface &image, int units, TransitionEffect effect = kTransitionCrossFade,
+		bool skippable = false, int resultVariable = -1, const Common::Rect &area = Common::Rect());
 	bool updateTransition();
+	void finishTransition();
 	int menuItemAt(const Common::Point &point) const;
 	MenuLayout menuLayout() const { return MenuLayout(_menuConfig.arguments); }
 	void activateMenuItem(int item);

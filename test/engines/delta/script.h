@@ -307,7 +307,7 @@ public:
 	}
 
 	void testSeenEventSurvivesSave() {
-		const byte bytes[] = { 0x3b, 0, 8, 0, 2, 0, 0x3a, 0, 8, 0, 3, 0, 0x91, 0, 4, 0, 3, 0x80 };
+		const byte bytes[] = { 0x3b, 0, 8, 0, 0x3a, 0, 8, 0, 3, 0, 0x91, 0, 4, 0, 3, 0x80 };
 		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
 		Delta::Script script(code);
 		Delta::ScriptCommand command;
@@ -320,6 +320,44 @@ public:
 		TS_ASSERT(restored.next(command));
 		TS_ASSERT(restored.next(command));
 		TS_ASSERT_EQUALS(command.arguments[1], 1);
+	}
+
+	void testLegacySeenEventTakesOneOperand() {
+		// PHM script offset 0x137f: mark event 1, clear a rectangle, load BGH_07_01
+		const byte bytes[] = { 0x3a, 0, 1, 0, 0x11, 0, 0, 0, 0, 0, 0, 0, 0xaf, 0, 'B', 0, 5, 0 };
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code, true);
+		Delta::ScriptCommand command;
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.opcode, 0x3b);
+		TS_ASSERT_EQUALS(command.arguments.size(), 1U);
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.opcode, 0x12);
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.opcode, 0xb0);
+		TS_ASSERT_EQUALS(command.strings[0], "B");
+	}
+
+	void testLegacyCharacterSceneClearsResultVariable() {
+		// PHM script offset 0x2228, with variable 1 preset first
+		const byte bytes[] = { 0x90, 0, 1, 0, 7, 0,
+			0x2b, 0, 'A', 0, 'B', 0, 'N', 'U', 'L', 'L', 0, 'B', 'G', 0, 2, 0, 1, 0, 3, 0, 1, 0, 5, 0, 1, 0,
+			0x3b, 0, 1, 0x80, 0x0d, 0 };
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code, true);
+		Delta::ScriptCommand command;
+		TS_ASSERT(script.next(command));
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.opcode, 0x2c);
+		TS_ASSERT_EQUALS(command.strings.size(), 4U);
+		TS_ASSERT_EQUALS(command.strings[2], "NULL");
+		TS_ASSERT_EQUALS(command.strings[3], "BG");
+		TS_ASSERT_EQUALS(command.arguments.size(), 6U);
+		TS_ASSERT_EQUALS(command.arguments[0], 2);
+		TS_ASSERT_EQUALS(command.arguments[4], 5);
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.opcode, 0x3c);
+		TS_ASSERT_EQUALS(command.arguments[0], 0);
 	}
 
 	void testOldStateLoadsVariablesAndRejectsUnknownVersion() {

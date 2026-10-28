@@ -4,6 +4,7 @@ MODULE_OBJS = \
 	delta.o \
 	data.o \
 	script.o \
+	transition.o \
 	options.o \
 	optionsmenu.o \
 	saveload.o \

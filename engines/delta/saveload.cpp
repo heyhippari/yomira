@@ -108,6 +108,8 @@ bool DeltaEngine::restoreSaveStream(Common::SeekableReadStream &stream, bool app
 	_menuHover = hover;
 	_menuPressed = -1;
 	_transitionDuration = 0;
+	_transitionResult = -1;
+	_backgroundName.clear();
 	_waiting = false;
 	_atMenu = false;
 	return true;

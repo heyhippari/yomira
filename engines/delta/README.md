@@ -20,8 +20,8 @@ exercised through opening scenes with Japanese text pages, character poses,
 and an event image. Later story execution, choices, and transitions remain
 incomplete; unsupported commands report their position and restore the title
 checkpoint. Message voice/effect playback and voice-token timing are not
-implemented. Cross-fades remain an approximation of the original effects and
-timing. Windows installation paths and INI preferences are not imported or
+implemented. Screen transitions follow the recovered 16-step fades (see
+Transitions); the effect `0x411350` and its callers are not implemented. Windows installation paths and INI preferences are not imported or
 modified. No game files are written. Both detection entries carry the
 `ADGF_UNSTABLE` flag.
 
@@ -221,18 +221,26 @@ the table's handlers establishes the implemented startup slice:
 | `0x22`, `0x3d` | Jump to a bounded absolute byte offset |
 | `0x5e`, `0x95` | Random choice and one-based indexed branch |
 | `0x23` | Load a full-screen image with an instant cut |
-| `0x26`, `0xb0` | Load a full-screen image with a 300 ms transition |
-| `0xb1` | Same as `0x26`, plus a foreground layer set unless its second name is `TACLEAR` |
+| `0x26`, `0xb0` | Load a full-screen image with a transition (see Transitions) |
+| `0xb1` | Same as `0xb0`, plus a foreground layer set unless its second name is `TACLEAR` |
+| `0x2c` | Show up to three character slots over a background (see Character Slots) |
 | `0x0d` | Clear the message window and restore the background behind it |
-| `0x19`, `0xa4` | Clear a scene rectangle to black (`0x19`) or white (`0xa4`); duration is argument 4 x 20 ms |
+| `0x19`, `0xa4` | Fade a scene rectangle to black (`0x19`) or white (`0xa4`) (see Transitions) |
 | `0xa5` | Clear the screen to black immediately |
-| `0xae` | Fade the screen to black; duration is argument 0 x 20 ms |
+| `0xae` | Fade the screen to black (see Transitions) |
 | `0x21`, `0x8a` | Bounded script calls and returns |
 | `0x3a`, `0x3b`, `0x3e`, `0x3f`, `0x61` | Event flags, checkpoint counters, and title strings |
 | `0x4b`, `0x54` | `0x4b` presents message tokens that contain text; `0x54` waits for input on a visible page |
 | `0xa2` | Decode a three-word sound command; audio playback is not implemented |
 | `0x99` | A nonzero argument 0 arms a deadline of argument 1 x 100 ms without waiting; zero waits until the most recently armed deadline passes |
 | `0x67` | Enter the title menu and suspend scenario execution |
+
+The dispatcher at `0x401952` indexes the table with `opcode - 1`. Seen-event
+command `0x3b` (handler `0x403d29`) reads one word, the event number. It stores
+1 or 2 (by `(event - 1) % 2`, from the byte table at `0x466af0`) in the event
+byte array, then calls `0x418630`, which writes the global data. Command `0x3a`
+(`0x403cfe`) reads the event and a variable and stores whether the event byte is
+non-zero. PHM uses `0x3b` in this one-word form at script offset `0x137f`.
 
 The runner processes at most 64 commands per frame, keeping events responsive
 even for a script loop. Unsupported commands and invalid operands stop with a
@@ -260,12 +268,59 @@ is the first six characters of the name plus `00`, and the layers come from
 characters 6 and 7. Backgrounds that are not 800x600 are rejected as unsupported
 partial images.
 
-`CG/EVINFO.BIN` maps a foreground name to its layer names. Layers are read from
-`CG/ST.CGF`, except names ending in `_D`, which come from `CG/EV.CGF`. A name
-missing from `EVINFO.BIN` is treated as a direct layer: an eight-character
-`E##` name, or `name_D` from `CG/EV.CGF`. Layer masks are decoded in the active
+`CG/EVINFO.BIN` maps a foreground name to its layer names. In One Lover,
+`0x410590` looks the name up there and loads each listed layer through the
+generic loader `0x40ddf0`. A name missing from `EVINFO.BIN` goes to `0x40ddf0`
+unchanged. That loader searches `CG/EV.CGF` (`0x40d020`), then `CG/ST.CGF`
+(`0x40d490`), then `CG/EVB.CGF` (`0x40cd50`), then a loose `name.IAF`. The
+engine resolves every layer from EV.CGF and then ST.CGF in the same order. PHM
+uses unlisted base poses directly, for example `SHSA20011` from `CG/ST.CGF` at
+script offset `0xec5`. Neither supplied game has an EV.CGF `X_D` record
+without an `EVINFO.BIN` entry for `X`, and the two banks share no names.
+Evidence: `ev_7529f427c7abcc51c8cc9309ad2ef357fab9b3f3142959c3ee5ac2762ac8ccd5`
+(`0x410590`) and `ev_08686a7273e89cde61f0e9c0c8d29c1635e9526e53bec8f2257f80e997b99253`
+(`0x40ddf0`). Layer masks are decoded in the active
 screen format (RGB565), whereas message-frame masks keep 24-bit precision, so
 mask values that depend on the finer precision may differ from the original.
+
+### Character Slots
+
+Command `0x2c` (handler `0x403121`, PHM raw `0x2b`) reads three character
+names, a background name and six words. Each of the first three words, `w`,
+gives a draw-order index `3 - w`: index 0 is drawn first, so a slot with `w` = 3
+is at the back. The fourth word is a transition effect and the fifth its
+parameter (`0xff` becomes -1), both passed to the transition routine `0x40edc0`.
+The sixth names a variable that receives the renderer's return value, which is
+always 0. In the handler, background `SAME` is replaced by the current
+background name (`0x7eee7c`, also written by the image and fade commands), and
+the result, `NULL` included, becomes the new current background name.
+
+Setup `0x422880` treats `NULL` as an empty slot. A background of `NULL` keeps
+the current background and updates only the non-`NULL` slots. Otherwise the
+background and all three slots are replaced. Slot X positions depend on how many
+of the command's names are present:
+
+| Present slots | Slot 0 | Slot 1 | Slot 2 |
+| --- | --- | --- | --- |
+| 1 or 3 | 152 | 400 | 648 |
+| 0 and 1 | 200 | 580 | - |
+| 0 and 2 | 200 | - | 580 |
+| 1 and 2 | - | 200 | 580 |
+
+The slot records start at `0x7eea88`, `0x150` bytes apart, with X at `+0x148`.
+Renderer `0x416740` draws the background, then each non-`NULL` slot in draw
+order. Each slot image is loaded through `0x410ab0`, which uses the `EVINFO.BIN`
+lookup described above and records the base sprite's metadata
+`(left, top, anchor, bottom)`. Compositor `0x40ea30` moves the destination by
+`left - anchor`, so a character is drawn at slot X - anchor + stored left, at
+its stored top. Every sprite in both supplied games has anchor 400. The
+compositor's separate handling of sprites lying entirely left of, or starting
+right of, the anchor is not reproduced.
+
+The engine reproduces the slot layout, draw order, `SAME`/`NULL` handling,
+result variable, and the `0x40edc0` cross-fade (see Transitions). Slot state is not stored in save games. All 150 uses in PHM's
+scenario name characters in slots 0 and 1, leave slot 2 `NULL`, give an
+explicit background, and use the words `2 1 3 1 5 1`.
 
 Opcode `0x7c` supplies the menu and button-sheet names, count, position, width,
 row height, and row spacing. Normal button rows occupy the first vertical
@@ -283,6 +338,75 @@ opcodes 5 and above to the next One Lover opcode. This mapping is validated
 against the supplied scenario's startup operands, branch targets, asset loads,
 and menu checkpoint, not asserted to cover all gameplay commands. The dialect
 is selected explicitly for the detected game, not inferred from `//SinNo`.
+
+## Transitions
+
+Targeted disassembly of One Lover's `OLV_DL.EXE` recovers one family of
+screen effects. REA's decompiler did not respond during this investigation, so
+the evidence is objdump listings of the routines named below. Each effect runs
+16 steps over 24-bit DIB data with MMX, weighting every 8-bit channel in
+sixteenths (`pmullw`, then `psrlw 4`). For step i = 0 to 15:
+
+| Routine | Effect | Channel value at step i |
+| --- | --- | --- |
+| `0x40edc0`, `0x412f50` | Cross-fade | `new*(i+1)>>4 + old*(15-i)>>4`; unchanged 4-byte groups are copied |
+| `0x411880` | Fade in from black | `new*(i+1)>>4` |
+| `0x411fa0` | Fade in from white | `new + ((255-new)*(16-i)>>4)` |
+| `0x411c00` | Fade to black | `old*(16-i)>>4` |
+| `0x412420` | Fade to white | `old + ((255-old)*(i+1)>>4)` |
+
+Timing is shared. A routine multiplies the duration word by 100 and divides it
+by the `EFFECT` setting (`0x67c474`: 1 normal, 2 fast, written by the display
+apply `0x42e150`). Step i is due at start + D(i+1)/17 (the `0x78787879`
+reciprocal), and a step whose time has already passed is skipped. Before a
+step, `0x418230(0, delay)` arms a deadline, and after rendering it,
+`0x418230(1, mode)` waits for it. Modes 1 and 2 return early once an input
+handler (`0x42b7e0`, `0x42c8e0`, `0x42ca20`) sets `0x67c34c` to 99; modes 3
+and 4 depend on skip state. An early return draws the final image, and the
+routine returns 1; otherwise it returns 0. `0x40edc0` always returns 0.
+Handlers pass a zero duration (an instant cut) when `EFFECT` is 0 or a
+skip/replay state is active (`0x7eeff8`, `0x7ef1a0`, `0x7e8370`,
+`0x67bbf4`). A duration of `0xff` becomes -1, which draws without a fade.
+
+The current background name (`0x7eee7c`) selects the effect:
+
+| Command | Operands | Behavior |
+| --- | --- | --- |
+| `0x26` (`0x402717`) | name, duration, input mode, result variable | After `BLACK`: `0x411880` through `0x421a20`/`0x414990`. After `WHITE`: `0x411fa0`. Otherwise `0x412f50` through `0x422480`/`0x417790`. Clears the character slots. |
+| `0xb0` (`0x4076a6`), `0xb1` (`0x4079cb`) | name(s), duration | After `WHITE`: `0x411fa0`. After `BLACK`: a cut. Otherwise `0x421770`. Mode 0, no result. |
+| `0x2c` (`0x403121`) | see Character Slots | `0x416740` calls `0x40edc0`. Effect word 0 cuts. Mode 0. |
+| `0x19` (`0x401ecd`) | x, y, width, height, duration, input mode, result variable | `0x411c00`; if the background is already `BLACK`, a cut that leaves the variable unchanged. The background becomes `BLACK`. |
+| `0xa4` (`0x406e53`) | as `0x19` | `0x412420`. The background becomes `WHITE`. |
+| `0xae` (`0x4074b7`) | duration | Full-screen `0x411c00`, mode 0; a cut when already `BLACK`. |
+| `0xa5` (`0x406f8b`) | none | `BLACK` at once. |
+
+`transition.cpp` implements the schedule and the five blends. The engine
+renders each step when it falls due, decoding RGB565 to 8-bit channels and back,
+so values can differ from the 24-bit original by rounding. Unchanged pixels are
+copied, matching the native 4-byte comparison as closely as whole pixels
+allow. In modes 1 and 2, a left-button release or Select finishes the effect
+and stores 1 in the result variable. `0x19` and `0xa4` fade only their
+rectangle; what the native redraws outside it afterwards was not traced. The
+background name is not saved and is cleared on load.
+
+Limitations:
+
+- `0x421770` and `0x421660` (used by `0xb0`/`0xb1`) were identified only by
+  their call sites; the port assumes the `0x412f50` cross-fade and a cut.
+- `0x411350`, a five-way effect switch (table `0x41186c`), is called only from
+  `0x422fe2`; the owning command was not identified.
+- Commands `0x18`, `0x29`, `0xa3`, `0xb7`, and `0xb8` also call these fades
+  and are not implemented.
+- PHM's executable is packed, so the One Lover routines are assumed to apply to
+  it.
+
+Verification: `DeltaTransitionTestSuite` covers the duration scaling, step
+schedule, blends, and rectangle clipping. Debug-level-2 runs of both games to
+the title menu logged the same startup sequence: `0x26` faded in from `BLACK`
+over 2000 ms, a second `0x26` cross-faded over 2000 ms, `0xae` faded to black
+over 1000 ms, and `0xb0` after `BLACK` cut. No `0x2c`, `0x19`, or `0xa4`
+transition was exercised at runtime, and the rendered frames were not compared
+with the original.
 
 ## Message Frames
 
@@ -604,10 +728,11 @@ applies a page. The original Windows INI is not read or written.
   `sfx_volume`, and `speech_volume` keys and their `*_mute` counterparts.
   Decibels convert as 256 x 10^(dB / 20). A ScummVM level is rewritten only
   when its whole-decibel step changes, so opening and closing the screen does
-  not change it.
+  not change it. Screen effects (`delta_effect`) scale or disable
+  transitions (see Transitions).
 - Stored only, because the engine does not implement the feature yet:
   `delta_read_color`, `delta_backlog_color`, `delta_text_speed`,
-  `delta_auto_speed`, `delta_no_movie`, `delta_effect`,
+  `delta_auto_speed`, `delta_no_movie`,
   `delta_font_smoothing`, `delta_wheel_mode`, `delta_volume_all`,
   `delta_voice_duck`, `delta_voice_cut`, `delta_no_directsound`,
   `delta_character_voice_off_N`, `delta_character_volume_N`,
@@ -673,7 +798,8 @@ REA evidence records:
   `GAMEOPTION_ORIGINAL_SAVELOAD`. No code checks them, so enabling them has no
   effect.
 - Tests: CxxTest suites are in `test/engines/delta/` (`data.h`, `script.h`,
-  `input.h`, `options.h`). `test/module.mk` adds them to `make test` only when
-  `ENABLE_DELTA` is `STATIC_PLUGIN`, and links `engines/delta/data.o`,
-  `engines/delta/script.o`, and `engines/delta/options.o`. There are no runtime tests. The REA-derived runtime
+  `input.h`, `options.h`, `transition.h`). `test/module.mk` adds them to
+  `make test` only when `ENABLE_DELTA` is `STATIC_PLUGIN`, and links
+  `engines/delta/data.o`, `engines/delta/script.o`, `engines/delta/options.o`,
+  and `engines/delta/transition.o`. There are no runtime tests. The REA-derived runtime
   claims above were not rerun for this documentation update.

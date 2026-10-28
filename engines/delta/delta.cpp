@@ -168,7 +168,7 @@ Common::Error DeltaEngine::loadImage(const Common::String &name, Graphics::Surfa
 			layers.push_back(name.substr(0, 4) + "00" + name.substr(6, 1) + "0");
 		if (name[7] != '0')
 			layers.push_back(name.substr(0, 3) + "A000" + name.substr(7, 1));
-		const Common::Error compositing = compositeLayers(image, layers, "CG/EV.CGF");
+		const Common::Error compositing = compositeLayers(image, layers);
 		if (compositing.getCode() != Common::kNoError) {
 			image.free();
 			return compositing;
@@ -183,38 +183,36 @@ Common::Error DeltaEngine::loadImage(const Common::String &name, Graphics::Surfa
 	return Common::kNoError;
 }
 
-Common::Error DeltaEngine::compositeForeground(Graphics::Surface &image, const Common::String &name) {
+Common::Error DeltaEngine::compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset) {
 	Common::File metadata;
 	if (!metadata.open("CG/EVINFO.BIN"))
 		return Common::Error(Common::kNoGameDataFoundError, "CG/EVINFO.BIN");
 	Common::StringArray layers;
 	if (!readSpriteInfo(metadata, name, layers, &_progress)) {
-		if (name.size() == 8 && name[0] == 'E' && name[1] >= '0' && name[1] <= '9' &&
-			name[2] >= '0' && name[2] <= '9')
-			layers.push_back(name);
-		else
-			layers.push_back(name + "_D");
-		const Common::Error result = compositeLayers(image, layers, "CG/EV.CGF");
+		layers.push_back(name);
+		const Common::Error result = compositeLayers(image, layers, offset);
 		if (result.getCode() == Common::kNoError)
 			debug(1, "Delta foreground: %s (direct layer)", name.c_str());
 		return result;
 	}
-	const Common::Error result = compositeLayers(image, layers, "CG/ST.CGF");
+	const Common::Error result = compositeLayers(image, layers, offset);
 	if (result.getCode() == Common::kNoError)
 		debug(1, "Delta foreground: %s (%u layers)", name.c_str(), layers.size());
 	return result;
 }
 
-Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Path &bankName) {
+Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset) {
+	static const char *const banks[] = { "CG/EV.CGF", "CG/ST.CGF" };
 	for (uint index = 0; index < layers.size(); ++index) {
-		const Common::Path layerBank = layers[index].hasSuffix("_D") ? Common::Path("CG/EV.CGF") : bankName;
-		Common::File bank;
-		if (!bank.open(layerBank))
-			return Common::Error(Common::kNoGameDataFoundError, layerBank.toString());
 		Graphics::Surface color, mask;
 		Common::Point position;
-		const bool valid = readSpriteBankImage(bank, layers[index], color, mask, image.format, &_progress, &position) &&
-			compositeMasked(image, color, mask, &_progress, position);
+		bool found = false;
+		for (uint bankIndex = 0; bankIndex < ARRAYSIZE(banks) && !found && !shouldQuit(); ++bankIndex) {
+			Common::File bank;
+			found = bank.open(banks[bankIndex]) &&
+				readSpriteBankImage(bank, layers[index], color, mask, image.format, &_progress, &position);
+		}
+		const bool valid = found && compositeMasked(image, color, mask, &_progress, position + offset);
 		color.free();
 		mask.free();
 		if (!valid)
@@ -223,55 +221,113 @@ Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Commo
 	return Common::kNoError;
 }
 
-void DeltaEngine::startTransition(const Graphics::Surface &image, uint32 duration) {
+static const int kCharacterAnchor = 400;
+
+Common::Error DeltaEngine::showCharacters(const ScriptCommand &command) {
+	// Native setup 0x422880 and renderer 0x416740
+	int order[3] = { -1, -1, -1 };
+	for (uint slot = 0; slot < 3; ++slot) {
+		const uint16 depth = command.arguments[slot];
+		if (depth < 1 || depth > 3 || order[3 - depth] >= 0)
+			return Common::Error(Common::kReadingFailed, "Invalid character draw order");
+		order[3 - depth] = slot;
+	}
+	bool present[3];
+	uint count = 0;
+	for (uint slot = 0; slot < 3; ++slot) {
+		present[slot] = command.strings[slot] != "NULL";
+		count += present[slot];
+	}
+	int positions[3] = { 152, 400, 648 };
+	if (count == 2) {
+		const int first = present[0] ? 0 : 1;
+		const int second = present[2] ? 2 : 1;
+		positions[first] = 200;
+		positions[second] = 580;
+	}
+
+	Common::String background = command.strings[3];
+	if (background == "SAME")
+		background = _backgroundName;
+	_backgroundName = background;
+	if (background == "NULL") {
+		for (uint slot = 0; slot < 3; ++slot) {
+			if (present[slot])
+				_characterNames[slot] = command.strings[slot];
+		}
+	} else {
+		_characterBackground = background;
+		for (uint slot = 0; slot < 3; ++slot)
+			_characterNames[slot] = command.strings[slot];
+	}
+	if (_characterBackground.empty())
+		return Common::Error(Common::kReadingFailed, "Character scene has no background");
+
+	Graphics::Surface image;
+	Common::Error result = loadImage(_characterBackground, image);
+	if (result.getCode() != Common::kNoError)
+		return result;
+	if (image.w != _screen->w || image.h != _screen->h) {
+		image.free();
+		return Common::Error(Common::kReadingFailed, "Unsupported partial background image");
+	}
+	for (uint layer = 0; layer < 3; ++layer) {
+		const uint slot = order[layer];
+		if (_characterNames[slot].empty() || _characterNames[slot] == "NULL")
+			continue;
+		result = compositeForeground(image, _characterNames[slot], Common::Point(positions[slot] - kCharacterAnchor, 0));
+		if (result.getCode() != Common::kNoError) {
+			image.free();
+			return result;
+		}
+	}
+	// 0x416740 passes the effect word and the duration to the cross-fade 0x40edc0; effect 0 cuts
+	const int units = command.arguments[3] ? command.arguments[4] : 0;
+	startTransition(image, units == 0xff ? -1 : units);
+	_messageVisible = false;
+	image.free();
+	return Common::kNoError;
+}
+
+void DeltaEngine::startTransition(const Graphics::Surface &image, int units, TransitionEffect effect,
+	bool skippable, int resultVariable, const Common::Rect &area) {
 	_transitionFrom.copyFrom(_screen->rawSurface());
 	_transitionTo.copyFrom(image);
-	_transitionFrame.copyFrom(image);
 	_transitionStart = _system->getMillis();
-	_transitionDuration = duration;
-	if (!duration)
-		_screen->blitFrom(image);
+	_transitionDuration = transitionDuration(units, _settings.effect);
+	_transitionEffect = effect;
+	_transitionArea = area.isEmpty() ? Common::Rect(_screen->w, _screen->h) : area;
+	_transitionStep = -1;
+	_transitionSkippable = skippable;
+	_transitionSkipped = false;
+	_transitionResult = resultVariable;
+	debug(2, "Delta transition: effect %d, %u ms", effect, _transitionDuration);
+	if (!_transitionDuration)
+		finishTransition();
+}
+
+void DeltaEngine::finishTransition() {
+	_screen->blitFrom(_transitionTo);
+	_transitionDuration = 0;
+	// The native effects return 1 when input cut them short; handlers store it in the result variable
+	if (_transitionResult >= 0)
+		_script->setVariable(_transitionResult, _transitionSkipped ? 1 : 0);
+	_transitionResult = -1;
 }
 
 bool DeltaEngine::updateTransition() {
 	if (!_transitionDuration)
 		return false;
-	const uint32 elapsed = _system->getMillis() - _transitionStart;
-	if (elapsed >= _transitionDuration) {
-		_screen->blitFrom(_transitionTo);
-		_transitionDuration = 0;
+	const int step = transitionStep(_system->getMillis() - _transitionStart, _transitionDuration);
+	if (_transitionSkipped || step == kTransitionSteps - 1) {
+		finishTransition();
 		return false;
 	}
-	const uint32 weight = elapsed * 256 / _transitionDuration;
-	const bool rgb565 = _screen->format == Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0);
-	for (int row = 0; row < _transitionFrame.h; ++row) {
-		if ((row & 15) == 0 && !pollInput())
-			return false;
-		if (rgb565) {
-			const uint16 *source = static_cast<const uint16 *>(_transitionFrom.getBasePtr(0, row));
-			const uint16 *target = static_cast<const uint16 *>(_transitionTo.getBasePtr(0, row));
-			uint16 *destination = static_cast<uint16 *>(_transitionFrame.getBasePtr(0, row));
-			for (int column = 0; column < _transitionFrame.w; ++column) {
-				const uint32 previous = source[column];
-				const uint32 next = target[column];
-				const uint32 red = ((previous >> 11) * (256 - weight) + (next >> 11) * weight) >> 8;
-				const uint32 green = (((previous >> 5) & 63) * (256 - weight) + ((next >> 5) & 63) * weight) >> 8;
-				const uint32 blue = ((previous & 31) * (256 - weight) + (next & 31) * weight) >> 8;
-				destination[column] = (red << 11) | (green << 5) | blue;
-			}
-			continue;
-		}
-		for (int column = 0; column < _transitionFrame.w; ++column) {
-			byte oldRed, oldGreen, oldBlue, newRed, newGreen, newBlue;
-			_screen->format.colorToRGB(_transitionFrom.getPixel(column, row), oldRed, oldGreen, oldBlue);
-			_screen->format.colorToRGB(_transitionTo.getPixel(column, row), newRed, newGreen, newBlue);
-			_transitionFrame.setPixel(column, row, _screen->format.RGBToColor(
-				(oldRed * (256 - weight) + newRed * weight) / 256,
-				(oldGreen * (256 - weight) + newGreen * weight) / 256,
-				(oldBlue * (256 - weight) + newBlue * weight) / 256));
-		}
+	if (step > _transitionStep) {
+		_transitionStep = step;
+		renderTransitionStep(_transitionFrame, _transitionFrom, _transitionTo, _transitionEffect, step, _transitionArea);
+		_screen->blitFrom(_transitionFrame);
 	}
-	_screen->blitFrom(_transitionFrame);
 	return true;
 }
 
@@ -489,6 +545,10 @@ Common::Error DeltaEngine::advanceScript() {
 			_messageWaiting = _messageVisible;
 			if (_messageWaiting)
 				return Common::kNoError;
+		} else if (command.opcode == 0x2c) {
+			const Common::Error result = showCharacters(command);
+			if (result.getCode() != Common::kNoError || _transitionDuration)
+				return result;
 		} else if (command.opcode == 0x7c) {
 			_menuConfig = command;
 		} else if (command.opcode == 0x67) {
@@ -517,32 +577,57 @@ Common::Error DeltaEngine::advanceScript() {
 					return compositing;
 				}
 			}
-			startTransition(image, command.opcode == 0x23 ? 0 : 300);
+			// The previous background selects the effect: 0x26 fades in from BLACK, 0xb0 and
+			// 0xb1 cut from it, and all three fade from WHITE. Other scenes cross-fade.
+			const bool fromBlack = _backgroundName.equalsIgnoreCase("BLACK");
+			const bool fromWhite = _backgroundName.equalsIgnoreCase("WHITE");
+			_backgroundName = command.strings[0];
+			for (uint slot = 0; slot < ARRAYSIZE(_characterNames); ++slot)
+				_characterNames[slot] = "NULL";
+			if (command.opcode == 0x23) {
+				startTransition(image, 0);
+			} else {
+				const int units = command.arguments[0] == 0xff ? -1 : command.arguments[0];
+				const TransitionEffect effect = fromWhite ? kTransitionFromWhite :
+					fromBlack ? kTransitionFromBlack : kTransitionCrossFade;
+				if (command.opcode == 0x26)
+					startTransition(image, units, effect, command.arguments[1] == 1 || command.arguments[1] == 2, command.arguments[2]);
+				else
+					startTransition(image, fromBlack && !fromWhite ? 0 : units, effect);
+			}
 			_messageVisible = false;
 			image.free();
 			if (_transitionDuration)
 				return Common::kNoError;
 		} else if (command.opcode == 0xa5 || command.opcode == 0xae || command.opcode == 0x19 || command.opcode == 0xa4) {
-			Graphics::Surface black;
-			uint32 duration = 0;
-			if (command.opcode == 0x19 || command.opcode == 0xa4) {
+			const bool white = command.opcode == 0xa4;
+			const bool alreadyBlack = _backgroundName.equalsIgnoreCase("BLACK");
+			_backgroundName = white ? "WHITE" : "BLACK";
+			for (uint slot = 0; slot < ARRAYSIZE(_characterNames); ++slot)
+				_characterNames[slot] = "NULL";
+			Graphics::Surface target;
+			if (command.opcode == 0x19 || white) {
+				// x, y, width, height, duration, input mode, result variable
 				const int left = command.arguments[0];
 				const int top = command.arguments[1];
 				const int width = command.arguments[2];
 				const int height = command.arguments[3];
 				if (width <= 0 || height <= 0 || left + width > _screen->w || top + height > _screen->h)
 					return Common::Error(Common::kReadingFailed, "Invalid scene-clear rectangle");
-				black.copyFrom(_screen->rawSurface());
-				black.fillRect(Common::Rect(left, top, left + width, top + height),
-					command.opcode == 0xa4 ? _screen->format.RGBToColor(255, 255, 255) : 0);
-				duration = command.arguments[4] * 20;
+				const Common::Rect area(left, top, left + width, top + height);
+				target.copyFrom(_screen->rawSurface());
+				target.fillRect(area, white ? _screen->format.RGBToColor(255, 255, 255) : 0);
+				// 0x19 cuts without writing its variable when the screen is already BLACK
+				const bool cut = !white && alreadyBlack;
+				const int mode = command.arguments[5];
+				startTransition(target, cut ? 0 : command.arguments[4], white ? kTransitionToWhite : kTransitionToBlack,
+					mode == 1 || mode == 2, cut ? -1 : command.arguments[6], area);
 			} else {
-				black.create(_screen->w, _screen->h, _screen->format);
-				black.fillRect(Common::Rect(black.w, black.h), 0);
-				duration = command.opcode == 0xae ? command.arguments[0] * 20 : 0;
+				target.create(_screen->w, _screen->h, _screen->format);
+				target.fillRect(Common::Rect(target.w, target.h), 0);
+				startTransition(target, command.opcode == 0xae && !alreadyBlack ? command.arguments[0] : 0, kTransitionToBlack);
 			}
-			startTransition(black, duration);
-			black.free();
+			target.free();
 			if (_transitionDuration)
 				return Common::kNoError;
 		}
@@ -632,8 +717,13 @@ void DeltaEngine::handleInput(const Common::Event &event) {
 		handleOptionsInput(event);
 		return;
 	}
-	if (_messageWaiting && (event.type == Common::EVENT_LBUTTONUP ||
-		(event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionSelect))) {
+	const bool select = event.type == Common::EVENT_LBUTTONUP ||
+		(event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionSelect);
+	if (select && _transitionDuration && _transitionSkippable) {
+		_transitionSkipped = true;
+		return;
+	}
+	if (_messageWaiting && select) {
 		advanceMessage();
 		return;
 	}

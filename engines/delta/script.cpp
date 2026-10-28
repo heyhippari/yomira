@@ -232,9 +232,7 @@ bool Script::next(ScriptCommand &command) {
 		}
 		command.arguments.push_back(event);
 		if (command.opcode == 0x3b) {
-			const uint16 value = _reader.readWord();
-			_seenEvents[event - 1] = value;
-			command.arguments.push_back(value);
+			_seenEvents[event - 1] = (event - 1) % 2 ? 2 : 1;
 		} else {
 			const uint16 variable = _reader.readWord();
 			if (variable >= ARRAYSIZE(_variables)) {
@@ -337,6 +335,20 @@ bool Script::next(ScriptCommand &command) {
 	case 0x98:
 		command.strings.push_back(_reader.readString());
 		break;
+	case 0x2c: {
+		for (uint index = 0; index < 4; ++index)
+			command.strings.push_back(_reader.readString());
+		for (uint index = 0; index < 6; ++index)
+			command.arguments.push_back(_reader.readWord());
+		// The native renderer (0x416740) always returns zero into the result variable.
+		const uint16 variable = command.arguments[5];
+		if (variable >= ARRAYSIZE(_variables)) {
+			_error = Common::String::format("Invalid variable at script offset 0x%x", command.offset);
+			return false;
+		}
+		_variables[variable] = 0;
+		break;
+	}
 	case 0x22:
 	case 0x3d: {
 		const uint32 destination = _reader.readDword();
