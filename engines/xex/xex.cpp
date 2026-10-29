@@ -206,9 +206,6 @@ Common::Error XexEngine::run() {
 
 	loadFont();
 	initCursor();
-#ifndef USE_MAD
-	warning("Xex: built without MP3 support, voices and digital music are silent");
-#endif
 
 	_scene.resize(_screenWidth * _screenHeight * 3);
 	memset(_scene.data(), 0, _scene.size());

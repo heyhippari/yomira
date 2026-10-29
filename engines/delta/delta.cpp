@@ -760,13 +760,7 @@ static Audio::SeekableAudioStream *openSound(const Common::Path &path, bool musi
 	}
 	if (!music)
 		return Audio::makeWAVStream(file, DisposeAfterUse::YES);
-#ifdef USE_VORBIS
 	return Audio::makeVorbisStream(file, DisposeAfterUse::YES);
-#else
-	delete file;
-	warning("Delta: Ogg Vorbis support is required for music");
-	return nullptr;
-#endif
 }
 
 // Native routines 0x439ad0 (music) and 0x4398b0 (effects)
@@ -864,7 +858,6 @@ void DeltaEngine::playVoice(uint16 archive, uint32 offset) {
 		warning("Delta: voice archive %u is not listed in VOICE.LST", archive);
 		return;
 	}
-#ifdef USE_VORBIS
 	Common::File *file = new Common::File();
 	uint32 size = 0;
 	if (file->open(Common::Path(_voiceArchives[archive])) && file->seek(offset)) {
@@ -886,9 +879,6 @@ void DeltaEngine::playVoice(uint16 archive, uint32 offset) {
 	}
 	debug(2, "Delta voice: %s at 0x%x (%u bytes)", _voiceArchives[archive].c_str(), offset, size);
 	_mixer->playStream(Audio::Mixer::kSpeechSoundType, &_voiceHandle, stream);
-#else
-	warning("Delta: Ogg Vorbis support is required for voices");
-#endif
 }
 
 void DeltaEngine::startWait(uint32 units, bool skippable, int resultVariable) {

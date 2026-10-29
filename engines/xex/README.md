@@ -48,7 +48,7 @@ font filenames in order:
 - `NotoSansCJKjp-Regular.otf`
 - `NotoSerifCJK-Regular.ttc`
 
-The build requires 16-bit color, high-resolution graphics, and FreeType2.
+The build requires 16-bit color, high-resolution graphics, FreeType2, and MP3 support (`mad`).
 Enable the engine with `./configure --enable-engine=xex`, then build with
 `make -j2`. It is enabled by default.
 
@@ -95,9 +95,8 @@ quick save, and quick load.
 ### Audio
 
 - MIDI: `mus/<name>.mid` is a standard MIDI file.
-- Digital: `vmd/<name>.vmd` is MP3 data with every byte XORed with `0xe5`. This requires a ScummVM build with MP3 support (`USE_MAD`).
+- Digital: `vmd/<name>.vmd` is MP3 data with every byte XORed with `0xe5`. `configure.engine` declares `mad` as a dependency, so the engine is not built without MP3 support.
 - Music uses MIDI when it is enabled and falls back to the digital track if the MIDI file cannot be opened or parsed. Voices are always digital.
-- Without MP3 support, voices and digital music are silent, and a warning is logged at startup.
 
 ### Save Data
 

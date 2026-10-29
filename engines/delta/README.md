@@ -36,7 +36,8 @@ The engine is built by default. To enable it explicitly, use:
 make
 ```
 
-`configure.engine` requires the `16bit`, `highres`, and `freetype2` features.
+`configure.engine` requires the `16bit`, `highres`, `freetype2`, and `vorbis`
+features. Music and voices are Ogg Vorbis.
 The engine can also be built as a dynamic plugin; `./configure --help` lists
 the matching option. It requests an 800x600 RGB565 screen and rejects 8-bit
 color modes.
@@ -556,8 +557,7 @@ ignored. ScummVM save and load remain limited to the title-menu checkpoint.
 
 Port: music and effects play on separate channels through ScummVM's mixer, as the music and
 sound-effect types, so the existing volume settings apply. A looped track
-plays its intro file once and then repeats the `L` file. Ogg playback
-requires the `vorbis` feature; without it, music is skipped with a warning.
+plays its intro file once and then repeats the `L` file.
 Music also starts while skipping. The prefix is the resource prefix from
 `ms.mhu`. One Lover's story requests track 17, whose file is not shipped; the
 port logs a warning. How the native handles the missing file was not checked. The wait word is ignored. The playing

@@ -31,10 +31,8 @@
 
 namespace Xex {
 
-#ifdef USE_MAD
 // The VMD files are MP3 data with every byte XORed with this value
 static const byte kVmdKey = 0xe5;
-#endif
 
 MusicMidiPlayer::MusicMidiPlayer() {
 	createDriver();
@@ -133,7 +131,6 @@ void AudioPlayer::pause(bool pause) {
 
 Audio::SeekableAudioStream *AudioPlayer::openStream(const Common::String &name) {
 	debugC(1, kDebugAudio, "Opening '%s.vmd'", name.c_str());
-#ifdef USE_MAD
 	Common::File file;
 	if (!file.open(Common::Path(name + ".vmd")))
 		return nullptr;
@@ -149,9 +146,6 @@ Audio::SeekableAudioStream *AudioPlayer::openStream(const Common::String &name) 
 		data[i] ^= kVmdKey;
 
 	return Audio::makeMP3Stream(new Common::MemoryReadStream(data, size, DisposeAfterUse::YES), DisposeAfterUse::YES);
-#else
-	return nullptr;
-#endif
 }
 
 void AudioPlayer::playMusic(const Common::String &name, bool loop) {

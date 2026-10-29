@@ -38,7 +38,8 @@ Pressing Escape ends startup.
 
 ## Build And Setup
 
-Illusion requires the `tinygl` renderer. It is registered in `configure.engine` as an optional engine:
+`configure.engine` requires the `16bit`, `highres`, and `tinygl` features: the
+engine renders through TinyGL at 640x480 or higher in 16 or 32 bits per pixel.
 
 ```sh
 ./configure --enable-engine=illusion
