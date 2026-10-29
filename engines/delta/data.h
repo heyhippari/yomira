@@ -62,9 +62,12 @@ bool readPackedData(Common::SeekableReadStream &stream, Common::Array<byte> &dat
 bool readIafData(Common::SeekableReadStream &stream, Common::Array<byte> &data, LoadProgress *progress = nullptr);
 bool readIafImage(Common::SeekableReadStream &stream, Graphics::Surface &surface, const Graphics::PixelFormat &format, LoadProgress *progress = nullptr);
 bool findIafRecord(Common::SeekableReadStream &stream, const Common::String &name, uint32 &offset, uint32 &size, LoadProgress *progress = nullptr);
+bool hasSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, LoadProgress *progress = nullptr);
 bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, Graphics::Surface &color, Graphics::Surface &mask, const Graphics::PixelFormat &format, LoadProgress *progress = nullptr, Common::Point *position = nullptr);
 bool readSpriteInfo(Common::SeekableReadStream &stream, const Common::String &name, Common::StringArray &layers, LoadProgress *progress = nullptr);
 bool compositeMasked(Graphics::Surface &destination, const Graphics::Surface &color, const Graphics::Surface &mask, LoadProgress *progress = nullptr, const Common::Point &position = Common::Point(), byte frameTransparency = 1);
+// Native 0x43bce0; returns false for tones that need the absent CG/TCP.TPF table
+bool applyTone(Graphics::Surface &image, const Common::String &tone);
 void drawShadowedString(const Graphics::Font &font, Graphics::ManagedSurface &destination, const Common::U32String &text, int x, int y, int width, uint32 foreground, uint32 shadow);
 bool readStartupConfig(Common::SeekableReadStream &stream, StartupConfig &config, LoadProgress *progress = nullptr);
 bool readScenarioData(Common::SeekableReadStream &stream, Common::Array<byte> &data, LoadProgress *progress = nullptr);

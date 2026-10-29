@@ -24,6 +24,7 @@
 
 #include "common/error.h"
 #include "common/random.h"
+#include "audio/mixer.h"
 #include "engines/engine.h"
 #include "graphics/screen.h"
 #include "graphics/font.h"
@@ -61,6 +62,9 @@ private:
 	uint32 _scriptPosition = 0;
 	Graphics::Screen *_screen = nullptr;
 	Script *_script = nullptr;
+	ReadHistory _readHistory;
+	bool _skipHeld = false;
+	bool _escapeLatch = false;
 	ScriptCommand _menuConfig;
 	Common::String _characterNames[3];
 	Common::String _characterBackground;
@@ -80,6 +84,9 @@ private:
 	int _transitionResult = -1;
 	uint32 _waitUntil = 0;
 	bool _waiting = false;
+	bool _waitSkippable = false;
+	bool _waitInterrupted = false;
+	int _waitResult = -1;
 	bool _atMenu = false;
 	bool _cursorInstalled = false;
 	InputState _input;
@@ -92,6 +99,18 @@ private:
 	Common::Array<byte> _pendingState;
 	Common::Array<byte> _titleState;
 	Graphics::Font *_messageFont = nullptr;
+	int _messageFontSize = 24;
+	Audio::SoundHandle _musicHandle;
+	Audio::SoundHandle _effectHandle;
+	uint16 _musicTrack = 0;
+	uint16 _effectNumber = 0;
+	Audio::SoundHandle _voiceHandle;
+	Common::StringArray _voiceArchives;
+	Common::Array<int32> _messageVoices;
+	uint _messageVoiceIndex = 0;
+	bool _waitForVoice = false;
+	// Layer tones of command 0x98: character slots 0-2, then the background
+	Common::String _layerTones[4];
 	Graphics::Surface _messageBackground;
 	Graphics::Surface _messageFrameColor[4];
 	Graphics::Surface _messageFrameMask[4];
@@ -120,15 +139,25 @@ private:
 
 	Common::Error initialize();
 	Common::Error loadImage(const Common::String &name, Graphics::Surface &image);
-	Common::Error compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset = Common::Point());
-	Common::Error compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset = Common::Point());
+	Common::Error compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset = Common::Point(),
+		const Common::String &tone = Common::String());
+	Common::Error compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset = Common::Point(),
+		const Common::String &tone = Common::String());
+	void setLayerTones(const Common::String &spec);
+	bool hasLayerSprite(const Common::String &name);
 	Common::Error showCharacters(const ScriptCommand &command);
 	Common::Error advanceScript();
 	Common::Error enterMenu();
 	void drawMenu();
 	void handleInput(const Common::Event &event);
+	bool skipping() const;
+	void loadReadHistory();
+	void saveReadHistory();
 	bool pollInput();
 	bool serviceInput();
+	void startWait(uint32 units, bool skippable, int resultVariable);
+	void playSound(bool music, uint16 number, uint16 repeat);
+	void playVoice(uint16 archive, uint32 offset);
 	void startTransition(const Graphics::Surface &image, int units, TransitionEffect effect = kTransitionCrossFade,
 		bool skippable = false, int resultVariable = -1, const Common::Rect &area = Common::Rect());
 	bool updateTransition();
@@ -155,6 +184,11 @@ private:
 
 protected:
 	Common::Error run() override;
+	// Dialogs can swallow the skip action's release
+	void pauseEngineIntern(bool pause) override {
+		Engine::pauseEngineIntern(pause);
+		_skipHeld = false;
+	}
 
 public:
 	DeltaEngine(OSystem *syst, const ADGameDescription *gameDesc);

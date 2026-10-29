@@ -316,3 +316,6 @@ __pycache__/
 #Ignore Claude instruction files
 CLAUDE.md
 .claude
+
+#Ignore machine-local agent instructions
+AGENTS.local.md

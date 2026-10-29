@@ -21,6 +21,7 @@
 
 #include <cxxtest/TestSuite.h>
 
+#include "common/endian.h"
 #include "common/memstream.h"
 #include "engines/delta/data.h"
 #include "graphics/font.h"
@@ -506,5 +507,40 @@ public:
 		TS_ASSERT(!Delta::findIafRecord(stream, "MISSING.IAF", offset, size));
 		WRITE_LE_UINT32(bank + 20, 8);
 		TS_ASSERT(!Delta::findIafRecord(stream, "TITLE.IAF", offset, size));
+	}
+
+	void testLayerTones() {
+		const Graphics::PixelFormat format(4, 8, 8, 8, 8, 16, 8, 0, 24);
+		const char *const tones[] = { "NULL", "MONO", "REVMONO", "TDOWN", "SEPIA", "NEGA", "WHITE", "FOO" };
+		const byte expected[][3] = {
+			{ 200, 100, 50 }, { 117, 117, 117 }, { 161, 161, 161 }, { 100, 50, 25 },
+			{ 90, 75, 54 }, { 55, 155, 205 }, { 255, 255, 255 }, { 200, 100, 50 }
+		};
+		for (uint index = 0; index < ARRAYSIZE(tones); ++index) {
+			Graphics::Surface image;
+			image.create(1, 1, format);
+			image.setPixel(0, 0, format.RGBToColor(200, 100, 50));
+			TS_ASSERT_EQUALS(Delta::applyTone(image, tones[index]), index != ARRAYSIZE(tones) - 1);
+			byte r, g, b;
+			format.colorToRGB(image.getPixel(0, 0), r, g, b);
+			TS_ASSERT_EQUALS(r, expected[index][0]);
+			TS_ASSERT_EQUALS(g, expected[index][1]);
+			TS_ASSERT_EQUALS(b, expected[index][2]);
+			image.free();
+		}
+	}
+
+	void testSpriteBankPresence() {
+		// A mask record followed by its color record, both pointing past the directory
+		byte bank[4 + 2 * 32 + 4] = {};
+		WRITE_LE_UINT32(bank, 2);
+		memcpy(bank + 4, "E11A00G0M", 9);
+		WRITE_LE_UINT32(bank + 4 + 28, 0x80000000 | 68);
+		memcpy(bank + 36, "E11A00G0", 8);
+		WRITE_LE_UINT32(bank + 36 + 28, 68);
+		Common::MemoryReadStream stream(bank, sizeof(bank));
+		TS_ASSERT(Delta::hasSpriteBankImage(stream, "e11a00g0"));
+		TS_ASSERT(!Delta::hasSpriteBankImage(stream, "E11C00G0"));
+		TS_ASSERT(!Delta::hasSpriteBankImage(stream, "E11A00G0M"));
 	}
 };

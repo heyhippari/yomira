@@ -460,4 +460,118 @@ public:
 			TS_ASSERT(!script.next(command));
 		}
 	}
+
+	void testAddVariableWrapsAndAcceptsReferences() {
+		const byte bytes[] = {
+			0x91, 0, 3, 0, 42, 0, 0x91, 0, 1, 0, 0xff, 0x7f, 0x8b, 0, 3, 0, 5, 0,
+			0x8b, 0, 3, 0, 1, 0x80, 0x8b, 0, 3, 0, 1, 0x80, 0x8b, 0, 3, 0, 0, 0x84
+		};
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code);
+		Delta::ScriptCommand command;
+		TS_ASSERT(script.next(command));
+		TS_ASSERT(script.next(command));
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.arguments[0], 3);
+		TS_ASSERT_EQUALS(command.arguments[1], 47);
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.arguments[1], 32814);
+		TS_ASSERT(script.next(command));
+		TS_ASSERT_EQUALS(command.arguments[1], 45);
+		TS_ASSERT(!script.next(command));
+	}
+
+	void testReadHistoryMarksLeftBlocksAndPersists() {
+		Delta::ReadHistory history;
+		TS_ASSERT(!history.currentRead());
+		TS_ASSERT(!history.enterBlock(7));
+		TS_ASSERT(!history.currentRead());
+		TS_ASSERT(history.enterBlock(65535));
+		TS_ASSERT(history.isRead(7));
+		TS_ASSERT(!history.isRead(65535));
+		TS_ASSERT(history.enterBlock(7));
+		TS_ASSERT(history.currentRead());
+		TS_ASSERT(history.isRead(65535));
+		history.leaveBlock();
+		TS_ASSERT(!history.currentRead());
+		TS_ASSERT(!history.enterBlock(8));
+
+		Common::MemoryWriteStreamDynamic out(DisposeAfterUse::YES);
+		TS_ASSERT(history.save(out));
+		Common::MemoryReadStream in(out.getData(), out.size());
+		Delta::ReadHistory restored;
+		TS_ASSERT(restored.load(in));
+		TS_ASSERT(restored.isRead(7));
+		TS_ASSERT(restored.isRead(65535));
+		TS_ASSERT(!restored.isRead(8));
+		Common::MemoryReadStream truncated(out.getData(), out.size() - 1);
+		TS_ASSERT(!Delta::ReadHistory().load(truncated));
+	}
+
+	void testVariableArithmetic() {
+		const byte bytes[] = {
+			0x91, 0, 1, 0, 10, 0, 0x91, 0, 2, 0, 3, 0,
+			0x8c, 0, 1, 0, 0x02, 0x80, // 10 - var[2] = 7
+			0x8f, 0, 1, 0, 0xff, 0x3f, // 7 * 0x3fff wraps
+			0x91, 0, 1, 0, 17, 0,
+			0x8e, 0, 1, 0, 0x02, 0x80, // 17 / 3 = 5
+			0x90, 0, 1, 0, 3, 0, // 5 % 3 = 2
+			0x8c, 0, 1, 0, 9, 0, // saturates at 0
+			0x90, 0, 2, 0, 0, 0 // zero divisor leaves 3
+		};
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code);
+		Delta::ScriptCommand command;
+		const int expected[] = { 10, 3, 7, (7 * 0x3fff) & 0xffff, 17, 5, 2, 0, 3 };
+		for (uint index = 0; index < ARRAYSIZE(expected); ++index) {
+			TS_ASSERT(script.next(command));
+			TS_ASSERT_EQUALS(command.arguments[1], expected[index]);
+		}
+		TS_ASSERT_EQUALS(script.position(), sizeof(bytes));
+	}
+
+	void testVariableRangeMaximum() {
+		const byte bytes[] = {
+			0x91, 0, 10, 0, 4, 0, 0x91, 0, 11, 0, 9, 0, 0x91, 0, 12, 0, 9, 0, 0x91, 0, 13, 0, 6, 0,
+			0x93, 0, 10, 0, 4, 0, 1, 0, 2, 0,
+			0x94, 0, 10, 0, 4, 0, 3, 0, 4, 0,
+			0x93, 0, 10, 0, 0, 0, 5, 0, 6, 0
+		};
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code);
+		Delta::ScriptCommand command;
+		for (uint index = 0; index < 7; ++index)
+			TS_ASSERT(script.next(command));
+		// Ties keep the earlier variable
+		TS_ASSERT_EQUALS(script.variable(1), 2);
+		TS_ASSERT_EQUALS(script.variable(2), 9);
+		TS_ASSERT_EQUALS(script.variable(3), 2);
+		TS_ASSERT_EQUALS(script.variable(4), 3);
+		TS_ASSERT_EQUALS(script.variable(5), 1);
+		TS_ASSERT_EQUALS(script.variable(6), 4);
+	}
+
+	void testWaitAndNoOperandCommands() {
+		const byte bytes[] = {
+			0x96, 0, 5, 0, 1, 0, 0, 0, 0, 0,
+			0x9e, 0, 5, 0, 0x9f, 0, 1, 0, 2, 0, 3, 0, 0xa0, 0,
+			0xa7, 0, 'X', 0, 1, 0, 2, 0, 3, 0, 4, 0, 0x4a, 0, 0x48, 0, 0x85, 0, 1, 0
+		};
+		const Common::Array<byte> code = copyCode(bytes, sizeof(bytes));
+		Delta::Script script(code);
+		Delta::ScriptCommand command;
+		const uint16 opcodes[] = { 0x96, 0x9e, 0x9f, 0xa0, 0xa7, 0x4a, 0x48, 0x85 };
+		for (uint index = 0; index < ARRAYSIZE(opcodes); ++index) {
+			TS_ASSERT(script.next(command));
+			TS_ASSERT_EQUALS(command.opcode, opcodes[index]);
+		}
+		TS_ASSERT(Delta::isHaltOpcode(0x4a));
+		TS_ASSERT(!Delta::isHaltOpcode(0x48));
+		TS_ASSERT_EQUALS(script.position(), sizeof(bytes));
+		// The percentage roll needs a random source
+		const byte roll[] = { 0x92, 0, 1, 0, 2, 0 };
+		const Common::Array<byte> rollCode = copyCode(roll, sizeof(roll));
+		Delta::Script unseeded(rollCode);
+		TS_ASSERT(!unseeded.next(command));
+	}
 };

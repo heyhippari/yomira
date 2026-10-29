@@ -110,6 +110,7 @@ bool DeltaEngine::restoreSaveStream(Common::SeekableReadStream &stream, bool app
 	_transitionDuration = 0;
 	_transitionResult = -1;
 	_backgroundName.clear();
+	_readHistory.leaveBlock();
 	_waiting = false;
 	_atMenu = false;
 	return true;
@@ -133,6 +134,7 @@ Common::Error DeltaEngine::loadGameStream(Common::SeekableReadStream *stream) {
 
 Common::Error DeltaEngine::applyPendingLoad() {
 	_loadPending = false;
+	_mixer->stopHandle(_voiceHandle);
 	Common::MemoryReadStream stream(_pendingState.begin(), _pendingState.size());
 	if (!restoreSaveStream(stream, true))
 		return Common::kReadingFailed;

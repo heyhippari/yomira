@@ -46,6 +46,9 @@ private:
 	bool _failed = false;
 };
 
+// Opcodes that halt the native dispatcher (handler 0x40861d) and end the frame
+bool isHaltOpcode(uint16 opcode);
+
 struct ScriptCommand {
 	uint16 opcode = 0;
 	uint32 offset = 0;
@@ -58,6 +61,7 @@ public:
 	explicit Script(const Common::Array<byte> &code, bool legacyOpcodes = false, Common::RandomSource *random = nullptr) : _reader(code), _legacyOpcodes(legacyOpcodes), _random(random) {}
 	bool next(ScriptCommand &command);
 	bool setVariable(uint16 variable, uint16 value);
+	uint16 variable(uint16 index) const { return index < ARRAYSIZE(_variables) ? _variables[index] : 0; }
 	bool saveState(Common::WriteStream &stream) const;
 	bool loadState(Common::SeekableReadStream &stream);
 	const Common::String &error() const { return _error; }
@@ -73,6 +77,22 @@ private:
 	Common::Array<uint32> _returnStack;
 	Common::String _error;
 	bool evaluateCondition();
+};
+
+// Read-text bitmap (native 0x67c498). Commands 0x1e and 0x3e mark the block being
+// left as read and enter the next one. The bitmap is global, not stored in saves.
+class ReadHistory {
+public:
+	bool enterBlock(uint16 block);
+	void leaveBlock() { _current = -1; }
+	bool isRead(uint16 block) const { return _read[block >> 3] & (1 << (block & 7)); }
+	bool currentRead() const { return _current >= 0 && isRead(_current); }
+	bool save(Common::WriteStream &stream) const;
+	bool load(Common::SeekableReadStream &stream);
+
+private:
+	byte _read[8192] = {};
+	int32 _current = -1;
 };
 
 } // End of namespace Delta

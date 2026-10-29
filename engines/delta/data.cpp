@@ -228,13 +228,13 @@ static bool readSpriteBitmap(Common::SeekableReadStream &stream, uint32 offset, 
 	return readPackedData(input, data, progress) && decodeBitmap(data, image, format, progress);
 }
 
-bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, Graphics::Surface &color, Graphics::Surface &mask, const Graphics::PixelFormat &format, LoadProgress *progress, Common::Point *position) {
+static bool findSpriteBankEntry(Common::SeekableReadStream &stream, const Common::String &name, uint32 &offset, uint32 &maskOffset, LoadProgress *progress) {
 	if (!stream.seek(0) || stream.size() < 4)
 		return false;
 	const uint32 count = stream.readUint32LE();
 	if (!count || count > 65536 || stream.size() < 4 + count * 32)
 		return false;
-	uint32 maskOffset = 0;
+	maskOffset = 0;
 	for (uint index = 0; index < count; ++index) {
 		if (progress && (index & 63) == 0 && !(*progress)())
 			return false;
@@ -242,7 +242,7 @@ bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::Strin
 		if (stream.read(entry, sizeof(entry)) != sizeof(entry))
 			return false;
 		const uint32 raw = stream.readUint32LE();
-		const uint32 offset = raw & 0x7fffffff;
+		offset = raw & 0x7fffffff;
 		if (offset < 4 + count * 32 || offset >= stream.size())
 			return false;
 		if (raw & 0x80000000)
@@ -250,21 +250,31 @@ bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::Strin
 		uint length = 0;
 		while (length < sizeof(entry) && entry[length])
 			++length;
-		if (!(raw & 0x80000000) && Common::String(entry, length).equalsIgnoreCase(name)) {
-			if (!maskOffset || !stream.seek(maskOffset) || stream.size() - stream.pos() < 16)
-				return false;
-			const int32 left = stream.readSint32LE();
-			const int32 top = stream.readSint32LE();
-			if (left < -4096 || left > 4096 || top < -4096 || top > 4096 ||
-				!readSpriteBitmap(stream, offset, 0, color, format, progress) ||
-				!readSpriteBitmap(stream, maskOffset, 16, mask, format, progress))
-				return false;
-			if (position)
-				*position = Common::Point(left, top);
-			return true;
-		}
+		if (!(raw & 0x80000000) && Common::String(entry, length).equalsIgnoreCase(name))
+			return maskOffset != 0;
 	}
 	return false;
+}
+
+bool hasSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, LoadProgress *progress) {
+	uint32 offset, maskOffset;
+	return findSpriteBankEntry(stream, name, offset, maskOffset, progress);
+}
+
+bool readSpriteBankImage(Common::SeekableReadStream &stream, const Common::String &name, Graphics::Surface &color, Graphics::Surface &mask, const Graphics::PixelFormat &format, LoadProgress *progress, Common::Point *position) {
+	uint32 offset, maskOffset;
+	if (!findSpriteBankEntry(stream, name, offset, maskOffset, progress) || !stream.seek(maskOffset) ||
+		stream.size() - stream.pos() < 16)
+		return false;
+	const int32 left = stream.readSint32LE();
+	const int32 top = stream.readSint32LE();
+	if (left < -4096 || left > 4096 || top < -4096 || top > 4096 ||
+		!readSpriteBitmap(stream, offset, 0, color, format, progress) ||
+		!readSpriteBitmap(stream, maskOffset, 16, mask, format, progress))
+		return false;
+	if (position)
+		*position = Common::Point(left, top);
+	return true;
 }
 
 bool readSpriteInfo(Common::SeekableReadStream &stream, const Common::String &name, Common::StringArray &layers, LoadProgress *progress) {
@@ -301,6 +311,59 @@ bool readSpriteInfo(Common::SeekableReadStream &stream, const Common::String &na
 		}
 	}
 	return false;
+}
+
+bool applyTone(Graphics::Surface &image, const Common::String &tone) {
+	static const char *const tones[] = { "NONE", "NULL", "MONO", "REVMONO", "TDOWN", "SEPIA", "BLACK", "WHITE", "NEGA" };
+	int kind = -1;
+	for (uint index = 0; index < ARRAYSIZE(tones); ++index) {
+		if (tone == tones[index])
+			kind = index;
+	}
+	if (kind < 0)
+		return false;
+	if (kind < 2 || (image.format.bytesPerPixel != 2 && image.format.bytesPerPixel != 4))
+		return true;
+	for (int y = 0; y < image.h; ++y) {
+		for (int x = 0; x < image.w; ++x) {
+			byte r, g, b;
+			image.format.colorToRGB(image.getPixel(x, y), r, g, b);
+			// The native works on DIB bytes b0 = blue, b1 = green, b2 = red
+			switch (kind) {
+			case 2:
+				r = g = b = (b + g + r + 1) / 3;
+				break;
+			case 3:
+				r = g = b = 255 - (r * 114 / 1000 + g * 587 / 1000 + b * 298 / 1000);
+				break;
+			case 4:
+				r >>= 1;
+				g >>= 1;
+				b >>= 1;
+				break;
+			case 5: {
+				const float luma = b * 0.298912f + g * 0.586611f + r * 0.114477f;
+				b = (byte)(luma * 0.568627f);
+				g = (byte)(luma * 0.784314f);
+				r = (byte)(luma * 0.941176f);
+				break;
+			}
+			case 6:
+				r = g = b = 0;
+				break;
+			case 7:
+				r = g = b = 255;
+				break;
+			default:
+				r = ~r;
+				g = ~g;
+				b = ~b;
+				break;
+			}
+			image.setPixel(x, y, image.format.RGBToColor(r, g, b));
+		}
+	}
+	return true;
 }
 
 bool compositeMasked(Graphics::Surface &destination, const Graphics::Surface &color, const Graphics::Surface &mask, LoadProgress *progress, const Common::Point &position, byte frameTransparency) {

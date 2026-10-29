@@ -19,9 +19,11 @@ original menu-result variable and resumes the scenario. One Lover has been
 exercised through opening scenes with Japanese text pages, character poses,
 and an event image. Later story execution, choices, and transitions remain
 incomplete; unsupported commands report their position and restore the title
-checkpoint. Message voice/effect playback and voice-token timing are not
-implemented. Screen transitions follow the recovered 16-step fades (see
-Transitions); the effect `0x411350` and its callers are not implemented. Windows installation paths and INI preferences are not imported or
+checkpoint. Music, sound effects, and message voices play (see Music And Sound
+Effects and Voices); voice-timing `W` tokens are ignored. Screen transitions follow the recovered 16-step fades (see
+Transitions); the effect `0x411350` and its callers are not implemented. A
+held, rebindable skip action passes read text, as the original's skip key does
+(see Skip). Windows installation paths and INI preferences are not imported or
 modified. No game files are written. Both detection entries carry the
 `ADGF_UNSTABLE` flag.
 
@@ -81,6 +83,8 @@ The `delta-default` keymap maps:
 - Focus movement: arrow keys, keypad 8/2/4/6, the joystick D-pad, and both
   analog sticks.
 - Game menu: F5 or joystick Start. Opens ScummVM's main menu.
+- Skip messages (hold): Left/Right Ctrl or the joystick right trigger. While
+  held, read text pages, waits and transitions pass without input (see Skip).
 - Left mouse: a press and release on the same menu row activates it; a left
   click advances a waiting message page.
 - On the options screen, the mouse behaves as in the original. Up/Down moves a
@@ -217,6 +221,7 @@ the table's handlers establishes the implemented startup slice:
 | --- | --- |
 | `0x84`, `0x83`, `0x70`-`0x81` | Decode scenario/header and configuration records |
 | `0x91` | Assign the 1024-word variable bank, including variable references |
+| `0x8b` | Add a word or variable reference to a variable, wrapping at 16 bits |
 | `0x3c` | Evaluate high-bit-tagged Boolean/comparison tokens |
 | `0x22`, `0x3d` | Jump to a bounded absolute byte offset |
 | `0x5e`, `0x95` | Random choice and one-based indexed branch |
@@ -242,6 +247,14 @@ byte array, then calls `0x418630`, which writes the global data. Command `0x3a`
 (`0x403cfe`) reads the event and a variable and stores whether the event byte is
 non-zero. PHM uses `0x3b` in this one-word form at script offset `0x137f`.
 
+Command `0x8b` (handler `0x406502`) reads a destination variable and a value
+word. A value with bit 15 set names a variable (`value & 0x7fff`). The handler
+adds the value to the destination, wrapping at 16 bits. It skips the addition
+unless `0x67bbec` is -2 (normal play). The other values of `0x67bbec` were not
+traced. The port has no other mode, so it always adds, and it ignores the flag
+for `0x91` as well. One Lover first uses `0x8b` at script offset `0x665b8`, as a
+loop counter that a `0x3c` condition tests.
+
 The runner processes at most 64 commands per frame, keeping events responsive
 even for a script loop. Unsupported commands and invalid operands stop with a
 diagnostic containing the script position. Conditions and jumps determine the
@@ -263,10 +276,45 @@ incomplete.
 
 Foreground and event images resolve in this order: a loose `IAF` in the game
 root or `CG/`, then the `CG/EVB.CGF` record, then the `CG/EV.CGF` sprite bank,
-then an E-prefixed event composition. For an event composition, the base image
-is the first six characters of the name plus `00`, and the layers come from
-characters 6 and 7. Backgrounds that are not 800x600 are rejected as unsupported
-partial images.
+then an E-prefixed event composition (see Event Compositions). Backgrounds that
+are not 800x600 are rejected as unsupported partial images.
+
+### Event Compositions
+
+`0x410590` first passes the name to `0x40d900`, before the `EVINFO.BIN`
+lookup. That routine splits an eight-character event name such as `E11C05G0`
+into fields and checks each against per-event tables:
+
+| Characters | Field | Table |
+| --- | --- | --- |
+| 0-2 | Event (`E01`-`E20`) | `0x466ec0`, 20 entries; no match returns 0 |
+| 3 | Series | `0x466f10`, four per event, with flags at `0x467190` (1 = has letter layers, 0 = none, 255 = unused) |
+| 4-5 | Pose | `0x467230`, 14 per event |
+| 6 | Layer letter | `0x467690`, ten per event; searched only when the series flag is 1 |
+| 7 | Layer digit | `0x4679c8`, eight per event; used only when `0x4679b0` (per event) is 1 and the character is not `0` |
+
+A field missing from its table returns 0, and the loader falls back to the
+`EVINFO.BIN` and bank lookups. Otherwise the routine builds up to three names
+(stored at `+0x75690c`, `+0x75691c`, `+0x75692c`, with their count at
+`+0x75694c`):
+
+- Base: event + series + pose + `00`.
+- Letter layer, only when the series flag is 1: event + series + `00` +
+  letter + `0`.
+- Digit layer, only when the event allows one and the digit is not `0`: event
+  + `A000` + digit, always series A.
+
+Thus `E11C05G0` loads only `E11C0500`. Series C of event 11 has flag 0, so
+the `G` is ignored, and no `E11C00G0` image exists. In One Lover the flags
+match the shipped sprites exactly: a series has `E..S00x0` letter layers in
+`CG/EV.CGF` if and only if its flag is 1, and an event has `E..A000d` digit
+layers if and only if its `0x4679b0` flag is 1. A separate branch for nonzero
+`0x7e8340` builds only the base and letter layer; that flag was not traced.
+
+Port: the engine has no copy of these tables, since PHM's packed executable
+cannot be read. Because of the match above, it adds a letter or digit layer
+only when `CG/EV.CGF` or `CG/ST.CGF` contains that sprite. It still tries a
+whole name in `EVB.CGF` and `EV.CGF` before composing.
 
 `CG/EVINFO.BIN` maps a foreground name to its layer names. In One Lover,
 `0x410590` looks the name up there and loads each listed layer through the
@@ -338,6 +386,274 @@ opcodes 5 and above to the next One Lover opcode. This mapping is validated
 against the supplied scenario's startup operands, branch targets, asset loads,
 and menu checkpoint, not asserted to cover all gameplay commands. The dialect
 is selected explicitly for the detected game, not inferred from `//SinNo`.
+
+## Opcode Recovery
+
+The handlers of the remaining One Lover opcodes are recovered in small batches
+from the objdump listing of `OLV_DL.EXE` (SHA-256
+`031aac508a173f698151ac8c35198c1dc1879ed6b61901e88e511bb3fe73eb81`). REA's
+Ghidra session did not finish opening the executable (it timed out after 30
+minutes), so no decompiler output was used. No native game was run. Operands are
+16-bit words read through `0x401690` unless stated. `var[n]` is the word array
+at `0x80c6d0`, and a value with bit 15 set names `var[value & 0x7fff]`. "Normal
+play" means `0x67bbec` is -2 (not scene replay).
+
+### Dispatcher Exits
+
+Every handler continues at `0x40859c`, which leaves the dispatcher (ending the
+frame) when the halt flag `0x7e87e9` is set and otherwise reads the next
+command. Twenty table entries (`0x02`-`0x04`, `0x15`, `0x16`, `0x1f`, `0x4a`,
+`0x4d`-`0x4f`, `0x51`, `0x5b`, `0x6c`, `0x7b`, `0x82`, `0x9b`, `0xa9`, `0xaa`,
+`0xba`, `0xbb`) share handler `0x40861d`. It takes no operands, sets the halt
+flag, and leaves the dispatcher. The flag is cleared only when a scenario is
+loaded (`0x425430`, `0x42a07f`), so afterwards the native runs one command per
+frame. The dispatcher also forces opcode `0xbb` when `0x7e7a5c` is set. Opcodes
+`0x48`, `0x49`, `0x5f`, `0x89`, and `0x8d` jump straight to `0x40859c` with no
+operands. When `0x6874c8` (set by the foreground cuts `0xb2`/`0xb3`) is set, that path
+redraws the message window (`0x414c60`, `0x4200b0`) before continuing.
+
+Port: the stop opcodes end the current frame's command batch. The one-command-
+per-frame throttle that follows is not reproduced, since it changes only
+pacing. The five no-operand opcodes are no-ops.
+
+### Variable Commands
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x8c` | `0x406550` | dst, value | `var[dst] -= value`, stopping at 0 (unsigned) |
+| `0x8e` | `0x4065ab` | dst, value | `var[dst] /= value` (unsigned) |
+| `0x8f` | `0x4065f8` | dst, value | `var[dst] *= value`, wrapping at 16 bits |
+| `0x90` | `0x40665b` | dst, value | `var[dst] %= value` (unsigned) |
+| `0x92` | `0x4068ac` | chance, dst | `var[dst] = var[chance] > rand(100)`, using `0x418100` (0-99) |
+| `0x93` | `0x406793` | base, count, index, value | Maximum of `var[base]`..`var[base+count-1]`: its one-based position goes to `var[index]`, the value to `var[value]`; ties keep the first |
+| `0x94` | `0x406800` | base, count, first, second | One-based positions of the largest and second-largest values; ties keep the earlier variable; values are not stored |
+| `0x96` | `0x4066a8` | as `0x95` | Same handler as the indexed branch `0x95` |
+
+The value of `0x8c`-`0x90` may name a variable (bit 15), as with `0x8b`. Like
+`0x8b`, they change nothing outside normal play; the port has no replay mode and
+always applies them. The native divides with `idiv` and faults on a zero divisor.
+The port then leaves the variable unchanged. `0x94` reads `var[base+1]`
+without checking that count is at least 2.
+
+### Waits
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x99` | `0x4068e4` | arm, time, variable | See below |
+| `0x9e` | `0x406c82` | time | Waits time x 100 ms; input does not end it |
+| `0x9f` | `0x406d46` | mode, time, variable | Waits time x 100 ms in input mode `mode`; `var[variable]` = 1 if input ended it, else 0 |
+| `0xa0` | `0x407198` | none | Closes the message window (`0x421070`) |
+| `0xa7` | `0x407019` | string, 4 words | Reads its operands and does nothing |
+
+- `0x99` with a nonzero first word arms the deadline `0x7e86e4` = now + time x
+  100 ms and ignores the third word. With a zero first word it ignores the
+  second, sets `0x80c6c4` to 1, and pumps messages until the deadline passes or
+  a left click (`0x42b7e0`) sets `0x80c6c4` to 2. The third word names a
+  variable that receives 1 after a click and 0 after the deadline. While
+  skipping (`0x67bbf4` = 1) it does not wait and stores 1.
+- `0x9e` waits through `0x418230` mode 0 only when `EFFECT` is nonzero and
+  neither skipping nor the auto/skip mode (`0x7eeff8`, `0x7ef1a0`) is active.
+  The values 0 and 99 instead save the Windows cursor position and park it at
+  (799, 599), or restore it, when `0x687450` is set.
+- `0x9f` waits only when not skipping, regardless of `EFFECT`; while skipping
+  the variable is left unchanged. `0x418230` returns early for modes 1 and 2 on
+  a left click (`0x67c34c` = 99), for mode 4 when `0x80c6c4` is 2 (the click
+  state above), and for mode 3 when `0x80c6c4` is 4, whose source was not traced.
+- `0x421070` restores the area behind a visible window (`0x7ef530`) and hides it.
+
+Port: `0x99`, `0x9e`, and `0x9f` share the engine's deadline wait. Left-button
+release and Select end an interruptible wait. `0x9f` mode 3 is treated as
+uninterruptible. Cursor parking is not reproduced. `0xa0` restores the saved
+scene behind the message window, as `0x0d` does.
+
+### Scenario Coverage
+
+A linear sweep of One Lover's decoded scenario, using the recovered operand
+layouts, stays aligned from offset 0 to `0x6662f`. That range holds all story
+text and uses 56 distinct opcodes. Beyond it lies the title, save, options, and
+extras code (from `0x66a8c`). There, several commands run twice. On the first
+pass the handler stores its own opcode in `0x67c484`, switches the UI mode
+`0x7e836c`, and leaves the dispatcher. When the screen closes, the dispatcher
+uses the stored opcode instead of reading one, and the second pass reads the
+remaining operands. Example: `0x63` reads a page variable, opens the CG gallery
+(mode 5), and on return reads the result variable.
+
+### State Commands
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x06` | `0x401a3f` | none | Resets the backlog/rewind history (`0x40b9f0`: buffer `0x7ef548`, 0x157c entries of 20 bytes) |
+| `0x07` | `0x401a6e` | flag | Backlog recording on (nonzero) or off (`0x7e8764`), read by message command `0x4b` |
+| `0x0f` | `0x401cca` | variable | `var[variable]` = Escape latch `0x7e7a58`; also copies it to the start reason `0x7ef329` |
+| `0x10` | `0x401cec` | flag | Nonzero stops images from unlocking gallery entries (`0x7e7a4c`, tested by `0x418ba0`) |
+| `0x1c` | `0x40207c` | family, size, weight | Message font: family index (byte, `0x7ef308`), size (`0x7e7f20`), weight clamped to 900, passed to `0x40e760` with the current colors |
+| `0x41` | `0x407138` | flag | Enables (nonzero) or greys the Load and Quick Load menu items (`0x80a32c`; IDs `0x8036`, `0x8048`) |
+| `0x44` | `0x404188` | clear, variable | `var[variable]` = start reason `0x7ef329`; a nonzero first word then clears the reason and the Escape latch |
+| `0x5c` | `0x407150` | value | Stores `0x7eb2d4` and calls the empty routine `0x41e9b0` |
+| `0x60` | `0x407108` | flag | Enables or greys Save and Quick Save (`0x7e82b4`; IDs `0x809d`, `0x803b`) |
+| `0x85` | `0x406310` | value | While the auto/toggled-skip mode `0x7eeff8` is on: value 0, or value 1 with auto mode, stops it (`0x401180`) |
+| `0xa1` | `0x4071a2` | flag | Nonzero selects message frames `WAKU20`/`WAKU21` (`0x7eb508`, read by `0x4201a0`); also applies option values deferred by the INI loader |
+
+- The window procedure (`0x41ca00`) sets the Escape latch when Escape is
+  pressed. Message wait `0x54` (`0x405045`), `0x44`, and the restart routine
+  `0x429dc0` clear it. One Lover's startup arms a 3.5-second `0x99` deadline,
+  then reads the latch with `0x0f`. If Escape was pressed since startup, the
+  script skips the logos and jumps to `0x669aa`; otherwise it continues to the
+  `DELTA` logo at `0x230`.
+- The start reason is 0 at a normal start. The File menu's Return to Start
+  (`0x423ac0`) sets it to 1 before restarting through `0x429dc0`, and scenario
+  chaining `0xab` sets 2. Values 1-3 are also written by `0x43b3f2`-`0x43b477`
+  (not traced). The startup code tests it with `0x44` and branches for 1, 2,
+  and 3.
+- The menu IDs come from the executable's menu resources 300 and 301: File
+  menu セーブする/クイックセーブ and ロードする/クイックロード.
+- Neither supplied `CG/ST.CGF` contains `WAKU20` or `WAKU21`. The story passes 0
+  to `0xa1` at both uses.
+
+Port: the Cancel action (Escape) sets the latch. `0x0f`, `0x44`, and `0x54`
+read and clear it as above, and the start reason is always 0. `0x1c` sets the
+message font size; weight and family have no Noto equivalent. The port has no
+backlog, gallery, Windows menu, auto mode, or `WAKU2x` frames, so `0x06`,
+`0x07`, `0x10`, `0x41`, `0x5c`, `0x60`, `0x85`, and `0xa1` are read and
+ignored. ScummVM save and load remain limited to the title-menu checkpoint.
+
+### Music And Sound Effects
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x12`, `0x50` | `0x401d0a` (shared) | track, repeat, wait | Music through `0x43aa10` |
+| `0xa2` | `0x406dbb` | effect, repeat, wait | Sound effect through `0x43ab00` |
+
+- Files: music `MUS\<prefix>M%03d.ogg` (`0x45da60`, built in `0x439ad0`) and
+  effects `SND\<prefix>W%03d.wav` (`0x45da50`, built in `0x4398b0`), where the
+  prefix (`0x7eb2ec`, set by the `ms.mhu` loader) is `OLV` in One Lover. The supplied game has
+  48 Ogg Vorbis music files and 14 PCM WAV effects.
+- Track or effect 0 stops the current one. Starting the track that is
+  already playing does not restart it. Starting another one stops the current one first.
+- Repeat (`0x43cf80` stores it at `+0x2574`): at the end of the stream, `0xff`
+  restarts it indefinitely; another nonzero value is decremented and the stream restarts
+  while it stays nonzero. The handler passes 0 for a repeat of 1, so
+  repeat n plays n times. All 175 story uses of `0x12` pass
+  `0xff`; all 24 uses of `0xa2` pass 1.
+- Intro and loop: `0x43aa10` copies a per-track byte to `0x687531` from the
+  tables at `0x468290` (tracks 0-80), `0x468245` (100-132), and `0x468202`
+  (200-222). When it is set, the streaming player (`0x43d2c0`) remembers the
+  file name with `L` inserted before the extension. At the first restart,
+  `0x43cba0` clears the byte and continues with that file. In One Lover the
+  byte is set for tracks 1-9 and 11-22, and the supplied `MUS` directory has
+  `OLVM%03dL.ogg` files for exactly the shipped tracks among those (1, 2, 7,
+  8, 9, 11, 12, 14, 16, 20).
+- Wait: with the DirectSound path (`0x7e87dc` = 1), a nonzero third word
+  polls every 200 ms until the sound ends. On the default streaming path,
+  the music routine instead calls an empty routine (`0x43ca80`) and stops the
+  sound at once. Every story use passes 0.
+- While skipping or in auto mode, `0x439ad0`/`0x4398b0` record the requested
+  track as current without starting it.
+- Both routines drive the same streaming object (`0x812608`), whose open
+  routine `0x43d2c0` first stops what it is playing; whether that player keeps
+  music and effects on separate channels was not traced. The DirectSound path
+  (`0x43a630`) takes the sound type as an argument (0 music, 1 effect).
+
+Port: music and effects play on separate channels through ScummVM's mixer, as the music and
+sound-effect types, so the existing volume settings apply. A looped track
+plays its intro file once and then repeats the `L` file. Ogg playback
+requires the `vorbis` feature; without it, music is skipped with a warning.
+Music also starts while skipping. The prefix is the resource prefix from
+`ms.mhu`. One Lover's story requests track 17, whose file is not shipped; the
+port logs a warning. How the native handles the missing file was not checked. The wait word is ignored. The playing
+track is not stored in saves. Voices and the screen-tone command `0x98`
+(operands such as `/A:SEPIA/`) are not part of this batch.
+
+### Voices
+
+A `V` or `v` token in message command `0x4b` is followed by a word and a
+dword. The handler (`0x404838`) passes them to `0x43d5a0` as an archive index
+and a byte offset. `VOICE.LST` lists the archives, one per line (`OLV01.SUD`,
+`OLV02.SUD`). At the offset, a 32-bit little-endian size precedes the Ogg
+Vorbis data. The next record follows immediately: `vA010002` is at
+`0x9d12` = 4 + `0x9d0e`, the size stored at offset 0. The token text names the clip
+(`vA` + two-digit character code + four-digit number), and only the code is used.
+
+- Characters: the code is looked up in the table at `0x466e60` (four rows of
+  eight names: `01`-`03` in row 0, `E01`-`E08` in row 3), and the row's
+  voice-off flag (`0x80a320`) is copied to `0x67c48c`. A voice is not started
+  when that flag is set, when skipping or in auto mode, or when the offset is
+  -1. Its volume combines the row's volume (`0x67bc14`) and the global voice
+  levels (`0x7ef318`, `0x7ef314`) through `0x418af0`, scaled by 7/10 unless
+  the code starts with `1`.
+- Playback: the clip plays once, and `0x7e7400` marks it as playing. Opening a
+  clip stops the previous one.
+- Cutting: a left click on a message page (`0x42b9e9`) stops the playing voice
+  when `VOICECUT` (`0x67c480`, INI key 46) is set.
+- `W`/`w` tokens wait for the voice: `W1` until it ends, `W0` until it ends or
+  a click stops it, and `Wn` for n x 100 ms. The story contains none.
+- One Lover's story has 2316 voice tokens: 1205 in `OLV01.SUD` and 1111 in
+  `OLV02.SUD`. The startup's title call `vA038888` sits in a `0x4b` command
+  without text.
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x9c` | `0x406b6f` | mode, variable | Waits for the playing voice; `var[variable]` = 1 if input stopped it, else 0 |
+
+`0x9c` clears the variable and, for a nonzero mode, sets `0x80c6c4` to 5. With
+the voice-off flag set it instead waits 2000 ms in input mode `mode`. Otherwise
+it polls every 100 ms while a voice plays. If input (modes as in `0x418230`) or
+`0x80c6c4` = 6 ends the wait, it stops the voice and stores 1. The story uses it
+once, after the title call, with mode 1.
+
+Port: voices play once on ScummVM's speech channel, so speech volume and mute
+apply. A new voice, a page advance by click or Select with `delta_voice_cut`
+on, and the return to the title checkpoint stop it. While skipping, voices are not started. `0x4b`
+commands without text now run, so voice-only commands play. `0x9c` waits for
+the voice to end; for a nonzero mode, a click or Select stops it and stores
+1. Per-character voice switches and volumes and the 7/10 scaling are not
+applied, and the voice-off 2000 ms wait is not reproduced. `W` tokens are
+ignored.
+
+### Layer Tones
+
+| Command | Handler | Operands | Behavior |
+| --- | --- | --- | --- |
+| `0x98` | `0x40851c` | string | Sets the color tone of scene layers (`0x43b7e0`) |
+
+The string has the form `/targets:tone/`. Targets `1`, `2`, and `3` select
+character slots 0-2, `0` selects the background, and `4` or `A` selects all
+four. The tone name is stored in a 0x150-byte layer record at `+0x114`: the
+slots at `0x7eeb9c`, `0x7eecec`, and `0x7eee3c`, the background at `0x7eef8c`.
+Tones left empty become `NULL`. `0x43bce0` applies a tone to a 24-bit image
+before it is composited. In the formulas, b0, b1, and b2 are a pixel's bytes in
+memory order (blue, green, red in a DIB):
+
+| Tone | Result |
+| --- | --- |
+| `NONE`, `NULL` | Unchanged |
+| `MONO` | Every byte = (b0 + b1 + b2 + 1) / 3 |
+| `REVMONO` | Every byte = 255 - (b2 x 114 / 1000 + b1 x 587 / 1000 + b0 x 298 / 1000), each term truncated |
+| `TDOWN` | Every byte halved |
+| `SEPIA` | Y = 0.298912 b0 + 0.586611 b1 + 0.114477 b2 (single-precision); b0 = Y x 0.568627, b1 = Y x 0.784314, b2 = Y x 0.941176, truncated by `0x44c1d8` |
+| `BLACK`, `WHITE` | Filled with 0 or 255 |
+| `NEGA` | Every byte inverted |
+| other | Looked up by `0x43bc60` in the LUT file `CG\TCP.TPF` (signature `DELTA_TCPAC_IDENT`, bit-inverted 20-byte names, 0x300-byte tables) |
+
+- `SEPIA`'s weights are the usual luminance weights applied in reverse byte
+  order, so red has the smallest weight. The result keeps red highest.
+- Which commands apply a tone: `0xb0` passes the background tone with its image.
+  `0xb1` passes the background tone for its background and slot 1's tone for its
+  foreground. `0x2a` and `0x2e` also pass the background tone. The
+  character-scene renderer `0x416740` applies each slot's tone to that slot's
+  sprite. `0x23` and `0x26` pass no tone, and whether `0x2c` tones its
+  background was not traced.
+- One Lover's story uses `0x98` 15 times. `/A:SEPIA/` ... `/A:NULL/` frames a
+  sepia flashback on `BG05A`, and two runs of `/4:WHITE/` and `/4:NULL/`
+  alternating with `0xb1` redraws make white flashes. Neither supplied game
+  ships `CG/TCP.TPF`.
+
+Port: the four tone names are engine state, not stored in saves. The built-in
+tones apply to `0xb0` and `0xb1` images, the `0xb1` foreground, and the `0x2c` character sprites.
+The port converts RGB565 pixels to 8-bit channels for the formulas and back, so
+results can differ from the 24-bit original by rounding. Names the port does
+not recognize leave the image unchanged. Inference: the native does the same
+when `CG/TCP.TPF` is missing, because its loader (`0x43ba60`) then returns 0.
 
 ## Transitions
 
@@ -736,10 +1052,11 @@ applies a page. The original Windows INI is not read or written.
   `delta_font_smoothing`, `delta_wheel_mode`, `delta_volume_all`,
   `delta_voice_duck`, `delta_voice_cut`, `delta_no_directsound`,
   `delta_character_voice_off_N`, `delta_character_volume_N`,
-  `delta_unread_skip`, `delta_read_skip`, `delta_skip_stop`,
+  `delta_read_skip`, `delta_skip_stop`,
   `delta_auto_stop`, `delta_skip_key`, `delta_auto_cursor`,
   `delta_wheel_button`, and `delta_right_click`. Antialiasing does not change
-  the Noto rasterizer.
+  the Noto rasterizer. `delta_unread_skip` is applied by the skip key (see
+  Skip); `delta_skip_key` is not, because the keymap binding replaces it.
 - When `delta_window_transparency` is absent, the port default stays 0; the
   in-game Reset sets 128.
 - Not reproduced: the text-speed demonstrations in the two gray preview boxes
@@ -786,13 +1103,87 @@ REA evidence records:
 | Page routing | `ev_00dfa43ddb71bac0ddcf9e083d52a3b5f487f6ee19a4fb57e84dc1e1a95376a0` |
 | RLE decoder | `ev_48d919e3c9da05017791f938c5938dfb8965c2c5cedb0145162a6c8b9cb955e1` |
 
+## Skip
+
+### Recovered Original Behaviour
+
+Static analysis of One Lover's `OLV_DL.EXE` (SHA-256
+`031aac508a173f698151ac8c35198c1dc1879ed6b61901e88e511bb3fe73eb81`) shows a
+hold-to-skip key. The evidence is objdump listings of the routines below; the
+`GetAsyncKeyState` import (`0x45b318`) and the `[OPTION]` key table at
+`0x466880` (`0x418810` indexes it) identify the variables. No native game was
+run.
+
+| Address | Meaning |
+| --- | --- |
+| `0x67bbf4` | Skip state: 0 off, 2 requested, 1 active |
+| `0x80a33c` | `SKIPKEY` virtual-key code (17 Ctrl, 16 Shift) |
+| `0x7e86f0` | `MIDOKU`: skip unread text |
+| `0x7e87ea` | `KIDOKU` |
+| `0x7ef164`, `0x7ef531` | `SKIPSTOP`, `AUTOSTOP` |
+| `0x7ef1b0` | Skip allowed: current text is read, or `MIDOKU` is set |
+| `0x67c498` | Read-text bitmap, 0x2800 bytes |
+| `0x80c618` | Current text block, -1 initially |
+
+- Key-down handler (`0x41cf53`): when the key is `SKIPKEY`, skipping is
+  allowed (`0x7ef1b0`), and no other mode is active, it sets the state to 2.
+  The next input-handler pass (`0x42b86f`) promotes 2 to 1.
+- Dispatcher (`0x4018e5`): before every command in state 1, it polls
+  `GetAsyncKeyState(SKIPKEY)` and calls `0x401180` to stop skipping once the
+  key is released. Skipping lasts only while the key is held.
+- Commands `0x1e` (`0x403f26`) and `0x3e` (`0x403fa3`, which also counts the
+  checkpoint) read a block number. In normal play (`0x67bbec` = -2), the block
+  being left is set in the bitmap, which `0x4187a0` writes to a global file,
+  not a save. The new block becomes current, and `0x4013e0` tests its bit.
+  A read block allows skipping. An unread block stops skipping and disallows it
+  unless `MIDOKU` is set.
+- While skipping, `0x54` (`0x405098`) does not wait for input, `0x99`
+  (`0x40692a`) does not wait, the text-drawing delay (`0x41f9c6`) is skipped,
+  and transition handlers pass a zero duration.
+- `0x7eeff8` is a separate mode set from the window buttons and menu (1 for
+  auto, -1 for a toggled skip). That mode, `KIDOKU`, `SKIPSTOP`, and
+  `AUTOSTOP` interact with `0x7ef1a0`; that interaction was not fully traced.
+
+### Port Implementation
+
+- The `SKIP` keymap action ("Skip messages (hold)") replaces `SKIPKEY`. It
+  defaults to Left/Right Ctrl, matching the original's default, and the
+  joystick right trigger, as in the XEX and System-98 engines. It can be
+  rebound in ScummVM's keymap settings. Skipping lasts while the action is
+  held. An engine pause clears it, because dialogs can swallow the release.
+- `ReadHistory` (`script.cpp`) is the read bitmap. Block numbers are 16-bit
+  script words, so it uses 8192 bytes. Commands `0x1e` and `0x3e` mark the
+  block being left and enter the next one. The bitmap is stored with the
+  `SaveFileManager` as `<target>.read` (tag `DLRD`, version 1) whenever a bit
+  is added, and is shared by all saves, like the original's global file.
+  Loading a save leaves the current block unset.
+- Skipping is active while the action is held, outside the title menu and
+  options screen, when the current block is read or `delta_unread_skip` is
+  set. With the original default (off), a first playthrough does not skip
+  until text has been read. While skipping, waiting message pages advance one
+  per frame, `0x54` and `0x99` do not wait, and new transitions are instant.
+  A transition in progress finishes at once and stores 0 in its result variable.
+- Not implemented: the toggled skip and auto modes, `KIDOKU`, `SKIPSTOP`
+  (choices are not implemented), and `AUTOSTOP`.
+
+Verification: `DeltaScriptTestSuite::testReadHistoryMarksLeftBlocksAndPersists`
+covers marking, the current-block state, and persistence. A temporary,
+uncommitted hook held the action in real-data One Lover runs from the title
+menu. With unread skip on, 297 pages passed in 30 seconds until the existing
+unsupported opcode `0x8b`; without the action, the run stopped at the first
+page. With unread skip off and no history, it stopped at the first page. With
+the history from the first run, it skipped 62 pages and stopped at block 8. The
+random branches had led to block 8, which the first run had not read. PHM was
+not run, and the skip key was not exercised through real keyboard or
+controller input.
+
 ## Debugging And Tests
 
 - Console: the engine console provides a `test` command. No other engine-specific
   console commands are defined.
 - Logging: `debug(1, ...)` reports major steps such as initialization, image and
   font loads, and menu selections. `debug(2, ...)` traces each script command,
-  pointer mode, and menu focus.
+  pointer mode, menu focus, and text-block read state.
 - Declared but unused: `detection.cpp` declares the `Graphics`, `Path`,
   `FilePath`, `Scan`, and `Script` debug channels, and
   `GAMEOPTION_ORIGINAL_SAVELOAD`. No code checks them, so enabling them has no

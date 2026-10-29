@@ -71,7 +71,8 @@ Common::KeymapArray DeltaMetaEngine::initKeymaps(const char *target) const {
 		{ "DOWN", _s("Down"), kActionDown, { "DOWN", "KP2", "JOY_DOWN", "JOY_LEFT_STICK_Y+", "JOY_RIGHT_STICK_Y+" } },
 		{ "LEFT", _s("Left"), kActionLeft, { "LEFT", "KP4", "JOY_LEFT", "JOY_LEFT_STICK_X-", "JOY_RIGHT_STICK_X-" } },
 		{ "RIGHT", _s("Right"), kActionRight, { "RIGHT", "KP6", "JOY_RIGHT", "JOY_LEFT_STICK_X+", "JOY_RIGHT_STICK_X+" } },
-		{ "MENU", _s("Game menu"), kActionMenu, { "F5", "JOY_START" } }
+		{ "MENU", _s("Game menu"), kActionMenu, { "F5", "JOY_START" } },
+		{ "SKIP", _s("Skip messages (hold)"), kActionSkip, { "LCTRL", "RCTRL", "JOY_RIGHT_TRIGGER" } }
 	};
 	for (const ActionDef &definition : actions) {
 		action = new Action(definition.id, _(definition.description));

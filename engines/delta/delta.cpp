@@ -22,11 +22,15 @@
 #include "delta/delta.h"
 #include "delta/detection.h"
 #include "delta/console.h"
+#include "audio/audiostream.h"
+#include "audio/decoders/vorbis.h"
+#include "audio/decoders/wave.h"
 #include "common/debug.h"
 #include "common/events.h"
 #include "common/file.h"
 #include "common/config-manager.h"
 #include "common/memstream.h"
+#include "common/savefile.h"
 #include "common/translation.h"
 #include "common/substream.h"
 #include "common/system.h"
@@ -43,6 +47,7 @@ DeltaEngine::DeltaEngine(OSystem *syst, const ADGameDescription *gameDesc) : Eng
 }
 
 DeltaEngine::~DeltaEngine() {
+	_mixer->stopAll();
 	if (_cursorInstalled) {
 		CursorMan.popCursor();
 		CursorMan.popCursorPalette();
@@ -109,6 +114,7 @@ Common::Error DeltaEngine::initialize() {
 		return Common::Error(shouldQuit() ? Common::kUserCanceled : Common::kReadingFailed, _configuration.scenarioFile);
 	_scriptPosition = 0;
 	_script = new Script(_scenario, getGameId() == "onegaitasukete", &_randomSource);
+	loadReadHistory();
 
 	debug(1, "Delta display: %dx%d, %u bytes per pixel", _screen->w, _screen->h, _screen->format.bytesPerPixel);
 	debug(1, "Delta initialized: scenario number %u, prefix %s, scenario %s (%u bytes), %u string tables, script offset %u",
@@ -163,10 +169,12 @@ Common::Error DeltaEngine::loadImage(const Common::String &name, Graphics::Surfa
 		const Common::Error result = loadImage(name.substr(0, 6) + "00", image);
 		if (result.getCode() != Common::kNoError)
 			return result;
+		// Native 0x40d900 adds a layer only where its tables list one, which in the supplied data
+		// is exactly where the sprite banks contain it
 		Common::StringArray layers;
-		if (name[6] != '0')
+		if (name[6] != '0' && hasLayerSprite(name.substr(0, 4) + "00" + name.substr(6, 1) + "0"))
 			layers.push_back(name.substr(0, 4) + "00" + name.substr(6, 1) + "0");
-		if (name[7] != '0')
+		if (name[7] != '0' && hasLayerSprite(name.substr(0, 3) + "A000" + name.substr(7, 1)))
 			layers.push_back(name.substr(0, 3) + "A000" + name.substr(7, 1));
 		const Common::Error compositing = compositeLayers(image, layers);
 		if (compositing.getCode() != Common::kNoError) {
@@ -183,25 +191,37 @@ Common::Error DeltaEngine::loadImage(const Common::String &name, Graphics::Surfa
 	return Common::kNoError;
 }
 
-Common::Error DeltaEngine::compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset) {
+bool DeltaEngine::hasLayerSprite(const Common::String &name) {
+	static const char *const banks[] = { "CG/EV.CGF", "CG/ST.CGF" };
+	for (uint index = 0; index < ARRAYSIZE(banks); ++index) {
+		Common::File bank;
+		if (bank.open(banks[index]) && hasSpriteBankImage(bank, name, &_progress))
+			return true;
+	}
+	return false;
+}
+
+Common::Error DeltaEngine::compositeForeground(Graphics::Surface &image, const Common::String &name, const Common::Point &offset,
+	const Common::String &tone) {
 	Common::File metadata;
 	if (!metadata.open("CG/EVINFO.BIN"))
 		return Common::Error(Common::kNoGameDataFoundError, "CG/EVINFO.BIN");
 	Common::StringArray layers;
 	if (!readSpriteInfo(metadata, name, layers, &_progress)) {
 		layers.push_back(name);
-		const Common::Error result = compositeLayers(image, layers, offset);
+		const Common::Error result = compositeLayers(image, layers, offset, tone);
 		if (result.getCode() == Common::kNoError)
 			debug(1, "Delta foreground: %s (direct layer)", name.c_str());
 		return result;
 	}
-	const Common::Error result = compositeLayers(image, layers, offset);
+	const Common::Error result = compositeLayers(image, layers, offset, tone);
 	if (result.getCode() == Common::kNoError)
 		debug(1, "Delta foreground: %s (%u layers)", name.c_str(), layers.size());
 	return result;
 }
 
-Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset) {
+Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Common::StringArray &layers, const Common::Point &offset,
+	const Common::String &tone) {
 	static const char *const banks[] = { "CG/EV.CGF", "CG/ST.CGF" };
 	for (uint index = 0; index < layers.size(); ++index) {
 		Graphics::Surface color, mask;
@@ -212,6 +232,8 @@ Common::Error DeltaEngine::compositeLayers(Graphics::Surface &image, const Commo
 			found = bank.open(banks[bankIndex]) &&
 				readSpriteBankImage(bank, layers[index], color, mask, image.format, &_progress, &position);
 		}
+		if (found)
+			applyTone(color, tone);
 		const bool valid = found && compositeMasked(image, color, mask, &_progress, position + offset);
 		color.free();
 		mask.free();
@@ -275,7 +297,7 @@ Common::Error DeltaEngine::showCharacters(const ScriptCommand &command) {
 		const uint slot = order[layer];
 		if (_characterNames[slot].empty() || _characterNames[slot] == "NULL")
 			continue;
-		result = compositeForeground(image, _characterNames[slot], Common::Point(positions[slot] - kCharacterAnchor, 0));
+		result = compositeForeground(image, _characterNames[slot], Common::Point(positions[slot] - kCharacterAnchor, 0), _layerTones[slot]);
 		if (result.getCode() != Common::kNoError) {
 			image.free();
 			return result;
@@ -289,12 +311,35 @@ Common::Error DeltaEngine::showCharacters(const ScriptCommand &command) {
 	return Common::kNoError;
 }
 
+void DeltaEngine::loadReadHistory() {
+	Common::ScopedPtr<Common::InSaveFile> file(_saveFileMan->openForLoading(_targetName + ".read"));
+	if (file && !_readHistory.load(*file))
+		warning("Delta: ignoring an invalid read-text history");
+}
+
+void DeltaEngine::saveReadHistory() {
+	Common::ScopedPtr<Common::OutSaveFile> file(_saveFileMan->openForSaving(_targetName + ".read", false));
+	if (!file || !_readHistory.save(*file)) {
+		warning("Delta: cannot write the read-text history");
+		return;
+	}
+	file->finalize();
+	if (file->err())
+		warning("Delta: cannot write the read-text history");
+}
+
+// The skip key (native 0x67bbf4) works on read text, or anywhere with the unread-skip option.
+bool DeltaEngine::skipping() const {
+	return _skipHeld && !_atMenu && !_optionsActive && (_settings.unreadSkip || _readHistory.currentRead());
+}
+
 void DeltaEngine::startTransition(const Graphics::Surface &image, int units, TransitionEffect effect,
 	bool skippable, int resultVariable, const Common::Rect &area) {
 	_transitionFrom.copyFrom(_screen->rawSurface());
 	_transitionTo.copyFrom(image);
 	_transitionStart = _system->getMillis();
-	_transitionDuration = transitionDuration(units, _settings.effect);
+	// Handlers pass a zero duration while skipping
+	_transitionDuration = skipping() ? 0 : transitionDuration(units, _settings.effect);
 	_transitionEffect = effect;
 	_transitionArea = area.isEmpty() ? Common::Rect(_screen->w, _screen->h) : area;
 	_transitionStep = -1;
@@ -319,7 +364,7 @@ bool DeltaEngine::updateTransition() {
 	if (!_transitionDuration)
 		return false;
 	const int step = transitionStep(_system->getMillis() - _transitionStart, _transitionDuration);
-	if (_transitionSkipped || step == kTransitionSteps - 1) {
+	if (_transitionSkipped || step == kTransitionSteps - 1 || skipping()) {
 		finishTransition();
 		return false;
 	}
@@ -373,7 +418,7 @@ void DeltaEngine::drawMenu() {
 
 Common::Error DeltaEngine::presentMessage() {
 	if (!_messageFont)
-		_messageFont = loadFont(24);
+		_messageFont = loadFont(_messageFontSize);
 	if (!_messageFont)
 		return Common::Error(Common::kNoGameDataFoundError, "A Japanese Noto CJK font is required in the game or extra path");
 	Common::U32String text;
@@ -390,7 +435,12 @@ Common::Error DeltaEngine::presentMessage() {
 				boundary = true;
 				break;
 			}
-		} else if (prefix != 'V' && prefix != 'v' && prefix != 'W' && prefix != 'w') {
+		} else if (prefix == 'V' || prefix == 'v') {
+			if (_messageVoiceIndex + 1 < _messageVoices.size()) {
+				playVoice(_messageVoices[_messageVoiceIndex], _messageVoices[_messageVoiceIndex + 1]);
+				_messageVoiceIndex += 2;
+			}
+		} else if (prefix != 'W' && prefix != 'w') {
 			Common::U32String line = token.decode(Common::kWindows932);
 			bool blank = true;
 			for (uint index = 0; index < line.size(); ++index)
@@ -491,6 +541,8 @@ void DeltaEngine::advanceMessage() {
 Common::Error DeltaEngine::advanceScript() {
 	if (_loadPending)
 		return applyPendingLoad();
+	if (_messageWaiting && skipping())
+		advanceMessage();
 	if (_atMenu || _messageWaiting || updateTransition())
 		return Common::kNoError;
 	if (_messageTokenIndex < _messageTokens.size()) {
@@ -499,9 +551,17 @@ Common::Error DeltaEngine::advanceScript() {
 			return result;
 	}
 	if (_waiting) {
-		if ((int32)(_system->getMillis() - _waitUntil) < 0)
+		const bool pending = _waitForVoice ? _mixer->isSoundHandleActive(_voiceHandle) :
+			(int32)(_system->getMillis() - _waitUntil) < 0;
+		if (pending && !_waitInterrupted && !skipping())
 			return Common::kNoError;
+		// 0x9c stops the voice when input ends its wait
+		if (_waitForVoice && _waitInterrupted)
+			_mixer->stopHandle(_voiceHandle);
 		_waiting = false;
+		_waitForVoice = false;
+		if (_waitResult >= 0)
+			_script->setVariable(_waitResult, _waitInterrupted ? 1 : 0);
 	}
 	for (uint count = 0; count < 64 && !shouldQuit(); ++count) {
 		ScriptCommand command;
@@ -529,20 +589,48 @@ Common::Error DeltaEngine::advanceScript() {
 			_messageLines.clear();
 			_messageTokenIndex = 0;
 		} else if (command.opcode == 0x4b) {
-			bool text = false;
-			for (uint index = 0; index < command.strings.size(); ++index) {
-				if (!command.strings[index].empty() && (byte)command.strings[index][0] >= 0x80)
-					text = true;
+			// Arguments: the token count, then an archive word and offset dword per voice token
+			_messageTokens = command.strings;
+			_messageTokenIndex = 0;
+			_messageVoices = command.arguments;
+			_messageVoiceIndex = 1;
+			const Common::Error result = presentMessage();
+			if (result.getCode() != Common::kNoError || _messageWaiting)
+				return result;
+		} else if (command.opcode == 0x9c) {
+			const uint16 mode = command.arguments[0];
+			_script->setVariable(command.arguments[1], 0);
+			if (_mixer->isSoundHandleActive(_voiceHandle) && !skipping()) {
+				startWait(0, mode != 0, command.arguments[1]);
+				_waitForVoice = true;
+				return Common::kNoError;
 			}
-			if (text) {
-				_messageTokens = command.strings;
-				_messageTokenIndex = 0;
-				const Common::Error result = presentMessage();
-				if (result.getCode() != Common::kNoError || _messageWaiting)
-					return result;
+		} else if (command.opcode == 0x1e || command.opcode == 0x3e) {
+			if (_readHistory.enterBlock(command.arguments[0]))
+				saveReadHistory();
+			debug(2, "Delta text block %d: %s", command.arguments[0], _readHistory.currentRead() ? "read" : "unread");
+		} else if (command.opcode == 0x0f) {
+			_script->setVariable(command.arguments[0], _escapeLatch);
+		} else if (command.opcode == 0x44) {
+			// The start reason (native 0x7ef329) is 0 for a normal start, the only one the port has
+			_script->setVariable(command.arguments[1], 0);
+			if (command.arguments[0])
+				_escapeLatch = false;
+		} else if (command.opcode == 0x1c) {
+			const int size = command.arguments[1];
+			Graphics::Font *font = size > 0 && size <= 96 && size != _messageFontSize ? loadFont(size) : nullptr;
+			if (font) {
+				delete _messageFont;
+				_messageFont = font;
+				_messageFontSize = size;
 			}
+		} else if (command.opcode == 0x12 || command.opcode == 0x50 || command.opcode == 0xa2) {
+			playSound(command.opcode != 0xa2, command.arguments[0], command.arguments[1]);
+		} else if (command.opcode == 0x98) {
+			setLayerTones(command.strings[0]);
 		} else if (command.opcode == 0x54) {
-			_messageWaiting = _messageVisible;
+			_escapeLatch = false;
+			_messageWaiting = _messageVisible && !skipping();
 			if (_messageWaiting)
 				return Common::kNoError;
 		} else if (command.opcode == 0x2c) {
@@ -557,10 +645,36 @@ Common::Error DeltaEngine::advanceScript() {
 		} else if (command.opcode == 0x99) {
 			if (command.arguments[0]) {
 				_waitUntil = _system->getMillis() + command.arguments[1] * 100;
+			} else if (skipping()) {
+				_script->setVariable(command.arguments[2], 1);
 			} else {
+				// A click ends the wait early and stores 1 in the third word's variable
 				_waiting = true;
+				_waitSkippable = true;
+				_waitInterrupted = false;
+				_waitResult = command.arguments[2];
 				return Common::kNoError;
 			}
+		} else if (command.opcode == 0x9e) {
+			// 0 and 99 park and restore the Windows cursor; screen effects off disable the pause
+			const uint16 units = command.arguments[0];
+			if (units && units != 99 && _settings.effect && !skipping()) {
+				startWait(units, false, -1);
+				return Common::kNoError;
+			}
+		} else if (command.opcode == 0x9f) {
+			const uint16 mode = command.arguments[0];
+			if (!skipping()) {
+				startWait(command.arguments[1], mode == 1 || mode == 2 || mode == 4, command.arguments[2]);
+				return Common::kNoError;
+			}
+		} else if (command.opcode == 0xa0) {
+			if (_messageVisible)
+				_screen->blitFrom(_messageBackground);
+			_messageVisible = false;
+			_messageWaiting = false;
+		} else if (isHaltOpcode(command.opcode)) {
+			return Common::kNoError;
 		} else if (command.opcode == 0x23 || command.opcode == 0x26 || command.opcode == 0xb0 || command.opcode == 0xb1) {
 			Graphics::Surface image;
 			const Common::Error result = loadImage(command.strings[0], image);
@@ -570,8 +684,11 @@ Common::Error DeltaEngine::advanceScript() {
 				image.free();
 				return Common::Error(Common::kReadingFailed, "Unsupported partial background image");
 			}
+			// 0xb0 and 0xb1 tone the background, and 0xb1 its foreground with slot 1's tone
+			if (command.opcode == 0xb0 || command.opcode == 0xb1)
+				applyTone(image, _layerTones[3]);
 			if (command.opcode == 0xb1 && !command.strings[1].equalsIgnoreCase("TACLEAR")) {
-				const Common::Error compositing = compositeForeground(image, command.strings[1]);
+				const Common::Error compositing = compositeForeground(image, command.strings[1], Common::Point(), _layerTones[1]);
 				if (compositing.getCode() != Common::kNoError) {
 					image.free();
 					return compositing;
@@ -633,6 +750,154 @@ Common::Error DeltaEngine::advanceScript() {
 		}
 	}
 	return Common::kNoError;
+}
+
+static Audio::SeekableAudioStream *openSound(const Common::Path &path, bool music) {
+	Common::File *file = new Common::File();
+	if (!file->open(path)) {
+		delete file;
+		return nullptr;
+	}
+	if (!music)
+		return Audio::makeWAVStream(file, DisposeAfterUse::YES);
+#ifdef USE_VORBIS
+	return Audio::makeVorbisStream(file, DisposeAfterUse::YES);
+#else
+	delete file;
+	warning("Delta: Ogg Vorbis support is required for music");
+	return nullptr;
+#endif
+}
+
+// Native routines 0x439ad0 (music) and 0x4398b0 (effects)
+void DeltaEngine::playSound(bool music, uint16 number, uint16 repeat) {
+	Audio::SoundHandle &handle = music ? _musicHandle : _effectHandle;
+	uint16 &current = music ? _musicTrack : _effectNumber;
+	if (number && number == current && _mixer->isSoundHandleActive(handle))
+		return;
+	_mixer->stopHandle(handle);
+	current = number;
+	if (!number)
+		return;
+	const Common::String name = Common::String::format(music ? "MUS/%sM%03d" : "SND/%sW%03d",
+		_configuration.resourcePrefix.c_str(), number);
+	const char *extension = music ? ".ogg" : ".wav";
+	Audio::SeekableAudioStream *first = openSound(Common::Path(name + extension), music);
+	if (!first) {
+		warning("Delta: cannot play %s%s", name.c_str(), extension);
+		return;
+	}
+	// A repeat of 0xff loops forever; n plays n times
+	const uint plays = repeat == 0xff ? 0 : MAX<uint>(repeat, 1);
+	// Looped tracks continue with the file named with an L before the extension
+	Audio::SeekableAudioStream *loop = music && plays != 1 ? openSound(Common::Path(name + "L" + extension), music) : nullptr;
+	Audio::AudioStream *stream;
+	if (loop) {
+		Audio::QueuingAudioStream *queue = Audio::makeQueuingAudioStream(first->getRate(), first->isStereo());
+		queue->queueAudioStream(first);
+		queue->queueAudioStream(Audio::makeLoopingAudioStream(loop, plays ? plays - 1 : 0));
+		queue->finish();
+		stream = queue;
+	} else {
+		stream = Audio::makeLoopingAudioStream(first, plays);
+	}
+	debug(1, "Delta %s: %s%s%s", music ? "music" : "effect", name.c_str(), loop ? " + L" : "", extension);
+	_mixer->playStream(music ? Audio::Mixer::kMusicSoundType : Audio::Mixer::kSFXSoundType, &handle, stream);
+}
+
+// Native 0x43b7e0: "/targets:tone/", where 1-3 are character slots, 0 the background, and 4 or A all
+void DeltaEngine::setLayerTones(const Common::String &spec) {
+	bool marked[ARRAYSIZE(_layerTones)] = {};
+	bool targets = false;
+	for (uint index = 0; index < spec.size(); ++index) {
+		const char character = spec[index];
+		if (character == '/') {
+			targets = true;
+		} else if (!targets) {
+			continue;
+		} else if (character >= '1' && character <= '3') {
+			marked[character - '1'] = true;
+		} else if (character == '0') {
+			marked[3] = true;
+		} else if (character == '4' || character == 'A') {
+			for (uint layer = 0; layer < ARRAYSIZE(marked); ++layer)
+				marked[layer] = true;
+		} else if (character == ':') {
+			uint end = index + 1;
+			while (end < spec.size() && spec[end] != '/' && spec[end] != ':' && end - index <= 32)
+				++end;
+			const Common::String tone(spec.c_str() + index + 1, end - index - 1);
+			for (uint layer = 0; layer < ARRAYSIZE(marked); ++layer) {
+				if (marked[layer])
+					_layerTones[layer] = tone;
+				marked[layer] = false;
+			}
+			targets = false;
+			index = end - 1;
+		}
+	}
+	for (uint layer = 0; layer < ARRAYSIZE(_layerTones); ++layer) {
+		if (_layerTones[layer].empty())
+			_layerTones[layer] = "NULL";
+	}
+	debug(2, "Delta layer tones: %s %s %s, background %s", _layerTones[0].c_str(), _layerTones[1].c_str(),
+		_layerTones[2].c_str(), _layerTones[3].c_str());
+}
+
+// Native 0x43d5a0: VOICE.LST names the archives; each clip is a size dword and Ogg data
+void DeltaEngine::playVoice(uint16 archive, uint32 offset) {
+	if (offset == 0xffffffff || skipping())
+		return;
+	if (_voiceArchives.empty()) {
+		Common::File list;
+		if (list.open("VOICE.LST")) {
+			while (!list.eos() && !list.err()) {
+				Common::String line = list.readLine();
+				line.trim();
+				if (!line.empty())
+					_voiceArchives.push_back(line);
+			}
+		}
+	}
+	_mixer->stopHandle(_voiceHandle);
+	if (archive >= _voiceArchives.size()) {
+		warning("Delta: voice archive %u is not listed in VOICE.LST", archive);
+		return;
+	}
+#ifdef USE_VORBIS
+	Common::File *file = new Common::File();
+	uint32 size = 0;
+	if (file->open(Common::Path(_voiceArchives[archive])) && file->seek(offset)) {
+		size = file->readUint32LE();
+		if (file->err() || size > (uint32)(file->size() - file->pos()))
+			size = 0;
+	}
+	if (!size) {
+		delete file;
+		warning("Delta: cannot read voice at 0x%x in %s", offset, _voiceArchives[archive].c_str());
+		return;
+	}
+	const uint32 start = file->pos();
+	Common::SeekableReadStream *clip = new Common::SeekableSubReadStream(file, start, start + size, DisposeAfterUse::YES);
+	Audio::SeekableAudioStream *stream = Audio::makeVorbisStream(clip, DisposeAfterUse::YES);
+	if (!stream) {
+		warning("Delta: invalid voice at 0x%x in %s", offset, _voiceArchives[archive].c_str());
+		return;
+	}
+	debug(2, "Delta voice: %s at 0x%x (%u bytes)", _voiceArchives[archive].c_str(), offset, size);
+	_mixer->playStream(Audio::Mixer::kSpeechSoundType, &_voiceHandle, stream);
+#else
+	warning("Delta: Ogg Vorbis support is required for voices");
+#endif
+}
+
+void DeltaEngine::startWait(uint32 units, bool skippable, int resultVariable) {
+	_waitUntil = _system->getMillis() + units * 100;
+	_waiting = true;
+	_waitSkippable = skippable;
+	_waitInterrupted = false;
+	_waitResult = resultVariable;
+	_waitForVoice = false;
 }
 
 int DeltaEngine::menuItemAt(const Common::Point &point) const {
@@ -711,6 +976,14 @@ void DeltaEngine::handleInput(const Common::Event &event) {
 		CursorMan.showMouse(_input.mouseActive());
 		debug(2, "Delta pointer: %s", _input.mouseActive() ? "visible (mouse)" : "hidden (keyboard/controller)");
 	}
+	if (event.customType == kActionSkip && (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START ||
+		event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_END)) {
+		_skipHeld = event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START;
+		return;
+	}
+	// The window procedure (native 0x41ca00) latches Escape for commands 0x0f and 0x44
+	if (event.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START && event.customType == kActionCancel)
+		_escapeLatch = true;
 	if (_uiBusy || _loadPending)
 		return;
 	if (_optionsActive) {
@@ -723,7 +996,14 @@ void DeltaEngine::handleInput(const Common::Event &event) {
 		_transitionSkipped = true;
 		return;
 	}
+	if (select && _waiting && _waitSkippable) {
+		_waitInterrupted = true;
+		return;
+	}
 	if (_messageWaiting && select) {
+		// A click on a page cuts the voice with VOICECUT (native 0x42b9e9)
+		if (_settings.voiceCut)
+			_mixer->stopHandle(_voiceHandle);
 		advanceMessage();
 		return;
 	}

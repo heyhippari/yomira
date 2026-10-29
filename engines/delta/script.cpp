@@ -21,6 +21,7 @@
 
 #include "delta/script.h"
 #include "common/endian.h"
+#include "common/util.h"
 
 namespace Delta {
 
@@ -63,6 +64,43 @@ bool ScriptReader::seek(uint32 position) {
 	}
 	_position = position;
 	return true;
+}
+
+bool ReadHistory::enterBlock(uint16 block) {
+	const bool changed = _current >= 0 && !isRead(_current);
+	if (changed)
+		_read[_current >> 3] |= 1 << (_current & 7);
+	_current = block;
+	return changed;
+}
+
+bool ReadHistory::save(Common::WriteStream &stream) const {
+	stream.writeUint32BE(MKTAG('D', 'L', 'R', 'D'));
+	stream.writeByte(1);
+	stream.write(_read, sizeof(_read));
+	return !stream.err();
+}
+
+bool ReadHistory::load(Common::SeekableReadStream &stream) {
+	byte read[sizeof(_read)];
+	if (stream.readUint32BE() != MKTAG('D', 'L', 'R', 'D') || stream.readByte() != 1 ||
+		stream.read(read, sizeof(read)) != sizeof(read))
+		return false;
+	memcpy(_read, read, sizeof(_read));
+	return true;
+}
+
+bool isHaltOpcode(uint16 opcode) {
+	// Table entries sharing native handler 0x40861d
+	static const uint16 opcodes[] = {
+		0x02, 0x03, 0x04, 0x15, 0x16, 0x1f, 0x4a, 0x4d, 0x4e, 0x4f,
+		0x51, 0x5b, 0x6c, 0x7b, 0x82, 0x9b, 0xa9, 0xaa, 0xba, 0xbb
+	};
+	for (uint index = 0; index < ARRAYSIZE(opcodes); ++index) {
+		if (opcodes[index] == opcode)
+			return true;
+	}
+	return false;
 }
 
 bool Script::evaluateCondition() {
@@ -201,6 +239,8 @@ bool Script::next(ScriptCommand &command) {
 	command.opcode = _reader.readWord();
 	if (_legacyOpcodes && command.opcode >= 5)
 		++command.opcode;
+	if (isHaltOpcode(command.opcode))
+		return true;
 	uint wordCount = 0;
 	switch (command.opcode) {
 	case 0x21: {
@@ -287,7 +327,8 @@ bool Script::next(ScriptCommand &command) {
 		command.arguments.push_back(variable);
 		break;
 	}
-	case 0x95: {
+	case 0x95:
+	case 0x96: {
 		const uint16 variable = _reader.readWord();
 		const uint16 count = _reader.readWord();
 		if (variable >= ARRAYSIZE(_variables) || count > 32 || _variables[variable] > count) {
@@ -383,10 +424,26 @@ bool Script::next(ScriptCommand &command) {
 	case 0x06:
 	case 0x0d:
 	case 0x48:
+	case 0x49:
 	case 0x54:
+	case 0x5f:
+	case 0x89:
+	case 0x8d:
+	case 0xa0:
 	case 0xa5:
 		break;
+	case 0x9e:
+		wordCount = 1;
+		break;
+	case 0x9f:
+		wordCount = 3;
+		break;
+	case 0xa7:
+		command.strings.push_back(_reader.readString());
+		wordCount = 4;
+		break;
 	case 0x07:
+	case 0x85:
 	case 0x0f:
 	case 0x10:
 	case 0x14:
@@ -424,6 +481,83 @@ bool Script::next(ScriptCommand &command) {
 		_variables[variable] = (value & 0x8000) ? _variables[value & 0x7fff] : value;
 		command.arguments.push_back(variable);
 		command.arguments.push_back(_variables[variable]);
+		break;
+	}
+	case 0x8b:
+	case 0x8c:
+	case 0x8e:
+	case 0x8f:
+	case 0x90: {
+		const uint16 variable = _reader.readWord();
+		uint16 value = _reader.readWord();
+		if (variable >= ARRAYSIZE(_variables) || ((value & 0x8000) && (value & 0x7fff) >= ARRAYSIZE(_variables))) {
+			_error = Common::String::format("Invalid variable at script offset 0x%x", command.offset);
+			return false;
+		}
+		if (value & 0x8000)
+			value = _variables[value & 0x7fff];
+		uint16 &target = _variables[variable];
+		switch (command.opcode) {
+		case 0x8b: target += value; break;
+		case 0x8c: target = target < value ? 0 : target - value; break;
+		case 0x8f: target *= value; break;
+		// The native faults on a zero divisor
+		case 0x8e: if (value) target /= value; break;
+		default: if (value) target %= value; break;
+		}
+		command.arguments.push_back(variable);
+		command.arguments.push_back(target);
+		break;
+	}
+	case 0x92: {
+		const uint16 chance = _reader.readWord();
+		const uint16 variable = _reader.readWord();
+		if (chance >= ARRAYSIZE(_variables) || variable >= ARRAYSIZE(_variables) || !_random) {
+			_error = Common::String::format("Invalid percentage roll at script offset 0x%x", command.offset);
+			return false;
+		}
+		_variables[variable] = _variables[chance] > _random->getRandomNumber(99);
+		command.arguments.push_back(chance);
+		command.arguments.push_back(variable);
+		break;
+	}
+	case 0x93:
+	case 0x94: {
+		const uint16 base = _reader.readWord();
+		const uint16 count = _reader.readWord();
+		const uint16 first = _reader.readWord();
+		const uint16 second = _reader.readWord();
+		const uint span = MAX<uint>(count, command.opcode == 0x94 ? 2 : 1);
+		if (base + span > ARRAYSIZE(_variables) || first >= ARRAYSIZE(_variables) || second >= ARRAYSIZE(_variables)) {
+			_error = Common::String::format("Invalid variable range at script offset 0x%x", command.offset);
+			return false;
+		}
+		const uint16 *values = &_variables[base];
+		if (command.opcode == 0x93) {
+			uint maximum = 0;
+			for (uint index = 1; index < count; ++index) {
+				if (values[index] > values[maximum])
+					maximum = index;
+			}
+			_variables[first] = maximum + 1;
+			_variables[second] = values[maximum];
+		} else {
+			// 0x406800 seeds from the first two variables, whatever the count
+			uint maximum = values[0] >= values[1] ? 0 : 1;
+			uint runnerUp = 1 - maximum;
+			for (uint index = 2; index < count; ++index) {
+				if (values[index] > values[maximum]) {
+					runnerUp = maximum;
+					maximum = index;
+				} else if (values[index] > values[runnerUp]) {
+					runnerUp = index;
+				}
+			}
+			_variables[first] = maximum + 1;
+			_variables[second] = runnerUp + 1;
+		}
+		command.arguments.push_back(base);
+		command.arguments.push_back(count);
 		break;
 	}
 	case 0x70:

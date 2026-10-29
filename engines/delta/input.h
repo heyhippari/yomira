@@ -33,7 +33,8 @@ enum DeltaAction {
 	kActionDown,
 	kActionLeft,
 	kActionRight,
-	kActionMenu
+	kActionMenu,
+	kActionSkip
 };
 
 class InputState {
