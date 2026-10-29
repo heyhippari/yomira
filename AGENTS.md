@@ -9,6 +9,7 @@
 
 - Follow ScummVM's [commit message guidelines](https://wiki.scummvm.org/index.php/Commit_Guidelines).
 - Prefix engine-specific commits with the uppercase engine name and a colon, followed by a concise description (for example, `COMPLET: Add game detection`).
+- Do not add Claude, Copilot, or any other AI agent as a co-author: no `Co-Authored-By` trailers or similar attribution lines for agents.
 
 ## Portability conventions
 
