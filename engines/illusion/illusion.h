@@ -35,8 +35,14 @@
 
 #include "illusion/archive.h"
 #include "illusion/detection.h"
+#include "illusion/model.h"
 
 namespace Illusion {
+
+static const uint32 kMouseLeftMask = 1U << 0;
+static const uint32 kMouseRightMask = 1U << 1;
+static const uint32 kMouseMiddleMask = 1U << 2;
+static const uint32 kMouseX1Mask = 1U << 3;
 
 struct IllusionInputState {
 	bool keys[Common::KEYCODE_LAST];
@@ -124,6 +130,35 @@ private:
 		kSelectImageCount = kSelectName + 9
 	};
 
+	enum SwimsuitImage {
+		kSuitBackground,
+		kSuitStanding,
+		kSuitFrame,
+		kSuitNew,
+		kSuitOkOn,
+		kSuitOkOff,
+		kSuitBackOn,
+		kSuitBackOff,
+		kSuitUnknown,
+		kSuitList = kSuitUnknown + 4,
+		kSuitDayDigit = kSuitList + 4,
+		kSuitTimeDigit = kSuitDayDigit + 10,
+		kSuitName = kSuitTimeDigit + 6,
+		kSuitImageCount = kSuitName + 9
+	};
+
+	// Swimsuit availability per girl, as stored by the game.
+	enum SwimsuitState {
+		kSwimsuitMissing = -1,
+		kSwimsuitLocked = 0,
+		kSwimsuitNew = 1,
+		kSwimsuitOwned = 2
+	};
+
+	static const int kGirlCount = 9;
+	static const int kSwimsuitCount = 72;
+	static const int kSwimsuitsPerPage = 18;
+
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
 	IllusionInputState _inputState;
@@ -157,6 +192,24 @@ private:
 	int _shownSlot;
 	int _selectButton;
 	bool _selectConfirmed;
+
+	int8 _swimsuits[kGirlCount][kSwimsuitCount];
+	int _currentSwimsuit;
+	uint _suitImages[kSuitImageCount];
+	CharacterSelectPhase _suitPhase;
+	uint32 _suitElapsed;
+	uint32 _suitClock;
+	int _suitPage;
+	int _suitButton;
+	bool _suitConfirmed;
+	bool _suitDirty;
+	IllusionArchive _suitModelArchive;
+	IllusionArchive _suitTextureArchive;
+	bool _suitArchivesOpen;
+	Model _suitModel;
+	ModelClips _suitClips;
+	ModelClipPlayer _suitPlayer;
+	Common::Array<uint> _suitTextures;
 protected:
 	// Engine APIs
 	Common::Error run() override;
@@ -174,10 +227,22 @@ private:
 	uint loadSceneImage(IllusionArchive &archive, const Common::String &name, bool keepBackgroundCopy = false);
 	void clearSceneImages();
 	Common::Error runStartup();
-	Common::Error runCharacterSelection(bool &returnToTitle);
+	Common::Error runCharacterSelection(bool &confirmed);
 	void updateCharacterSelection(uint32 delta);
 	void drawCharacterSelection();
 	void drawPointer();
+	void drawDayDisplay(const uint *dayDigits, const uint *timeDigits, const uint *name);
+
+	// New-game flow (newgame.cpp)
+	void resetNewGame();
+	Common::Error runNewGame(bool &returnToTitle);
+	Common::Error loadSwimsuitSelection();
+	Common::Error runSwimsuitSelection(bool &confirmed);
+	void updateSwimsuitSelection(uint32 delta);
+	void drawSwimsuitSelection();
+	void loadSwimsuitModel();
+	void clearSwimsuitModel();
+	uint loadModelTexture(IllusionArchive &archive, const Common::String &name);
 	void playSound(const Common::String &name, bool loop);
 	void drawMenu();
 	Common::Rect menuRectangle(int x, int y, int width, int height) const;

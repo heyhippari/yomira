@@ -24,6 +24,7 @@
 #include "graphics/palette.h"
 #include "graphics/pixelformat.h"
 #include "graphics/tinygl/tinygl.h"
+#include "illusion/model.h"
 
 namespace Illusion {
 
@@ -42,7 +43,16 @@ private:
 	int _height;
 	bool _blendingEnabled;
 
+	struct AlphaMesh {
+		uint mesh;
+		uint group;
+		float distance;
+	};
+	Common::Array<AlphaMesh> _alphaMeshes;
+
 	void freeBackgroundCopy(uint index);
+	void setupModelLights(const Model &model);
+	void drawModelMesh(const Model &model, uint index, const uint *textures, bool alphaPass);
 
 public:
 	IllusionRenderer(OSystem *system);
@@ -75,6 +85,19 @@ public:
 	/** Replaces the frame with the cached scene. Returns false when none is cached. */
 	bool restoreScene();
 	void invalidateScene() { _sceneValid = false; }
+	/**
+	 * Uploads a texture for drawModel(). Returns 0 when it cannot be used; the size is limited to
+	 * the 512x512 texture size of the context.
+	 */
+	uint createTexture(const Graphics::Surface &surface, const Graphics::Palette &palette);
+	void destroyTexture(uint texture);
+	/**
+	 * Draws a posed model over what has been drawn so far, using the game's perspective and a
+	 * camera at the given Direct3D position looking along +Z. textures holds one texture handle
+	 * per Model::getTextures() entry (0 for none). The depth buffer is cleared first and the
+	 * 2D drawing state is restored afterwards, so 2D draws queued later land on top.
+	 */
+	void drawModel(const Model &model, const uint *textures, const float *cameraPosition);
 	void clearScreen();
 	void flipBuffer();
 };

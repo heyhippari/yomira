@@ -57,7 +57,7 @@ endif
 
 ifeq ($(ENABLE_ILLUSION), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/illusion/*.h
-	TEST_LIBS := engines/illusion/archive.o $(TEST_LIBS)
+	TEST_LIBS := engines/illusion/archive.o engines/illusion/model.o $(TEST_LIBS)
 endif
 
 ifeq ($(ENABLE_WINTERMUTE), STATIC_PLUGIN)

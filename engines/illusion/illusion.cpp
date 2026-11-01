@@ -54,10 +54,6 @@ static const float kProjectionAspect = 0.75f;
 static const float kProjectionFieldOfView = 0.5f;
 static const float kProjectionNearPlane = 1.0f;
 static const float kProjectionFarPlane = 100000.0f;
-static const uint32 kMouseLeftMask = 1U << 0;
-static const uint32 kMouseRightMask = 1U << 1;
-static const uint32 kMouseMiddleMask = 1U << 2;
-static const uint32 kMouseX1Mask = 1U << 3;
 static const uint8 kTextureFilterPoint = 1;
 static const uint8 kTextureFilterLinear = 2;
 static const uint8 kTextureOperationModulate = 4;
@@ -115,18 +111,24 @@ IllusionEngine::IllusionEngine(OSystem *syst, const ADGameDescription *gameDesc)
 	_fadeImage(0), _pointerImage(0), _startupPhase(kMoviePending), _startupElapsed(0), _menuSelection(0),
 	_menuAction(-1), _linearFiltering(false), _day(1), _currentGirl(0), _portraitImage(0), _profileImage(0),
 	_selectPhase(kSelectFadeIn), _selectElapsed(0), _portraitElapsed(0), _selectedSlot(0), _shownSlot(0),
-	_selectButton(0), _selectConfirmed(false) {
+	_selectButton(0), _selectConfirmed(false), _currentSwimsuit(-1), _suitPhase(kSelectFadeIn), _suitElapsed(0),
+	_suitClock(0), _suitPage(0), _suitButton(0), _suitConfirmed(false), _suitDirty(true),
+	_suitArchivesOpen(false) {
 	for (uint index = 0; index < ARRAYSIZE(_menuImages); ++index)
 		_menuImages[index] = 0;
 	for (uint index = 0; index < ARRAYSIZE(_selectImages); ++index)
 		_selectImages[index] = 0;
+	for (uint index = 0; index < ARRAYSIZE(_suitImages); ++index)
+		_suitImages[index] = 0;
+	resetNewGame();
 	g_engine = this;
 }
 
 IllusionEngine::~IllusionEngine() {
 	_mixer->stopHandle(_musicHandle);
 	_mixer->stopHandle(_effectHandle);
-	clearSceneImages();
+	if (_renderer)
+		clearSceneImages();
 	delete _renderer;
 	g_engine = nullptr;
 }
@@ -350,6 +352,10 @@ Common::Error IllusionEngine::initCharacterSelection() {
 }
 
 void IllusionEngine::clearSceneImages() {
+	clearSwimsuitModel();
+	_suitModelArchive.close();
+	_suitTextureArchive.close();
+	_suitArchivesOpen = false;
 	for (uint index = 0; index < _sceneImages.size(); ++index)
 		_renderer->destroyImage(_sceneImages[index]);
 	_sceneImages.clear();
@@ -361,6 +367,8 @@ void IllusionEngine::clearSceneImages() {
 	_profileImage = 0;
 	for (uint index = 0; index < ARRAYSIZE(_selectImages); ++index)
 		_selectImages[index] = 0;
+	for (uint index = 0; index < ARRAYSIZE(_suitImages); ++index)
+		_suitImages[index] = 0;
 }
 
 uint IllusionEngine::loadSceneImage(IllusionArchive &archive, const Common::String &name, bool keepBackgroundCopy) {
@@ -456,8 +464,9 @@ Common::Error IllusionEngine::loadCharacterSelection() {
 	_selectConfirmed = false;
 	_selectPhase = kSelectFadeIn;
 	_selectElapsed = 0;
+	// Entering the character selection forgets the swimsuit chosen for the previous girl.
+	_currentSwimsuit = -1;
 
-	playSound("BG0002", true);
 	// The game starts with the pointer on the confirm button.
 	const Common::Rect ok = menuRectangle(kSelectButtonX, kSelectButtonY, 248, 59);
 	_system->warpMouse((ok.left + ok.right) / 2, (ok.top + ok.bottom) / 2);
@@ -557,11 +566,8 @@ void IllusionEngine::drawCharacterSelection() {
 		_renderer->drawImage(_selectImages[kSelectTitle], menuRectangle(388, 30, 420, 56));
 		_renderer->drawImage(_selectImages[kSelectProfileLabel], menuRectangle(680, 165, 160, 72));
 
-		// Day counter and time-of-day slot of the shown girl; a new game starts at day 1, slot 1.
-		_renderer->drawImage(_selectImages[kSelectTimeDigit], menuRectangle(977, 70, 19, 29));
-		_renderer->drawImage(_selectImages[kSelectDayDigit + (_day / 10) % 10], menuRectangle(833, 26, 29, 35));
-		_renderer->drawImage(_selectImages[kSelectDayDigit + _day % 10], menuRectangle(853, 26, 29, 35));
-		_renderer->drawImage(_selectImages[kSelectName + girlForSlot(_selectedSlot)], menuRectangle(875, 74, 84, 26));
+		drawDayDisplay(_selectImages + kSelectDayDigit, _selectImages + kSelectTimeDigit,
+			_selectImages + kSelectName + girlForSlot(_selectedSlot));
 
 		_renderer->drawImage(_profileImage, menuRectangle(495, 235, 513, 190));
 		_renderer->drawImage(_selectImages[kSelectGrid], menuRectangle(494, 433, 516, 238));
@@ -596,14 +602,22 @@ void IllusionEngine::drawCharacterSelection() {
 	_renderer->flipBuffer();
 }
 
+void IllusionEngine::drawDayDisplay(const uint *dayDigits, const uint *timeDigits, const uint *name) {
+	// Day counter and time-of-day slot of the girl; a new game starts at day 1, slot 1.
+	_renderer->drawImage(timeDigits[0], menuRectangle(977, 70, 19, 29));
+	_renderer->drawImage(dayDigits[(_day / 10) % 10], menuRectangle(833, 26, 29, 35));
+	_renderer->drawImage(dayDigits[_day % 10], menuRectangle(853, 26, 29, 35));
+	_renderer->drawImage(*name, menuRectangle(875, 74, 84, 26));
+}
+
 void IllusionEngine::drawPointer() {
 	const Common::Rect size = menuRectangle(0, 0, 64, 64);
 	_renderer->drawImage(_pointerImage, Common::Rect(_inputState.mousePosition.x, _inputState.mousePosition.y,
 		_inputState.mousePosition.x + size.width(), _inputState.mousePosition.y + size.height()));
 }
 
-Common::Error IllusionEngine::runCharacterSelection(bool &returnToTitle) {
-	returnToTitle = false;
+Common::Error IllusionEngine::runCharacterSelection(bool &confirmed) {
+	confirmed = false;
 	uint32 previousTime = _system->getMillis();
 	bool redraw = true;
 	while (!shouldQuit() && !_inputState.quitRequested) {
@@ -619,13 +633,10 @@ Common::Error IllusionEngine::runCharacterSelection(bool &returnToTitle) {
 		updateCharacterSelection(delta);
 		if (_selectPhase == kSelectFadeOut && _selectElapsed >= kSceneFadeTime) {
 			clearSceneImages();
-			if (!_selectConfirmed) {
-				returnToTitle = true;
-				return Common::kNoError;
-			}
-			debug(1, "Illusion: girl %d chosen; swimsuit selection (scene 2, step 1) requested", _currentGirl);
-			return Common::Error(Common::kUnsupportedGameidError,
-				"The swimsuit selection is not implemented yet");
+			confirmed = _selectConfirmed;
+			if (confirmed)
+				debug(1, "Illusion: girl %d chosen", _currentGirl);
+			return Common::kNoError;
 		}
 		// A portrait that was just loaded starts its animation now, not after the load time.
 		if (_portraitElapsed == 0 && delta != 0)
@@ -767,11 +778,8 @@ Common::Error IllusionEngine::runStartup() {
 				const uint sceneStates[] = { 2, 0xc, 0x11, 0xd };
 				debug(1, "Illusion: title menu requests scene state %u", sceneStates[_menuAction]);
 				if (_menuAction == 0) {
-					Common::Error result = initCharacterSelection();
-					if (result.getCode() != Common::kNoError)
-						return result;
 					bool returnToTitle = false;
-					result = runCharacterSelection(returnToTitle);
+					const Common::Error result = runNewGame(returnToTitle);
 					if (!returnToTitle)
 						return result;
 					playSound("BG0000", true);

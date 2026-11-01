@@ -2,8 +2,10 @@ MODULE := engines/illusion
 
 MODULE_OBJS = \
 	illusion.o \
+	newgame.o \
 	archive.o \
 	renderer.o \
+	model.o \
 	console.o \
 	metaengine.o
 
