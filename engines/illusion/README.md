@@ -175,7 +175,7 @@ Implemented in `resetNewGame()`. The values were taken from the game's new-game 
 
 ## Rendering Notes
 
-Implemented in [renderer.cpp](renderer.cpp).
+The engine draws through the `IllusionRenderer` interface in [renderer.h](renderer.h). `createRenderer()` in [renderer.cpp](renderer.cpp) picks the backend from the standard `renderer` setting among those the build supports; TinyGL ([renderer_tinygl.cpp](renderer_tinygl.cpp)) is the only one so far. Scene caching (`cacheScene()`/`restoreScene()`) is optional: a backend that keeps nothing makes the scenes redraw every frame. The notes below describe the TinyGL backend.
 
 - Once the portrait finishes fading in, the scene behind the buttons is cached with `cacheScene()` and restored with a `memcpy` on later frames. A cell click invalidates the cache, and it is rebuilt after the next full draw.
 - The frame is redrawn only when the pointer moves, a mouse button is pressed, an animation or fade runs, or a focus or screen event requests it.
@@ -184,7 +184,7 @@ Implemented in [renderer.cpp](renderer.cpp).
 
 ## 3D Models
 
-Implemented in [model.cpp](model.cpp) and the `drawModel()` part of [renderer.cpp](renderer.cpp). The format is specified in the reverse-engineering notes (`model-format.md`); only a subset is used so far.
+Implemented in [model.cpp](model.cpp) and the `drawModel()` part of [renderer_tinygl.cpp](renderer_tinygl.cpp). The format is specified in the reverse-engineering notes (`model-format.md`); only a subset is used so far.
 
 - `Model` parses OBJM version 8 `.x` files: MATE, TEXT, LIGH, MESH, FRAM and ANIM. FOG and the chunks that are not used yet (ENVL, MORP, MATA, TEXA, PART, CNST, BLND) are skipped by size, and an unknown tag stops parsing like the game does. Every count and size is checked against the buffer, and a malformed file fails the load. Skinning and morphs are not implemented.
 - Frame matrices keep the game's convention (Direct3D, row vectors, `world = local * parentWorld`). ANIM keys are completed by the "prepare" step, evaluated with slerp and lerp, and replace the frame's local matrix.
@@ -205,7 +205,8 @@ Implemented in [model.cpp](model.cpp) and the `drawModel()` part of [renderer.cp
 
 - [illusion.cpp](illusion.cpp) and [illusion.h](illusion.h): engine core. Startup, data validation, display setup, menu flow, character selection, input, and resource loading.
 - [archive.cpp](archive.cpp) and [archive.h](archive.h): package reader for both formats above.
-- [renderer.cpp](renderer.cpp) and [renderer.h](renderer.h): TinyGL renderer. Creates textures from surfaces, draws backgrounds and images with opacity, supports fade-from-black and fade-to-white, caches and restores a scene, draws posed 3D models, and flips the buffer.
+- [renderer.h](renderer.h) and [renderer.cpp](renderer.cpp): renderer interface and backend selection.
+- [renderer_tinygl.cpp](renderer_tinygl.cpp) and [renderer_tinygl.h](renderer_tinygl.h): TinyGL renderer. Creates textures from surfaces, draws backgrounds and images with opacity, supports fade-from-black and fade-to-white, caches and restores a scene, draws posed 3D models, and flips the buffer.
 - [model.cpp](model.cpp) and [model.h](model.h): `.x` model and `.xan` clip parsing, frame animation and the clip player.
 - [newgame.cpp](newgame.cpp): new-game flow, swimsuit selection and the swimsuit preview model.
 - [detection.cpp](detection.cpp), [detection_tables.h](detection_tables.h), and [detection.h](detection.h): game detection.

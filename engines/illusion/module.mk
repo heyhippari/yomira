@@ -5,6 +5,7 @@ MODULE_OBJS = \
 	newgame.o \
 	archive.o \
 	renderer.o \
+	renderer_tinygl.o \
 	model.o \
 	console.o \
 	metaengine.o

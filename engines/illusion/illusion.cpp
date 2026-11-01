@@ -917,10 +917,12 @@ Common::Error IllusionEngine::run() {
 	if (result.getCode() != Common::kNoError)
 		return result;
 	initRendererState();
-	_renderer = new IllusionRenderer(_system);
+	_renderer = createRenderer(_system);
+	if (!_renderer)
+		return Common::Error(Common::kUnsupportedColorMode, "No supported renderer is available");
 	if (!_renderer->init(_rendererState.viewport.width(), _rendererState.viewport.height(),
 			_system->getScreenFormat(), _rendererState))
-		return Common::Error(Common::kUnsupportedColorMode, "Unable to initialize TinyGL renderer");
+		return Common::Error(Common::kUnsupportedColorMode, "Unable to initialize the renderer");
 	result = loadStartupResources();
 	if (result.getCode() != Common::kNoError)
 		return result;
