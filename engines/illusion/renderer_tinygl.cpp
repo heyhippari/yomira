@@ -16,6 +16,9 @@
  */
 
 #include "illusion/renderer_tinygl.h"
+
+#if defined(USE_TINYGL)
+
 #include "illusion/illusion.h"
 
 #include "common/algorithm.h"
@@ -555,3 +558,5 @@ void TinyGLRenderer::flipBuffer() {
 }
 
 } // End of namespace Illusion
+
+#endif // USE_TINYGL

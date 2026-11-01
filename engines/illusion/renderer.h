@@ -22,6 +22,7 @@
 #include "common/rect.h"
 #include "common/system.h"
 #include "graphics/palette.h"
+#include "graphics/renderer.h"
 #include "graphics/pixelformat.h"
 #include "graphics/surface.h"
 #include "illusion/model.h"
@@ -87,10 +88,14 @@ public:
 };
 
 /**
- * Creates the renderer selected by the "renderer" setting, falling back to the best one this
- * build supports. Returns nullptr when none is available.
+ * Picks the renderer type from the "renderer" setting, falling back to the best one that this
+ * build and the graphics backend support. Returns kRendererTypeDefault when none is available.
+ * It must run before the display is initialised, because OpenGL needs a 3D display.
  */
-IllusionRenderer *createRenderer(OSystem *system);
+Graphics::RendererType selectRendererType();
+
+/** Creates the renderer for a type returned by selectRendererType(). Returns nullptr when it is not supported. */
+IllusionRenderer *createRenderer(OSystem *system, Graphics::RendererType type);
 
 } // End of namespace Illusion
 

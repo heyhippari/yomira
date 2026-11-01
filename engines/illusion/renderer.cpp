@@ -16,6 +16,7 @@
  */
 
 #include "illusion/renderer.h"
+#include "illusion/renderer_opengl.h"
 #include "illusion/renderer_tinygl.h"
 
 #include "common/config-manager.h"
@@ -24,15 +25,28 @@
 
 namespace Illusion {
 
-IllusionRenderer *createRenderer(OSystem *system) {
+Graphics::RendererType selectRendererType() {
 	const Graphics::RendererType desired = Graphics::Renderer::parseTypeCode(ConfMan.get("renderer"));
 	uint32 supported = 0;
 #if defined(USE_TINYGL)
 	supported |= Graphics::kRendererTypeTinyGL;
 #endif
+#if defined(USE_OPENGL_GAME)
+	// getAvailableTypes() only reports OpenGL when the backend has kFeatureOpenGLForGame.
+	supported |= Graphics::kRendererTypeOpenGL;
+#endif
+	if (!(Graphics::Renderer::getAvailableTypes() & supported))
+		return Graphics::kRendererTypeDefault;
 	const Graphics::RendererType type = Graphics::Renderer::getBestMatchingAvailableType(desired, supported);
 	debug(1, "Illusion: using the %s renderer", Graphics::Renderer::getTypeCode(type).c_str());
+	return type;
+}
 
+IllusionRenderer *createRenderer(OSystem *system, Graphics::RendererType type) {
+#if defined(USE_OPENGL_GAME)
+	if (type == Graphics::kRendererTypeOpenGL)
+		return new OpenGLRenderer(system);
+#endif
 #if defined(USE_TINYGL)
 	if (type == Graphics::kRendererTypeTinyGL)
 		return new TinyGLRenderer(system);

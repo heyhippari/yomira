@@ -40,8 +40,12 @@ Pressing Escape on the title menu ends startup. Escape has no effect in characte
 
 ## Build And Setup
 
-`configure.engine` requires the `16bit`, `highres`, and `tinygl` features: the
-engine renders through TinyGL at 640x480 or higher in 16 or 32 bits per pixel.
+`configure.engine` requires the `highres` and `3d` features, where `3d` means
+that TinyGL or OpenGL (classic) game rendering is built; configure cannot express
+"either" directly, so `3d` stands for it. `tinygl` is listed as a component, so
+it stays enabled when available. TinyGL renders at 640x480 or higher in 16 or 32
+bits per pixel. The OpenGL renderer needs `USE_OPENGL_GAME`; both renderer
+sources are guarded by their define and the build works with only one of them.
 
 ```sh
 ./configure --enable-engine=illusion
@@ -175,7 +179,9 @@ Implemented in `resetNewGame()`. The values were taken from the game's new-game 
 
 ## Rendering Notes
 
-The engine draws through the `IllusionRenderer` interface in [renderer.h](renderer.h). `createRenderer()` in [renderer.cpp](renderer.cpp) picks the backend from the standard `renderer` setting among those the build supports; TinyGL ([renderer_tinygl.cpp](renderer_tinygl.cpp)) is the only one so far. Scene caching (`cacheScene()`/`restoreScene()`) is optional: a backend that keeps nothing makes the scenes redraw every frame. The notes below describe the TinyGL backend.
+The engine draws through the `IllusionRenderer` interface in [renderer.h](renderer.h). `createRenderer()` in [renderer.cpp](renderer.cpp) `selectRendererType()` picks the backend from the standard `renderer` setting (the game's Graphics tab or `renderer=` in the config) among those that the build and the graphics backend support, and `run()` does this before the display is set up: OpenGL needs `initGraphics3d()`, TinyGL a 2D `initGraphics()`. If OpenGL cannot be initialised, the engine falls back to TinyGL. The backends are TinyGL ([renderer_tinygl.cpp](renderer_tinygl.cpp)) and fixed-function OpenGL ([renderer_opengl.cpp](renderer_opengl.cpp), needs `USE_OPENGL_GAME`). Scene caching (`cacheScene()`/`restoreScene()`) is optional: a backend that keeps nothing makes the scenes redraw every frame. The notes below describe the TinyGL backend unless stated otherwise.
+
+The OpenGL backend draws every image as a textured quad in a pixel-sized orthographic projection (NPOT textures are padded when the context lacks them), fades from black by scaling RGB with blending off, and fades to white with an untextured white quad. It keeps no scene cache. It re-establishes the whole 2D state once per frame and after each model pass, because the graphics backend changes GL state when it presents. For models it follows the TinyGL matrices and ordering, and improves on it with `GL_ZERO / GL_ONE_MINUS_SRC_COLOR` for darken meshes, a local viewer for specular, and `GL_SEPARATE_SPECULAR_COLOR` (GL 1.2) so that specular is added after texturing as in Direct3D. The per-light range is still not applied. This backend has not been run on a GPU yet.
 
 - Once the portrait finishes fading in, the scene behind the buttons is cached with `cacheScene()` and restored with a `memcpy` on later frames. A cell click invalidates the cache, and it is rebuilt after the next full draw.
 - The frame is redrawn only when the pointer moves, a mouse button is pressed, an animation or fade runs, or a focus or screen event requests it.
@@ -206,6 +212,7 @@ Implemented in [model.cpp](model.cpp) and the `drawModel()` part of [renderer_ti
 - [illusion.cpp](illusion.cpp) and [illusion.h](illusion.h): engine core. Startup, data validation, display setup, menu flow, character selection, input, and resource loading.
 - [archive.cpp](archive.cpp) and [archive.h](archive.h): package reader for both formats above.
 - [renderer.h](renderer.h) and [renderer.cpp](renderer.cpp): renderer interface and backend selection.
+- [renderer_opengl.cpp](renderer_opengl.cpp) and [renderer_opengl.h](renderer_opengl.h): fixed-function OpenGL renderer with the same interface, without scene caching.
 - [renderer_tinygl.cpp](renderer_tinygl.cpp) and [renderer_tinygl.h](renderer_tinygl.h): TinyGL renderer. Creates textures from surfaces, draws backgrounds and images with opacity, supports fade-from-black and fade-to-white, caches and restores a scene, draws posed 3D models, and flips the buffer.
 - [model.cpp](model.cpp) and [model.h](model.h): `.x` model and `.xan` clip parsing, frame animation and the clip player.
 - [newgame.cpp](newgame.cpp): new-game flow, swimsuit selection and the swimsuit preview model.

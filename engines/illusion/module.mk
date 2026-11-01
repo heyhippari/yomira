@@ -5,6 +5,7 @@ MODULE_OBJS = \
 	newgame.o \
 	archive.o \
 	renderer.o \
+	renderer_opengl.o \
 	renderer_tinygl.o \
 	model.o \
 	console.o \

@@ -32,6 +32,7 @@
 #include "common/util.h"
 #include "engines/engine.h"
 #include "audio/mixer.h"
+#include "graphics/renderer.h"
 
 #include "illusion/archive.h"
 #include "illusion/detection.h"
@@ -217,7 +218,7 @@ protected:
 private:
 	/** Checks for the minimum Sexy Beach 2 files before anything is started. */
 	Common::Error validateGameData() const;
-	Common::Error initDisplay();
+	Common::Error initDisplay(Graphics::RendererType rendererType);
 	void initRendererState();
 	Common::Error loadStartupResources();
 	Common::Error loadMenuResources();

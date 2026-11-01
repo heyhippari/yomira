@@ -18,6 +18,10 @@
 #ifndef ILLUSION_RENDERER_TINYGL_H
 #define ILLUSION_RENDERER_TINYGL_H
 
+#include "common/scummsys.h"
+
+#if defined(USE_TINYGL)
+
 #include "common/array.h"
 #include "graphics/tinygl/tinygl.h"
 #include "illusion/renderer.h"
@@ -78,5 +82,7 @@ public:
 };
 
 } // End of namespace Illusion
+
+#endif // USE_TINYGL
 
 #endif // ILLUSION_RENDERER_TINYGL_H

@@ -167,7 +167,7 @@ Common::Error IllusionEngine::validateGameData() const {
 	return Common::kNoError;
 }
 
-Common::Error IllusionEngine::initDisplay() {
+Common::Error IllusionEngine::initDisplay(Graphics::RendererType rendererType) {
 	int width = kDefaultScreenWidth;
 	int height = kDefaultScreenHeight;
 	uint32 bitsPerPixel = 32;
@@ -197,16 +197,23 @@ Common::Error IllusionEngine::initDisplay() {
 	if (!displaySettingsValid)
 		debug(1, "Illusion: using default display mode %dx%dx32", width, height);
 
-	// TinyGL only renders to 16 and 32 bits per pixel, so 24-bit modes use a 32-bit surface.
-	const Graphics::PixelFormat format = bitsPerPixel == 16 ?
-		Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0) :
-		Graphics::PixelFormat::createFormatBGRA32();
-	initGraphics(width, height, &format);
-	const Graphics::PixelFormat &actualFormat = _system->getScreenFormat();
-	if (!(actualFormat == format))
-		warning("Illusion: backend pixel format differs from the requested format");
-	if (actualFormat.bytesPerPixel != 2 && actualFormat.bytesPerPixel != 4)
-		return Common::kUnsupportedColorMode;
+	if (rendererType == Graphics::kRendererTypeOpenGL) {
+		// OpenGL draws to its own framebuffer, so the configured color depth does not apply.
+		initGraphics3d(width, height);
+		if (!_system->hasFeature(OSystem::kFeatureOpenGLForGame))
+			return Common::kUnsupportedColorMode;
+	} else {
+		// TinyGL only renders to 16 and 32 bits per pixel, so 24-bit modes use a 32-bit surface.
+		const Graphics::PixelFormat format = bitsPerPixel == 16 ?
+			Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0) :
+			Graphics::PixelFormat::createFormatBGRA32();
+		initGraphics(width, height, &format);
+		const Graphics::PixelFormat &actualFormat = _system->getScreenFormat();
+		if (!(actualFormat == format))
+			warning("Illusion: backend pixel format differs from the requested format");
+		if (actualFormat.bytesPerPixel != 2 && actualFormat.bytesPerPixel != 4)
+			return Common::kUnsupportedColorMode;
+	}
 
 	_rendererState.viewport = Common::Rect(0, 0, _system->getWidth(), _system->getHeight());
 	_rendererState.screenCenter = Common::Point(_system->getWidth() / 2, _system->getHeight() / 2);
@@ -913,16 +920,32 @@ Common::Error IllusionEngine::run() {
 	if (result.getCode() != Common::kNoError)
 		return result;
 
-	result = initDisplay();
-	if (result.getCode() != Common::kNoError)
-		return result;
-	initRendererState();
-	_renderer = createRenderer(_system);
-	if (!_renderer)
+	// The renderer decides how the display is set up, so it is chosen first.
+	Graphics::RendererType rendererType = selectRendererType();
+	if (rendererType == Graphics::kRendererTypeDefault)
 		return Common::Error(Common::kUnsupportedColorMode, "No supported renderer is available");
-	if (!_renderer->init(_rendererState.viewport.width(), _rendererState.viewport.height(),
-			_system->getScreenFormat(), _rendererState))
-		return Common::Error(Common::kUnsupportedColorMode, "Unable to initialize the renderer");
+	for (;;) {
+		result = initDisplay(rendererType);
+		if (result.getCode() == Common::kNoError) {
+			initRendererState();
+			_renderer = createRenderer(_system, rendererType);
+			if (_renderer && _renderer->init(_rendererState.viewport.width(), _rendererState.viewport.height(),
+					_system->getScreenFormat(), _rendererState))
+				break;
+			delete _renderer;
+			_renderer = nullptr;
+			result = Common::Error(Common::kUnsupportedColorMode, "Unable to initialize the renderer");
+		}
+#if defined(USE_TINYGL)
+		// A failed OpenGL setup falls back to the software renderer on a regular display.
+		if (rendererType == Graphics::kRendererTypeOpenGL) {
+			warning("Illusion: the OpenGL renderer is unavailable, using the software renderer");
+			rendererType = Graphics::kRendererTypeTinyGL;
+			continue;
+		}
+#endif
+		return result;
+	}
 	result = loadStartupResources();
 	if (result.getCode() != Common::kNoError)
 		return result;
