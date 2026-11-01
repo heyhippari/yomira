@@ -112,9 +112,14 @@ IllusionRendererState::IllusionRendererState() : viewport(0, 0, 0, 0), screenCen
 
 IllusionEngine::IllusionEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("Illusion"), _renderer(nullptr),
-	_startupPhase(kMoviePending), _startupElapsed(0), _menuSelection(0), _menuAction(-1), _linearFiltering(false) {
+	_fadeImage(0), _pointerImage(0), _startupPhase(kMoviePending), _startupElapsed(0), _menuSelection(0),
+	_menuAction(-1), _linearFiltering(false), _day(1), _currentGirl(0), _portraitImage(0), _profileImage(0),
+	_selectPhase(kSelectFadeIn), _selectElapsed(0), _portraitElapsed(0), _selectedSlot(0), _shownSlot(0),
+	_selectButton(0), _selectConfirmed(false) {
 	for (uint index = 0; index < ARRAYSIZE(_menuImages); ++index)
 		_menuImages[index] = 0;
+	for (uint index = 0; index < ARRAYSIZE(_selectImages); ++index)
+		_selectImages[index] = 0;
 	g_engine = this;
 }
 
@@ -253,8 +258,10 @@ Common::Error IllusionEngine::loadStartupResources() {
 	Common::MemoryReadStream fadeStream(imageData.data(), imageData.size());
 	if (!fadeBackground.loadStream(fadeStream))
 		return Common::Error(Common::kReadingFailed, "Invalid fadeW.bmp in sb2_007.pp");
-	debug(1, "Illusion startup image: fadeW.bmp (%dx%d)",
-		fadeBackground.getSurface()->w, fadeBackground.getSurface()->h);
+	// The white fader is stretched over the screen for scene fades.
+	_fadeImage = _renderer->createImage(*fadeBackground.getSurface(), fadeBackground.getPalette());
+	if (!_fadeImage)
+		return Common::Error(Common::kReadingFailed, "Unable to upload fadeW.bmp");
 
 	if (!archive.readMember("loading.bmp", imageData))
 		return Common::Error(Common::kReadingFailed, "Unable to read loading.bmp from sb2_007.pp");
@@ -271,6 +278,17 @@ Common::Error IllusionEngine::loadStartupResources() {
 		return Common::Error(Common::kReadingFailed, "Invalid f1omake_01.tga in sb2_007.pp");
 	debug(1, "Illusion startup image: f1omake_01.tga (%dx%d)",
 		startupLogo.getSurface()->w, startupLogo.getSurface()->h);
+
+	// The game draws this pointer instead of the system cursor in every 2D scene.
+	if (!archive.readMember("icon_17.tga", imageData))
+		return Common::Error(Common::kReadingFailed, "Unable to read icon_17.tga from sb2_007.pp");
+	Common::MemoryReadStream pointerStream(imageData.data(), imageData.size());
+	Image::TGADecoder pointer;
+	if (!pointer.loadStream(pointerStream))
+		return Common::Error(Common::kReadingFailed, "Invalid icon_17.tga in sb2_007.pp");
+	_pointerImage = _renderer->createImage(*pointer.getSurface(), pointer.getPalette());
+	if (!_pointerImage)
+		return Common::Error(Common::kReadingFailed, "Unable to upload icon_17.tga");
 
 	return Common::kNoError;
 }
@@ -335,45 +353,293 @@ void IllusionEngine::clearSceneImages() {
 	for (uint index = 0; index < _sceneImages.size(); ++index)
 		_renderer->destroyImage(_sceneImages[index]);
 	_sceneImages.clear();
+	_renderer->invalidateScene();
+	_selectArchive.close();
+	_renderer->destroyImage(_portraitImage);
+	_renderer->destroyImage(_profileImage);
+	_portraitImage = 0;
+	_profileImage = 0;
+	for (uint index = 0; index < ARRAYSIZE(_selectImages); ++index)
+		_selectImages[index] = 0;
 }
 
+uint IllusionEngine::loadSceneImage(IllusionArchive &archive, const Common::String &name, bool keepBackgroundCopy) {
+	Common::Array<byte> data;
+	if (!archive.readMember(name, data)) {
+		warning("Illusion: unable to read %s", name.c_str());
+		return 0;
+	}
+	Common::MemoryReadStream stream(data.data(), data.size());
+	uint handle = 0;
+	if (name.hasSuffixIgnoreCase(".bmp")) {
+		Image::BitmapDecoder image;
+		if (image.loadStream(stream))
+			handle = _renderer->createImage(*image.getSurface(), image.getPalette(), keepBackgroundCopy);
+	} else {
+		Image::TGADecoder image;
+		if (image.loadStream(stream))
+			handle = _renderer->createImage(*image.getSurface(), image.getPalette());
+	}
+	if (!handle)
+		warning("Illusion: invalid image %s", name.c_str());
+	else
+		_sceneImages.push_back(handle);
+	return handle;
+}
+
+// Selection slots map to the girl numbers used in resource names.
+static int girlForSlot(int slot) {
+	static const int girls[] = { 0, 1, 2, 5, 7, 8 };
+	return slot >= 0 && slot < (int)ARRAYSIZE(girls) ? girls[slot] : 0;
+}
+
+static int slotForGirl(int girl) {
+	for (int slot = 0; slot < 6; ++slot) {
+		if (girlForSlot(slot) == girl)
+			return slot;
+	}
+	return 0;
+}
+
+// Grid cells of kyarawaku.tga, in 1024x768 layout units: three cells on each of two staggered rows.
+static Common::Rect selectionCell(int slot) {
+	const int x = slot < 3 ? 598 + slot * 102 : 649 + (slot - 3) * 102;
+	const int y = slot < 3 ? 435 : 551;
+	return Common::Rect(x, y, x + 104, y + 118);
+}
+
+static const int kSelectButtonX = 495;
+static const int kSelectButtonY = 699;
+static const int kSelectButtonSpacing = 265;
+static const int kPortraitSlideDistance = 512;
+static const uint32 kPortraitSlideTime = 200;
+static const uint32 kPortraitFadeTime = 400;
+static const uint32 kSceneFadeTime = 1000;
+
 Common::Error IllusionEngine::loadCharacterSelection() {
-	IllusionArchive archive;
+	// The archive stays open so that portraits can be reloaded without parsing its table again.
+	IllusionArchive &archive = _selectArchive;
 	if (!archive.open("Data/sb2_000.pp", "Data/sb2_000.tbl"))
 		return Common::Error(Common::kReadingFailed, "Unable to open character-selection archive");
-	Common::Array<byte> data;
-	if (!archive.readMember("character.bmp", data))
-		return Common::Error(Common::kReadingFailed, "Unable to read character.bmp");
-	Common::MemoryReadStream backgroundStream(data.data(), data.size());
-	Image::BitmapDecoder background;
-	if (!background.loadStream(backgroundStream))
-		return Common::Error(Common::kReadingFailed, "Invalid character.bmp");
-	const uint backgroundImage = _renderer->createImage(*background.getSurface(), background.getPalette());
-	if (!backgroundImage)
-		return Common::Error(Common::kReadingFailed, "Unable to upload character.bmp");
-	_sceneImages.push_back(backgroundImage);
 
 	const char *const names[] = {
-		"select00.tga", "select01.tga", "kao00.tga", "kyarasen.tga",
-		"botan00_00.tga", "botan00_01.tga", "botan01_00.tga", "botan01_01.tga",
-		"kyarawaku.tga", "profile00.tga"
+		"character.bmp", "select00.tga", "select01.tga", "kyarawaku.tga", "kyarasen.tga",
+		"botan00_00.tga", "botan00_01.tga", "botan01_00.tga", "botan01_01.tga"
 	};
-	for (uint index = 0; index < ARRAYSIZE(names) + 7; ++index) {
-		const Common::String name = index < ARRAYSIZE(names) ? Common::String(names[index]) :
-			Common::String::format("time%02u.tga", index - ARRAYSIZE(names));
-		if (!archive.readMember(name, data))
-			return Common::Error(Common::kReadingFailed, "Unable to read " + name);
-		Common::MemoryReadStream stream(data.data(), data.size());
-		Image::TGADecoder image;
-		if (!image.loadStream(stream))
-			return Common::Error(Common::kReadingFailed, "Invalid " + name);
-		const uint handle = _renderer->createImage(*image.getSurface(), image.getPalette());
-		if (!handle)
-			return Common::Error(Common::kReadingFailed, "Unable to upload " + name);
-		_sceneImages.push_back(handle);
+	for (uint index = 0; index < ARRAYSIZE(names); ++index)
+		_selectImages[kSelectBackground + index] = loadSceneImage(archive, names[index], index == 0);
+	for (uint index = 0; index < 7; ++index)
+		_selectImages[kSelectBadge + index] = loadSceneImage(archive, Common::String::format("time%02u.tga", index));
+
+	IllusionArchive hud;
+	if (!hud.open("Data/sb2_028.pp", "Data/sb2_028.tbl"))
+		return Common::Error(Common::kReadingFailed, "Unable to open day display archive");
+	for (uint index = 0; index < 10; ++index)
+		_selectImages[kSelectDayDigit + index] = loadSceneImage(hud, Common::String::format("time_moji%02u.tga", index));
+	for (uint index = 0; index < 6; ++index)
+		_selectImages[kSelectTimeDigit + index] = loadSceneImage(hud, Common::String::format("time2_moji%02u.tga", index + 1));
+	for (uint index = 0; index < 9; ++index)
+		_selectImages[kSelectName + index] = loadSceneImage(hud, Common::String::format("time03_%02u.tga", index + 1));
+
+	for (uint index = 0; index < kSelectBadge; ++index) {
+		if (!_selectImages[index])
+			return Common::Error(Common::kReadingFailed, "Unable to load the character-selection images");
 	}
+
+	_selectedSlot = slotForGirl(_currentGirl);
+	_shownSlot = _selectedSlot;
+	const Common::Error result = loadCharacterPortrait(_shownSlot);
+	if (result.getCode() != Common::kNoError)
+		return result;
+	_portraitElapsed = kPortraitFadeTime;
+	_selectButton = 0;
+	_selectConfirmed = false;
+	_selectPhase = kSelectFadeIn;
+	_selectElapsed = 0;
+
 	playSound("BG0002", true);
+	// The game starts with the pointer on the confirm button.
+	const Common::Rect ok = menuRectangle(kSelectButtonX, kSelectButtonY, 248, 59);
+	_system->warpMouse((ok.left + ok.right) / 2, (ok.top + ok.bottom) / 2);
+	setMousePosition(Common::Point((ok.left + ok.right) / 2, (ok.top + ok.bottom) / 2));
 	debug(1, "Illusion: initialized %u character-selection images for scene state 2", _sceneImages.size());
+	return Common::kNoError;
+}
+
+Common::Error IllusionEngine::loadCharacterPortrait(int slot) {
+	IllusionArchive &archive = _selectArchive;
+	const int girl = girlForSlot(slot);
+	const uint portrait = loadSceneImage(archive, Common::String::format("kao%02d.tga", girl));
+	const uint profile = loadSceneImage(archive, Common::String::format("profile%02d.tga", girl));
+	// The portrait and profile are owned separately so a new selection can replace them.
+	for (uint index = 0; index < _sceneImages.size();) {
+		if (_sceneImages[index] == portrait || _sceneImages[index] == profile)
+			_sceneImages.remove_at(index);
+		else
+			++index;
+	}
+	if (!portrait || !profile) {
+		_renderer->destroyImage(portrait);
+		_renderer->destroyImage(profile);
+		return Common::Error(Common::kReadingFailed, "Unable to load the character portrait");
+	}
+	_renderer->destroyImage(_portraitImage);
+	_renderer->destroyImage(_profileImage);
+	_portraitImage = portrait;
+	_profileImage = profile;
+	return Common::kNoError;
+}
+
+void IllusionEngine::updateCharacterSelection(uint32 delta) {
+	_selectElapsed += delta;
+	if (_selectPhase == kSelectFadeIn) {
+		if (_selectElapsed >= kSceneFadeTime) {
+			_selectPhase = kSelectReady;
+			_selectElapsed = 0;
+		}
+		return;
+	}
+	if (_selectPhase == kSelectFadeOut)
+		return;
+
+	_portraitElapsed = MIN(_portraitElapsed + delta, kPortraitFadeTime);
+	const bool clicked = (_inputState.mouseButtonsPressed & kMouseLeftMask) != 0;
+
+	// Both groups keep their last highlighted entry while the pointer is outside them.
+	for (int button = 0; button < 2; ++button) {
+		const Common::Rect rect = menuRectangle(kSelectButtonX + button * kSelectButtonSpacing, kSelectButtonY, 248, 59);
+		if (!rect.contains(_inputState.mousePosition))
+			continue;
+		if (_selectButton != button) {
+			_selectButton = button;
+			playSound("SE0004", false);
+		}
+		if (clicked) {
+			_selectConfirmed = button == 0;
+			playSound(_selectConfirmed ? "SE0000" : "SE0002", false);
+			_selectPhase = kSelectFadeOut;
+			_selectElapsed = 0;
+			if (_selectConfirmed)
+				_currentGirl = girlForSlot(_shownSlot);
+			return;
+		}
+	}
+
+	if (!clicked)
+		return;
+	for (int slot = 0; slot < 6; ++slot) {
+		const Common::Rect cell = selectionCell(slot);
+		if (!menuRectangle(cell.left, cell.top, cell.width(), cell.height()).contains(_inputState.mousePosition))
+			continue;
+		playSound("SE0003", false);
+		_selectedSlot = slot;
+		_renderer->invalidateScene();
+		if (slot != _shownSlot) {
+			if (loadCharacterPortrait(slot).getCode() == Common::kNoError) {
+				_shownSlot = slot;
+				_portraitElapsed = 0;
+			}
+		}
+		break;
+	}
+}
+
+void IllusionEngine::drawCharacterSelection() {
+	// Once the portrait has settled the scene below the buttons is static, so it is drawn only once.
+	const bool settled = _portraitElapsed >= kPortraitFadeTime;
+	if (!settled || !_renderer->restoreScene()) {
+		_renderer->drawBackground(_selectImages[kSelectBackground], 1.0f);
+
+		// A new portrait slides in from the left while it fades in.
+		const int slide = _portraitElapsed >= kPortraitSlideTime ? 0 :
+			-kPortraitSlideDistance + kPortraitSlideDistance * (int)_portraitElapsed / (int)kPortraitSlideTime;
+		_renderer->drawImage(_portraitImage, menuRectangle(slide, 0, 1024, 768), _portraitElapsed / (float)kPortraitFadeTime);
+		_renderer->drawImage(_selectImages[kSelectTitle], menuRectangle(388, 30, 420, 56));
+		_renderer->drawImage(_selectImages[kSelectProfileLabel], menuRectangle(680, 165, 160, 72));
+
+		// Day counter and time-of-day slot of the shown girl; a new game starts at day 1, slot 1.
+		_renderer->drawImage(_selectImages[kSelectTimeDigit], menuRectangle(977, 70, 19, 29));
+		_renderer->drawImage(_selectImages[kSelectDayDigit + (_day / 10) % 10], menuRectangle(833, 26, 29, 35));
+		_renderer->drawImage(_selectImages[kSelectDayDigit + _day % 10], menuRectangle(853, 26, 29, 35));
+		_renderer->drawImage(_selectImages[kSelectName + girlForSlot(_selectedSlot)], menuRectangle(875, 74, 84, 26));
+
+		_renderer->drawImage(_profileImage, menuRectangle(495, 235, 513, 190));
+		_renderer->drawImage(_selectImages[kSelectGrid], menuRectangle(494, 433, 516, 238));
+		const Common::Rect cell = selectionCell(_selectedSlot);
+		_renderer->drawImage(_selectImages[kSelectFrame], menuRectangle(cell.left, cell.top, cell.width(), cell.height()));
+
+		// The game shows each girl's day count or "Clear"; without saves every girl is on day 1.
+		for (int slot = 0; slot < 6; ++slot) {
+			const int x = slot < 3 ? 626 + slot * 102 : 677 + (slot - 3) * 102;
+			const int y = slot < 3 ? 527 : 643;
+			_renderer->drawImage(_selectImages[kSelectBadge + 1], menuRectangle(x, y, 48, 20));
+		}
+		if (settled)
+			_renderer->cacheScene();
+	}
+
+	// The buttons do not overlap the layers above, so they can follow them.
+	for (int button = 0; button < 2; ++button) {
+		const bool highlighted = _selectPhase == kSelectReady && _selectButton == button;
+		const uint image = _selectImages[(button ? kSelectBackOn : kSelectOkOn) + (highlighted ? 0 : 1)];
+		_renderer->drawImage(image, menuRectangle(kSelectButtonX + button * kSelectButtonSpacing, kSelectButtonY, 248, 59));
+	}
+
+	if (_selectPhase == kSelectReady)
+		drawPointer();
+	float fade = 0.0f;
+	if (_selectPhase == kSelectFadeIn)
+		fade = 1.0f - MIN(1.0f, _selectElapsed / (float)kSceneFadeTime);
+	else if (_selectPhase == kSelectFadeOut)
+		fade = MIN(1.0f, _selectElapsed / (float)kSceneFadeTime);
+	_renderer->drawFadeToWhite(_fadeImage, fade);
+	_renderer->flipBuffer();
+}
+
+void IllusionEngine::drawPointer() {
+	const Common::Rect size = menuRectangle(0, 0, 64, 64);
+	_renderer->drawImage(_pointerImage, Common::Rect(_inputState.mousePosition.x, _inputState.mousePosition.y,
+		_inputState.mousePosition.x + size.width(), _inputState.mousePosition.y + size.height()));
+}
+
+Common::Error IllusionEngine::runCharacterSelection(bool &returnToTitle) {
+	returnToTitle = false;
+	uint32 previousTime = _system->getMillis();
+	bool redraw = true;
+	while (!shouldQuit() && !_inputState.quitRequested) {
+		const uint32 frameStart = _system->getMillis();
+		pumpEvents();
+		if (shouldQuit() || _inputState.quitRequested)
+			break;
+		const uint32 now = _system->getMillis();
+		const uint32 delta = MIN<uint32>(100, now - previousTime);
+		previousTime = now;
+		const CharacterSelectPhase previousPhase = _selectPhase;
+		const bool wasAnimating = _portraitElapsed < kPortraitFadeTime;
+		updateCharacterSelection(delta);
+		if (_selectPhase == kSelectFadeOut && _selectElapsed >= kSceneFadeTime) {
+			clearSceneImages();
+			if (!_selectConfirmed) {
+				returnToTitle = true;
+				return Common::kNoError;
+			}
+			debug(1, "Illusion: girl %d chosen; swimsuit selection (scene 2, step 1) requested", _currentGirl);
+			return Common::Error(Common::kUnsupportedGameidError,
+				"The swimsuit selection is not implemented yet");
+		}
+		// A portrait that was just loaded starts its animation now, not after the load time.
+		if (_portraitElapsed == 0 && delta != 0)
+			previousTime = _system->getMillis();
+		// Nothing changes on screen while idle, so only redraw when something moved or is animating.
+		redraw = redraw || _selectPhase != kSelectReady || _selectPhase != previousPhase || wasAnimating ||
+			_portraitElapsed < kPortraitFadeTime || _inputState.mouseDelta != Common::Point(0, 0) ||
+			_inputState.mouseButtonsPressed || _inputState.redrawRequested;
+		if (redraw)
+			drawCharacterSelection();
+		redraw = false;
+		const uint32 spent = _system->getMillis() - frameStart;
+		_system->delayMillis(spent < 16 ? 16 - spent : 1);
+	}
 	return Common::kNoError;
 }
 
@@ -430,6 +696,8 @@ void IllusionEngine::drawMenu() {
 				menuRectangle(x, kMenuButtonY[button], 285, 67), buttonOpacity);
 		}
 	}
+	if (_startupPhase == kMenuReady)
+		drawPointer();
 	_renderer->flipBuffer();
 }
 
@@ -499,18 +767,26 @@ Common::Error IllusionEngine::runStartup() {
 				const uint sceneStates[] = { 2, 0xc, 0x11, 0xd };
 				debug(1, "Illusion: title menu requests scene state %u", sceneStates[_menuAction]);
 				if (_menuAction == 0) {
-					const Common::Error result = initCharacterSelection();
+					Common::Error result = initCharacterSelection();
 					if (result.getCode() != Common::kNoError)
 						return result;
-					return Common::Error(Common::kUnsupportedGameidError,
-						"Character-selection resources are initialized, but scene interaction is not implemented yet");
+					bool returnToTitle = false;
+					result = runCharacterSelection(returnToTitle);
+					if (!returnToTitle)
+						return result;
+					playSound("BG0000", true);
+					_startupPhase = kMenuBackground;
+					_startupElapsed = 0;
+					previousTime = _system->getMillis();
+					continue;
 				}
 				return Common::Error(Common::kUnsupportedGameidError,
 					"The selected title-menu scene is not implemented yet");
 			}
 			break;
 		}
-		redraw = redraw || _startupPhase != previousPhase || _menuSelection != previousSelection;
+		redraw = redraw || _startupPhase != previousPhase || _menuSelection != previousSelection ||
+			_inputState.mouseDelta != Common::Point(0, 0);
 		if (redraw)
 			drawMenu();
 		else

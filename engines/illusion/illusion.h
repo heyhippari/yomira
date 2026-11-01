@@ -101,6 +101,29 @@ private:
 		kMenuLeaving
 	};
 
+	enum CharacterSelectPhase {
+		kSelectFadeIn,
+		kSelectReady,
+		kSelectFadeOut
+	};
+
+	enum CharacterSelectImage {
+		kSelectBackground,
+		kSelectTitle,
+		kSelectProfileLabel,
+		kSelectGrid,
+		kSelectFrame,
+		kSelectOkOn,
+		kSelectOkOff,
+		kSelectBackOn,
+		kSelectBackOff,
+		kSelectBadge,
+		kSelectDayDigit = kSelectBadge + 7,
+		kSelectTimeDigit = kSelectDayDigit + 10,
+		kSelectName = kSelectTimeDigit + 6,
+		kSelectImageCount = kSelectName + 9
+	};
+
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
 	IllusionInputState _inputState;
@@ -110,12 +133,30 @@ private:
 	Audio::SoundHandle _musicHandle;
 	Audio::SoundHandle _effectHandle;
 	uint _menuImages[12];
+	uint _fadeImage;
+	uint _pointerImage;
 	Common::Array<uint> _sceneImages;
 	StartupPhase _startupPhase;
 	uint32 _startupElapsed;
 	int _menuSelection;
 	int _menuAction;
 	bool _linearFiltering;
+
+	// New-game state. The day counter and the per-girl day counts and clear flags start at
+	// 1, 0 and false; save games are not supported yet.
+	int _day;
+	int _currentGirl;
+	uint _selectImages[kSelectImageCount];
+	IllusionArchive _selectArchive;
+	uint _portraitImage;
+	uint _profileImage;
+	CharacterSelectPhase _selectPhase;
+	uint32 _selectElapsed;
+	uint32 _portraitElapsed;
+	int _selectedSlot;
+	int _shownSlot;
+	int _selectButton;
+	bool _selectConfirmed;
 protected:
 	// Engine APIs
 	Common::Error run() override;
@@ -129,8 +170,14 @@ private:
 	Common::Error loadMenuResources();
 	Common::Error initCharacterSelection();
 	Common::Error loadCharacterSelection();
+	Common::Error loadCharacterPortrait(int slot);
+	uint loadSceneImage(IllusionArchive &archive, const Common::String &name, bool keepBackgroundCopy = false);
 	void clearSceneImages();
 	Common::Error runStartup();
+	Common::Error runCharacterSelection(bool &returnToTitle);
+	void updateCharacterSelection(uint32 delta);
+	void drawCharacterSelection();
+	void drawPointer();
 	void playSound(const Common::String &name, bool loop);
 	void drawMenu();
 	Common::Rect menuRectangle(int x, int y, int width, int height) const;

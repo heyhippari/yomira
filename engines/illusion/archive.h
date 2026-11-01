@@ -40,7 +40,6 @@ private:
 	uint32 _groupStart[256];
 	uint32 _groupCount[256];
 
-	void close();
 	bool loadTable(const Common::Path &packagePath, const Common::Path &tablePath);
 	bool loadEmbedded(const Common::Path &packagePath);
 	static bool decompressTable(const Common::Array<byte> &packed, Common::Array<byte> &table, uint32 &decodedSize);
@@ -51,6 +50,7 @@ public:
 
 	bool open(const Common::Path &packagePath, const Common::Path &tablePath);
 	bool openEmbedded(const Common::Path &packagePath);
+	void close();
 	bool readMember(const Common::String &name, Common::Array<byte> &data);
 };
 

@@ -22,6 +22,8 @@
 #include "common/system.h"
 #include "graphics/surface.h"
 
+#include <string.h>
+
 namespace Illusion {
 
 static void setCapability(TGLenum capability, bool enabled) {
@@ -31,11 +33,15 @@ static void setCapability(TGLenum capability, bool enabled) {
 		tglDisable(capability);
 }
 
-IllusionRenderer::IllusionRenderer(OSystem *system) : _system(system), _context(nullptr), _width(0), _height(0),
-		_blendingEnabled(false) {
+IllusionRenderer::IllusionRenderer(OSystem *system) : _system(system), _context(nullptr), _sceneCopy(nullptr),
+		_sceneValid(false), _width(0), _height(0), _blendingEnabled(false) {
 }
 
 IllusionRenderer::~IllusionRenderer() {
+	if (_sceneCopy) {
+		_sceneCopy->free();
+		delete _sceneCopy;
+	}
 	for (uint index = 0; index < _backgroundCopies.size(); ++index)
 		freeBackgroundCopy(index);
 	if (_context) {
@@ -59,7 +65,7 @@ bool IllusionRenderer::init(int width, int height, const Graphics::PixelFormat &
 			state.projectionNear <= 0.0f || state.projectionFar <= state.projectionNear)
 		return false;
 
-	_context = TinyGL::createContext(width, height, format, 512, true, false);
+	_context = TinyGL::createContext(width, height, format, 512, false, false);
 	if (!_context)
 		return false;
 	_format = format;
@@ -172,6 +178,12 @@ void IllusionRenderer::drawBackground(uint image, float opacity) {
 	const uint32 colorMask = _format.rMax() << _format.rShift | _format.gMax() << _format.gShift |
 		_format.bMax() << _format.bShift;
 	const uint32 scale = (uint32)(opacity * 256.0f);
+	if (scale >= 256) {
+		// Full opacity leaves every lane unchanged, so rows can be copied as they are.
+		for (int y = 0; y < _height; ++y)
+			memcpy(target.getBasePtr(0, y), copy->getBasePtr(0, y), _width * 4);
+		return;
+	}
 	for (int y = 0; y < _height; ++y) {
 		const uint32 *src = (const uint32 *)copy->getBasePtr(0, y);
 		uint32 *dst = (uint32 *)target.getBasePtr(0, y);
@@ -186,17 +198,27 @@ void IllusionRenderer::drawBackground(uint image, float opacity) {
 }
 
 void IllusionRenderer::drawImage(uint image, const Common::Rect &destination, float opacity, bool fadeFromBlack) {
-	if (!_context || image == 0 || image > _images.size() || !_images[image - 1] || opacity <= 0.0f || destination.isEmpty() ||
-			destination.left < 0 || destination.top < 0)
+	if (!_context || image == 0 || image > _images.size() || !_images[image - 1] || opacity <= 0.0f || destination.isEmpty())
+		return;
+	Common::Rect visible = destination;
+	visible.clip(Common::Rect(0, 0, _width, _height));
+	if (visible.isEmpty())
 		return;
 	TinyGL::setContext(_context);
 	int sourceWidth = 0, sourceHeight = 0;
 	tglGetBlitImageSize(_images[image - 1], sourceWidth, sourceHeight);
-	TinyGL::BlitTransform transform(destination.left, destination.top);
-	transform.sourceRectangle(0, 0, sourceWidth, sourceHeight);
+	// Map the on-screen part back to the matching source pixels.
+	const int sourceLeft = (visible.left - destination.left) * sourceWidth / destination.width();
+	const int sourceTop = (visible.top - destination.top) * sourceHeight / destination.height();
+	const int sourceRight = (visible.right - destination.left) * sourceWidth / destination.width();
+	const int sourceBottom = (visible.bottom - destination.top) * sourceHeight / destination.height();
+	if (sourceRight <= sourceLeft || sourceBottom <= sourceTop)
+		return;
+	TinyGL::BlitTransform transform(visible.left, visible.top);
+	transform.sourceRectangle(sourceLeft, sourceTop, sourceRight - sourceLeft, sourceBottom - sourceTop);
 	// A zero-size destination selects TinyGL's unscaled RLE/memcpy path instead of the per-pixel scaler.
-	if (destination.width() != sourceWidth || destination.height() != sourceHeight)
-		transform.scale(destination.width(), destination.height());
+	if (visible.width() != sourceRight - sourceLeft || visible.height() != sourceBottom - sourceTop)
+		transform.scale(visible.width(), visible.height());
 	opacity = MIN(opacity, 1.0f);
 	if (fadeFromBlack && opacity < 1.0f && _blendingEnabled) {
 		// Over a cleared black buffer, scaling RGB equals alpha blending without the per-pixel blend path.
@@ -210,14 +232,72 @@ void IllusionRenderer::drawImage(uint image, const Common::Rect &destination, fl
 	tglBlit(_images[image - 1], transform);
 }
 
+void IllusionRenderer::drawFadeToWhite(uint image, float amount) {
+	amount = CLIP(amount, 0.0f, 1.0f);
+	if (!_context || amount <= 0.0f)
+		return;
+	if (_format.bytesPerPixel != 4 || _format.rBits() != 8 || _format.gBits() != 8 || _format.bBits() != 8) {
+		drawImage(image, Common::Rect(0, 0, _width, _height), amount);
+		return;
+	}
+
+	// Queued draws must land in the buffer before it is modified.
+	TinyGL::setContext(_context);
+	Common::List<Common::Rect> dirtyAreas;
+	TinyGL::presentBuffer(dirtyAreas);
+	Graphics::Surface target;
+	TinyGL::getSurfaceRef(target);
+	const uint32 colorMask = _format.rMax() << _format.rShift | _format.gMax() << _format.gShift |
+		_format.bMax() << _format.bShift;
+	const uint32 scale = (uint32)(amount * 256.0f);
+	for (int y = 0; y < _height; ++y) {
+		uint32 *dst = (uint32 *)target.getBasePtr(0, y);
+		for (int x = 0; x < _width; ++x) {
+			const uint32 pixel = dst[x];
+			// Each color lane moves toward 255 by scale/256; two lanes are scaled per multiply.
+			const uint32 gap = ~pixel & colorMask;
+			const uint32 even = (((gap & 0x00FF00FF) * scale) >> 8) & 0x00FF00FF;
+			const uint32 odd = (((gap >> 8) & 0x00FF00FF) * scale) & 0xFF00FF00;
+			dst[x] = pixel + ((even | odd) & colorMask);
+		}
+	}
+}
+
+void IllusionRenderer::cacheScene() {
+	if (!_context)
+		return;
+	TinyGL::setContext(_context);
+	Common::List<Common::Rect> dirtyAreas;
+	TinyGL::presentBuffer(dirtyAreas);
+	Graphics::Surface source;
+	TinyGL::getSurfaceRef(source);
+	if (!_sceneCopy) {
+		_sceneCopy = new Graphics::Surface();
+		_sceneCopy->create(_width, _height, source.format);
+	}
+	for (int y = 0; y < _height; ++y)
+		memcpy(_sceneCopy->getBasePtr(0, y), source.getBasePtr(0, y), _width * source.format.bytesPerPixel);
+	_sceneValid = true;
+}
+
+bool IllusionRenderer::restoreScene() {
+	if (!_context || !_sceneValid)
+		return false;
+	TinyGL::setContext(_context);
+	Graphics::Surface target;
+	TinyGL::getSurfaceRef(target);
+	for (int y = 0; y < _height; ++y)
+		memcpy(target.getBasePtr(0, y), _sceneCopy->getBasePtr(0, y), _width * target.format.bytesPerPixel);
+	return true;
+}
+
 void IllusionRenderer::clearScreen() {
 	if (!_context)
 		return;
 	TinyGL::setContext(_context);
 	tglClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	tglClearDepth(1.0f);
-	tglClearStencil(0);
-	tglClear(TGL_COLOR_BUFFER_BIT | TGL_DEPTH_BUFFER_BIT | TGL_STENCIL_BUFFER_BIT);
+	tglClear(TGL_COLOR_BUFFER_BIT | TGL_DEPTH_BUFFER_BIT);
 }
 
 void IllusionRenderer::flipBuffer() {

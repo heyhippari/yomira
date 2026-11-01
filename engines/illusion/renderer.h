@@ -35,6 +35,8 @@ private:
 	TinyGL::ContextHandle *_context;
 	Common::Array<TinyGL::BlitImage *> _images;
 	Common::Array<Graphics::Surface *> _backgroundCopies;
+	Graphics::Surface *_sceneCopy;
+	bool _sceneValid;
 	Graphics::PixelFormat _format;
 	int _width;
 	int _height;
@@ -60,6 +62,19 @@ public:
 	 * with keepBackgroundCopy and matches the screen size.
 	 */
 	void drawBackground(uint image, float opacity);
+	/**
+	 * Fades the frame drawn so far toward white by the given amount. Falls back to drawing the
+	 * white image over the screen when the pixel format does not allow the direct path.
+	 */
+	void drawFadeToWhite(uint image, float amount);
+	/**
+	 * Executes the queued draws and keeps the result, so a static scene can be restored with
+	 * restoreScene() instead of being drawn again.
+	 */
+	void cacheScene();
+	/** Replaces the frame with the cached scene. Returns false when none is cached. */
+	bool restoreScene();
+	void invalidateScene() { _sceneValid = false; }
 	void clearScreen();
 	void flipBuffer();
 };
