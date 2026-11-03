@@ -185,8 +185,13 @@ bool Resources::init() {
 bool Resources::load(const Common::String &name, Common::Array<byte> &data) const {
 	data.clear();
 	Common::File file;
-	const Common::String utf8Name = name.decode(Common::kWindows1252).encode(Common::kUtf8);
-	if (file.open(Common::Path(name)) || (utf8Name != name && file.open(Common::Path(utf8Name)))) {
+	bool legacyName = false;
+	for (uint index = 0; index < name.size(); ++index)
+		legacyName |= byte(name[index]) >= 0x80;
+	// Extracted Shift-JIS names may be UTF-8, or Windows-1252 bytes transcoded to UTF-8
+	if (file.open(Common::Path(name)) || (legacyName &&
+	    (file.open(Common::Path(name.decode(Common::kWindows932).encode(Common::kUtf8))) ||
+	     file.open(Common::Path(name.decode(Common::kWindows1252).encode(Common::kUtf8)))))) {
 		if (file.size() < 0 || file.size() > 16 * 1024 * 1024)
 			return false;
 		data.resize(file.size());

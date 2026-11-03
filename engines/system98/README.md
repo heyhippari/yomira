@@ -166,6 +166,7 @@ Source files are in `engines/system98/`:
 - `audio.cpp`, `audio.h`: MIDI player for music and effects, with fades,
   pause, and volume.
 - `mmd.cpp`, `mmd.h`: M.M.D.-to-SMF conversion and effect extraction.
+- `dialogs.cpp`, `dialogs.h`: the name dialog that replaces `NAMCHG.EXE`.
 - `detection.cpp`, `metaengine.cpp`: game detection and engine registration.
 
 Runtime state:
@@ -393,7 +394,8 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | 0x8F | Mugen extension | bank, file name | Loads a scene into bank 1, the secondary 0x4000-byte bank. Bank 0 reloads the main scene. | Implemented |
 | 0x90 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
 | 0x91 | Mugen extension | mode reg, result reg | Music mode request. Modes 0 and 3 succeed; other modes store 0xFFFD. | Partial |
-| 0x92-0x93 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
+| 0x92 | Mugen extension | none | Runs `NAMCHG.EXE` to change the protagonist's name. Replaced by a ScummVM name dialog. | Partial |
+| 0x93 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
 | 0x94 | Mugen extension | none consumed | No-op here. The executable's operand count is unknown. | Partial (no-op) |
 | 0x95 | Mugen extension | eight words | Patterned blit from page 1 to page 0 in stages, using a captured pattern slot and a per-stage delay. | Implemented |
 | 0x96 | Mugen extension | slot, byte columns | Captures eight rows of page 1 intensity bits as a pattern. | Implemented |
@@ -555,12 +557,32 @@ stage progression, short-height phase reset, clipping, and invalid data.
 Opcode 0x80 (STRFLD) reads a two-line text file into consecutive 80-byte
 strings, splitting on CRLF and stopping at the DOS 0x1a marker. The opcode's
 string ID must leave room for both entries. String bytes are preserved for
-Shift-JIS text. Loose filenames are tried as provided and as Windows-1252 bytes
-transcoded to UTF-8, for extracted disks whose legacy filenames were converted
-that way. The native handler at 0x14d3a reads the string ID and scene-relative
+Shift-JIS text. Loose filenames are tried as provided, as Shift-JIS transcoded
+to UTF-8, and as Windows-1252 bytes transcoded to UTF-8, for extracted disks
+whose legacy filenames were converted that way. A string file saved by the game
+takes precedence over the shipped one. The native handler at 0x14d3a reads the string ID and scene-relative
 filename, then copies rows until EOF; row handling at 0x14d79 recognizes CRLF
 and 0x1a. Evidence: `ev_c3c164131ce4308b774e5e9fae294cb934f5aafb93c7fd1dcea77b2446ac0780`,
 `ev_bccf6b98119000c8202a009c3b0dae1616cf3909be1d7afe979c2c148e2a97fcec`.
+
+Three loose files on disk A have Shift-JIS names: `名前` (`96 bc 91 4f`,
+9 bytes, the two-line name file), `設` (`90 dd`, the 16-byte configuration
+registers), and `秘` (`94 e9`, 1024 bytes). The D88 directory entries hold
+these bytes. One extraction decoded them with an MSX-style 8-bit character set,
+producing `かシあO`, `πン`, and `えの`. These names are not supported; rename
+the files to the UTF-8 names above.
+
+Opcode 0x92 (dispatch 0x15017) takes no operands. It calls the DOS exec
+helper at 0x1175e with `NAMCHG.EXE` and an empty command line, then continues.
+`open.s` reaches it from item 3 of the title submenu at 0x0877 (JTBL at
+0x08b5) and jumps back to the menu at 0x0851. `NAMCHG.EXE` is packed. Its
+visible strings include `名前`, 変更 (change), 入力 (input), 決定 (confirm),
+and 取消 (cancel). The name file's second line is the name: `open.s:2d63` loads
+it into string 0x1e, and the JTBL at 0x2d6f centres it for lengths up to 8
+bytes. The shipped file holds an empty first line and `慎一`. ScummVM shows a
+dialog for up to eight Shift-JIS bytes, keeps the first line, and writes the
+file with CRLF line ends and a 0x1a terminator to a save file.
+`NAMCHG.EXE`'s own screen and any first-line edits have not been reproduced.
 
 Opcode 0x62 (dispatch 0x14484) reads a word offset `w` and a line `l` from two
 registers and sends graphics GDC command 0x70 (SCROLL) with two display areas.

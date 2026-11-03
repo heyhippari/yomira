@@ -2,6 +2,7 @@ MODULE := engines/system98
 
 MODULE_OBJS := \
 	audio.o \
+	dialogs.o \
 	graphics.o \
 	image.o \
 	metaengine.o \

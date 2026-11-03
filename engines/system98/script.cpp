@@ -25,9 +25,13 @@
 #include "common/system.h"
 #include "system98/system98.h"
 #include "system98/audio.h"
+#include "system98/dialogs.h"
 #include "system98/image.h"
 
 namespace System98 {
+
+// The Shift-JIS file name ("name") that NAMCHG.EXE writes
+static const char *const kNameFile = "\x96\xbc\x91\x4f";
 
 bool System98Engine::loadScene(const Common::String &name, uint bank) {
 	Common::Array<byte> data;
@@ -46,6 +50,52 @@ bool System98Engine::loadScene(const Common::String &name, uint bank) {
 	}
 	debug(1, "System98: scene %s -> bank %u", name.c_str(), bank);
 	return true;
+}
+
+Common::String System98Engine::saveFileName(const Common::String &name) const {
+	Common::String result = _targetName + ".s98-";
+	for (uint index = 0; index < name.size(); ++index)
+		result += Common::String::format("%02x", byte(name[index]));
+	return result;
+}
+
+// A string file the game rewrote takes precedence over the shipped one
+bool System98Engine::loadStringFile(const Common::String &name, byte strings[2][80]) {
+	Common::Array<byte> data;
+	Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveFileName(name));
+	if (file) {
+		const int64 size = file->size();
+		data.resize(size > 0 && size <= 0x1000 ? size : 0);
+		const bool read = !data.empty() && file->read(data.data(), data.size()) == data.size() && !file->err();
+		delete file;
+		if (read && decodeStringFile(data, strings))
+			return true;
+	}
+	return _resources.load(name, data) && decodeStringFile(data, strings);
+}
+
+// Opcode 0x92 runs NAMCHG.EXE, which rewrites the second line of the name file
+void System98Engine::changeName() {
+	byte strings[2][80];
+	if (!loadStringFile(kNameFile, strings))
+		memset(strings, 0, sizeof(strings));
+	NameDialog dialog(Common::String(reinterpret_cast<const char *>(strings[1])));
+	if (runDialog(dialog) == 1) {
+		Common::OutSaveFile *file = _system->getSavefileManager()->openForSaving(saveFileName(kNameFile));
+		if (file) {
+			file->writeString(reinterpret_cast<const char *>(strings[0]));
+			file->writeString("\r\n");
+			file->writeString(dialog.getName());
+			file->writeString("\r\n\x1a");
+			file->finalize();
+			if (file->err())
+				warning("System98: cannot save the protagonist's name");
+			delete file;
+		} else {
+			warning("System98: cannot save the protagonist's name");
+		}
+	}
+	present();
 }
 
 uint16 System98Engine::sceneWord(uint offset) const {
@@ -193,13 +243,6 @@ bool System98Engine::execute() {
 	auto arguments = [&](uint count) {
 		for (uint index = 0; index < count; ++index)
 			args[index] = fetchWord();
-	};
-	auto saveName = [&](uint offset) {
-		Common::String name = _targetName + ".s98-";
-		const Common::String original = sceneString(offset, true);
-		for (uint index = 0; index < original.size(); ++index)
-			name += Common::String::format("%02x", byte(original[index]));
-		return name;
 	};
 	switch (opcode) {
 	case 0: return false;
@@ -351,14 +394,14 @@ bool System98Engine::execute() {
 		const uint begin = args[0] == 2 ? 1024 : args[0] * 512;
 		const uint count = args[0] == 2 ? 8 : 512;
 		if (opcode == 0x4a) {
-			Common::OutSaveFile *file = _system->getSavefileManager()->openForSaving(saveName(args[1]));
+			Common::OutSaveFile *file = _system->getSavefileManager()->openForSaving(saveFileName(sceneString(args[1], true)));
 			if (!file) { _scriptValid = false; break; }
 			for (uint index = 0; index < count; ++index) file->writeUint16LE(reg(begin + index));
 			file->finalize();
 			_scriptValid = !file->err();
 			delete file;
 		} else {
-			Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveName(args[1]));
+			Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveFileName(sceneString(args[1], true)));
 			Common::Array<byte> data;
 			if (file) {
 				if (file->size() == count * 2)
@@ -419,7 +462,7 @@ bool System98Engine::execute() {
 	case 0x60: {
 		arguments(3);
 		if (args[1] >= ARRAYSIZE(_strings)) { _scriptValid = false; break; }
-		Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveName(args[2]));
+		Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveFileName(sceneString(args[2], true)));
 		reg(args[0]) = file ? 1 : 0;
 		_strings[args[1]][0] = 0;
 		delete file;
@@ -456,10 +499,9 @@ bool System98Engine::execute() {
 	case 0x80: {
 		arguments(2);
 		if (args[0] >= ARRAYSIZE(_strings) - 1) { _scriptValid = false; break; }
-		Common::Array<byte> data;
 		byte strings[2][80];
 		const Common::String name = sceneString(args[1], true);
-		if (!_resources.load(name, data) || !decodeStringFile(data, strings)) {
+		if (!loadStringFile(name, strings)) {
 			warning("System98: cannot load two strings from %s", name.c_str());
 			_scriptValid = false;
 			break;
@@ -486,6 +528,7 @@ bool System98Engine::execute() {
 			}
 		}
 		break;
+	case 0x92: changeName(); break;
 	case 0x94: break;
 	case 0x95:
 		arguments(8);

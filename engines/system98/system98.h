@@ -69,6 +69,9 @@ private:
 	uint16 sceneWord(uint offset) const;
 	Common::String sceneString(uint offset, bool fileName = false) const;
 	uint16 &reg(uint index);
+	Common::String saveFileName(const Common::String &name) const;
+	bool loadStringFile(const Common::String &name, byte strings[2][80]);
+	void changeName();
 	bool execute();
 	void present();
 	bool loadImage(const Common::String &name, int x, int y, uint page, bool palette, bool transparent);
