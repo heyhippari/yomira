@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDisplayName</key>
-	<string>ScummVM</string>
+	<string>Yomira</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -23,7 +23,7 @@
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>scummvm</string>
+	<string>yomira</string>
 	<key>CFBundleGetInfoString</key>
 	<string>2026.4.1git, Copyright 2001-2026 The ScummVM Team</string>
 	<key>CFBundleIconFile</key>
@@ -59,7 +59,7 @@
 		<string>uk</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>ScummVM</string>
+	<string>Yomira</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

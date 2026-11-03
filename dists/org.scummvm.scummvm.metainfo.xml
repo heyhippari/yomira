@@ -32,7 +32,7 @@
   <developer_name>The ScummVM Team</developer_name>
   <launchable type="desktop-id">org.scummvm.scummvm.desktop</launchable>
   <provides>
-    <binary>scummvm</binary>
+    <binary>yomira</binary>
   </provides>
   <description>
     <p>

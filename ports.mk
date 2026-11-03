@@ -57,33 +57,33 @@ endif
 # Special generic target for simple archive distribution
 
 dist-generic: $(EXECUTABLE) $(PLUGINS)
-	mkdir -p ./dist-generic/scummvm/data
-	mkdir -p ./dist-generic/scummvm/doc
-	rm -f ./dist-generic/scummvm/$(EXECUTABLE)
-	$(STRIP) "$(EXECUTABLE)" -o "./dist-generic/scummvm/$(EXECUTABLE)"
-	cp $(DIST_FILES_DOCS) ./dist-generic/scummvm/doc
-	cp $(DIST_FILES_THEMES) ./dist-generic/scummvm/data
+	mkdir -p ./dist-generic/yomira/data
+	mkdir -p ./dist-generic/yomira/doc
+	rm -f ./dist-generic/yomira/$(EXECUTABLE)
+	$(STRIP) "$(EXECUTABLE)" -o "./dist-generic/yomira/$(EXECUTABLE)"
+	cp $(DIST_FILES_DOCS) ./dist-generic/yomira/doc
+	cp $(DIST_FILES_THEMES) ./dist-generic/yomira/data
 ifdef DIST_FILES_ENGINEDATA
-	cp $(DIST_FILES_ENGINEDATA) ./dist-generic/scummvm/data
+	cp $(DIST_FILES_ENGINEDATA) ./dist-generic/yomira/data
 endif
 ifdef DIST_FILES_ENGINEDATA_BIG
-	cp $(DIST_FILES_ENGINEDATA_BIG) ./dist-generic/scummvm/data
+	cp $(DIST_FILES_ENGINEDATA_BIG) ./dist-generic/yomira/data
 endif
 ifdef DIST_FILES_NETWORKING
-	cp $(DIST_FILES_NETWORKING) ./dist-generic/scummvm/data
+	cp $(DIST_FILES_NETWORKING) ./dist-generic/yomira/data
 endif
 ifdef DIST_FILES_VKEYBD
-	cp $(DIST_FILES_VKEYBD) ./dist-generic/scummvm/data
+	cp $(DIST_FILES_VKEYBD) ./dist-generic/yomira/data
 endif
 ifdef DIST_FILES_SOUNDFONTS
-	cp $(DIST_FILES_SOUNDFONTS) ./dist-generic/scummvm/data
+	cp $(DIST_FILES_SOUNDFONTS) ./dist-generic/yomira/data
 endif
 ifdef DIST_FILES_SHADERS
-	mkdir -p ./dist-generic/scummvm/data/shaders
-	cp $(DIST_FILES_SHADERS) ./dist-generic/scummvm/data/shaders
+	mkdir -p ./dist-generic/yomira/data/shaders
+	cp $(DIST_FILES_SHADERS) ./dist-generic/yomira/data/shaders
 endif
 ifeq ($(DYNAMIC_MODULES),1)
-	@for i in $(PLUGINS); do cp $$i ./dist-generic/scummvm; done
+	@for i in $(PLUGINS); do cp $$i ./dist-generic/yomira; done
 endif
 
 # Special target to create a application wrapper for macOS
@@ -134,14 +134,14 @@ scummvm.docktileplugin: ScummVMDockTilePlugin
 
 endif
 
-bundle_name = ScummVM.app
+bundle_name = Yomira.app
 bundle_binary = scummvm-static
 
 bundle-pack:
 	mkdir -p $(bundle_name)/Contents/MacOS
 	mkdir -p $(bundle_name)/Contents/Resources
 	printf "APPL????" > $(bundle_name)/Contents/PkgInfo
-	sed -e 's/$$(PRODUCT_BUNDLE_IDENTIFIER)/org.scummvm.app/' $(srcdir)/dists/macosx/Info.plist >$(bundle_name)/Contents/Info.plist
+	sed -e 's/$$(PRODUCT_BUNDLE_IDENTIFIER)/org.yomira.app/' $(srcdir)/dists/macosx/Info.plist >$(bundle_name)/Contents/Info.plist
 ifdef USE_SPARKLE
 	mkdir -p $(bundle_name)/Contents/Frameworks
 	cp $(srcdir)/dists/macosx/dsa_pub.pem $(bundle_name)/Contents/Resources/
@@ -209,9 +209,9 @@ ifneq ($(DIST_FILES_SHADERS),)
 	chmod 755 $(bundle_name)/Contents/Resources/shaders
 	chmod 644 $(bundle_name)/Contents/Resources/shaders/*
 endif
-	cp $(bundle_binary) $(bundle_name)/Contents/MacOS/scummvm
-	chmod 755 $(bundle_name)/Contents/MacOS/scummvm
-	$(STRIP) $(bundle_name)/Contents/MacOS/scummvm
+	cp $(bundle_binary) $(bundle_name)/Contents/MacOS/yomira
+	chmod 755 $(bundle_name)/Contents/MacOS/yomira
+	$(STRIP) $(bundle_name)/Contents/MacOS/yomira
 ifdef USE_DOCKTILEPLUGIN
 	mkdir -p $(bundle_name)/Contents/PlugIns
 	cp -r scummvm.docktileplugin $(bundle_name)/Contents/PlugIns/
@@ -234,7 +234,7 @@ bundle-dynamic: $(EXECUTABLE) plugins scummvm.docktileplugin bundle-pack
 else
 bundle-dynamic: $(EXECUTABLE) plugins bundle-pack
 endif
-	dylibbundler -od -b -x $(bundle_name)/Contents/MacOS/scummvm -d $(bundle_name)/Contents/Frameworks/ -p @executable_path/../Frameworks/
+	dylibbundler -od -b -x $(bundle_name)/Contents/MacOS/yomira -d $(bundle_name)/Contents/Frameworks/ -p @executable_path/../Frameworks/
 	# sdl2-compat loads SDL3 at runtime from next to itself, which dylibbundler cannot see
 	if grep -q libSDL3 $(bundle_name)/Contents/Frameworks/libSDL2-*.dylib; then \
 		sdl3=`pkg-config --variable=libdir sdl3`/libSDL3.0.dylib && \
@@ -649,58 +649,58 @@ osxsnap: bundle osxsnap-pack
 
 # Create the disk image from an existing $(bundle_name)
 osxsnap-pack:
-	mkdir ScummVM-snapshot
-	cp $(DIST_FILES_DOCS) ./ScummVM-snapshot/
-	mv ./ScummVM-snapshot/COPYING ./ScummVM-snapshot/License\ \(GPL\)
-	mv ./ScummVM-snapshot/COPYING.Apache ./ScummVM-snapshot/License\ \(Apache\)
-	mv ./ScummVM-snapshot/COPYING.BSD ./ScummVM-snapshot/License\ \(BSD\)
-	mv ./ScummVM-snapshot/COPYING.BSL ./ScummVM-snapshot/License\ \(BSL\)
-	mv ./ScummVM-snapshot/COPYING.GLAD ./ScummVM-snapshot/License\ \(Glad\)
-	mv ./ScummVM-snapshot/COPYING.ISC ./ScummVM-snapshot/License\ \(ISC\)
-	mv ./ScummVM-snapshot/COPYING.LGPL ./ScummVM-snapshot/License\ \(LGPL\)
-	mv ./ScummVM-snapshot/COPYING.LUA ./ScummVM-snapshot/License\ \(Lua\)
-	mv ./ScummVM-snapshot/COPYING.MIT ./ScummVM-snapshot/License\ \(MIT\)
-	mv ./ScummVM-snapshot/COPYING.MKV ./ScummVM-snapshot/License\ \(MKV\)
-	mv ./ScummVM-snapshot/COPYING.MPL ./ScummVM-snapshot/License\ \(MPL\)
-	mv ./ScummVM-snapshot/COPYING.OFL ./ScummVM-snapshot/License\ \(OFL\)
-	mv ./ScummVM-snapshot/COPYING.TINYGL ./ScummVM-snapshot/License\ \(TinyGL\)
-	mv ./ScummVM-snapshot/CatharonLicense.txt ./ScummVM-snapshot/CatharonLicense.txt
-	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./ScummVM-snapshot/*
-	mkdir ScummVM-snapshot/doc
-	cp $(srcdir)/doc/QuickStart ./ScummVM-snapshot/doc/QuickStart
-	mkdir ScummVM-snapshot/doc/cz
-	cp $(DIST_FILES_DOCS_cz) ./ScummVM-snapshot/doc/cz/
-	mkdir ScummVM-snapshot/doc/da
-	cp $(DIST_FILES_DOCS_da) ./ScummVM-snapshot/doc/da/
-	mkdir ScummVM-snapshot/doc/de
-	cp $(DIST_FILES_DOCS_de) ./ScummVM-snapshot/doc/de/
-	mkdir ScummVM-snapshot/doc/es
-	cp $(DIST_FILES_DOCS_es) ./ScummVM-snapshot/doc/es/
-	mkdir ScummVM-snapshot/doc/fr
-	cp $(DIST_FILES_DOCS_fr) ./ScummVM-snapshot/doc/fr/
-	mkdir ScummVM-snapshot/doc/it
-	cp $(DIST_FILES_DOCS_it) ./ScummVM-snapshot/doc/it/
-	mkdir ScummVM-snapshot/doc/no-nb
-	cp $(DIST_FILES_DOCS_no-nb) ./ScummVM-snapshot/doc/no-nb/
-	mkdir ScummVM-snapshot/doc/sv
-	cp $(DIST_FILES_DOCS_se) ./ScummVM-snapshot/doc/sv/
+	mkdir Yomira-snapshot
+	cp $(DIST_FILES_DOCS) ./Yomira-snapshot/
+	mv ./Yomira-snapshot/COPYING ./Yomira-snapshot/License\ \(GPL\)
+	mv ./Yomira-snapshot/COPYING.Apache ./Yomira-snapshot/License\ \(Apache\)
+	mv ./Yomira-snapshot/COPYING.BSD ./Yomira-snapshot/License\ \(BSD\)
+	mv ./Yomira-snapshot/COPYING.BSL ./Yomira-snapshot/License\ \(BSL\)
+	mv ./Yomira-snapshot/COPYING.GLAD ./Yomira-snapshot/License\ \(Glad\)
+	mv ./Yomira-snapshot/COPYING.ISC ./Yomira-snapshot/License\ \(ISC\)
+	mv ./Yomira-snapshot/COPYING.LGPL ./Yomira-snapshot/License\ \(LGPL\)
+	mv ./Yomira-snapshot/COPYING.LUA ./Yomira-snapshot/License\ \(Lua\)
+	mv ./Yomira-snapshot/COPYING.MIT ./Yomira-snapshot/License\ \(MIT\)
+	mv ./Yomira-snapshot/COPYING.MKV ./Yomira-snapshot/License\ \(MKV\)
+	mv ./Yomira-snapshot/COPYING.MPL ./Yomira-snapshot/License\ \(MPL\)
+	mv ./Yomira-snapshot/COPYING.OFL ./Yomira-snapshot/License\ \(OFL\)
+	mv ./Yomira-snapshot/COPYING.TINYGL ./Yomira-snapshot/License\ \(TinyGL\)
+	mv ./Yomira-snapshot/CatharonLicense.txt ./Yomira-snapshot/CatharonLicense.txt
+	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./Yomira-snapshot/*
+	mkdir Yomira-snapshot/doc
+	cp $(srcdir)/doc/QuickStart ./Yomira-snapshot/doc/QuickStart
+	mkdir Yomira-snapshot/doc/cz
+	cp $(DIST_FILES_DOCS_cz) ./Yomira-snapshot/doc/cz/
+	mkdir Yomira-snapshot/doc/da
+	cp $(DIST_FILES_DOCS_da) ./Yomira-snapshot/doc/da/
+	mkdir Yomira-snapshot/doc/de
+	cp $(DIST_FILES_DOCS_de) ./Yomira-snapshot/doc/de/
+	mkdir Yomira-snapshot/doc/es
+	cp $(DIST_FILES_DOCS_es) ./Yomira-snapshot/doc/es/
+	mkdir Yomira-snapshot/doc/fr
+	cp $(DIST_FILES_DOCS_fr) ./Yomira-snapshot/doc/fr/
+	mkdir Yomira-snapshot/doc/it
+	cp $(DIST_FILES_DOCS_it) ./Yomira-snapshot/doc/it/
+	mkdir Yomira-snapshot/doc/no-nb
+	cp $(DIST_FILES_DOCS_no-nb) ./Yomira-snapshot/doc/no-nb/
+	mkdir Yomira-snapshot/doc/sv
+	cp $(DIST_FILES_DOCS_se) ./Yomira-snapshot/doc/sv/
 ifdef MACOSX_LEOPARD_OR_BELOW
-	perl -pi -e 'print "\xEF\xBB\xBF" if $$. == 1 && substr($$_, 0, 3) ne "\xEF\xBB\xBF"; close ARGV if eof' ./ScummVM-snapshot/doc/*/*
+	perl -pi -e 'print "\xEF\xBB\xBF" if $$. == 1 && substr($$_, 0, 3) ne "\xEF\xBB\xBF"; close ARGV if eof' ./Yomira-snapshot/doc/*/*
 else
-	xattr -w "com.apple.TextEncoding" "utf-8;134217984" ./ScummVM-snapshot/doc/*/*
+	xattr -w "com.apple.TextEncoding" "utf-8;134217984" ./Yomira-snapshot/doc/*/*
 endif
-	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./ScummVM-snapshot/doc/QuickStart
-	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./ScummVM-snapshot/doc/*/*
-	cp -RP $(bundle_name) ./ScummVM-snapshot/
-	cp $(srcdir)/dists/macosx/DS_Store ./ScummVM-snapshot/.DS_Store
-	cp $(srcdir)/dists/macosx/background.jpg ./ScummVM-snapshot/background.jpg
-	$(XCODETOOLSPATH)/SetFile -a V ./ScummVM-snapshot/.DS_Store
-	$(XCODETOOLSPATH)/SetFile -a V ./ScummVM-snapshot/background.jpg
+	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./Yomira-snapshot/doc/QuickStart
+	$(XCODETOOLSPATH)/SetFile -t ttro -c ttxt ./Yomira-snapshot/doc/*/*
+	cp -RP $(bundle_name) ./Yomira-snapshot/
+	cp $(srcdir)/dists/macosx/DS_Store ./Yomira-snapshot/.DS_Store
+	cp $(srcdir)/dists/macosx/background.jpg ./Yomira-snapshot/background.jpg
+	$(XCODETOOLSPATH)/SetFile -a V ./Yomira-snapshot/.DS_Store
+	$(XCODETOOLSPATH)/SetFile -a V ./Yomira-snapshot/background.jpg
 	hdiutil create -ov -format UDZO -imagekey zlib-level=9 -fs HFS+ \
-					-srcfolder ScummVM-snapshot \
-					-volname "ScummVM" \
-					ScummVM-snapshot.dmg
-	rm -rf ScummVM-snapshot
+					-srcfolder Yomira-snapshot \
+					-volname "Yomira" \
+					Yomira-snapshot.dmg
+	rm -rf Yomira-snapshot
 
 publish-appcast:
 	cp dists/macosx/scummvm_appcast.xml ../scummvm-web/public_html/appcasts/macosx/release.xml

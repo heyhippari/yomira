@@ -14,6 +14,7 @@ lib*.a
 
 /config.log
 /scummvm
+/yomira
 /libscummvm.so
 /scummvm-static
 /ScummVMDockTilePlugin*
@@ -28,6 +29,7 @@ lib*.a
 /MT32_CONTROL.ROM
 /MT32_PCM.ROM
 /ScummVM.app
+/Yomira.app
 /scummvm.docktileplugin
 /\!ScummVM*
 /*,e1f

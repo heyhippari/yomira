@@ -54,8 +54,8 @@
 
 - (NSMenu*)dockMenu {
 	// Get the list or recent games
-	CFPreferencesAppSynchronize(CFSTR("org.scummvm.app"));
-	NSArray *array = CFPreferencesCopyAppValue(CFSTR("recentGames"), CFSTR("org.scummvm.app"));
+	CFPreferencesAppSynchronize(CFSTR("org.yomira.app"));
+	NSArray *array = CFPreferencesCopyAppValue(CFSTR("recentGames"), CFSTR("org.yomira.app"));
 	if (array == nil)
 		return nil;
 
@@ -109,12 +109,12 @@
 - (IBAction) startGame {
 	NSLog(@"Starting Game %@...", game);
 
-	NSString *scummVMPath = [[NSWorkspace sharedWorkspace] absolutePathForAppBundleWithIdentifier:@"org.scummvm.app"];
+	NSString *scummVMPath = [[NSWorkspace sharedWorkspace] absolutePathForAppBundleWithIdentifier:@"org.yomira.app"];
 	if (scummVMPath == nil) {
-		NSLog(@"Cannot find ScummVM.app!");
+		NSLog(@"Cannot find Yomira.app!");
 		return;
 	}
-	// Start ScummVM.app with the game ID as argument
+	// Start Yomira.app with the game ID as argument
 	NSURL *url = [NSURL fileURLWithPath:scummVMPath];
 	NSMutableDictionary *args = [[NSMutableDictionary alloc] init];
 	[args setObject:[NSArray arrayWithObject:game] forKey:NSWorkspaceLaunchConfigurationArguments];
