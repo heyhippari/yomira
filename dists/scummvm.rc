@@ -21,9 +21,7 @@ IDI_COUNT              ICON    "icons/count.ico"
 ID_GDF_XML             DATA    "dists/win32/scummvm.gdf.xml"
 
 scummclassic.zip       FILE    "gui/themes/scummclassic.zip"
-scummmodern.zip        FILE    "gui/themes/scummmodern.zip"
-scummremastered.zip    FILE    "gui/themes/scummremastered.zip"
-residualvm.zip         FILE    "gui/themes/residualvm.zip"
+yomira.zip             FILE    "gui/themes/yomira.zip"
 gui-icons.dat          FILE    "gui/themes/gui-icons.dat"
 shaders.dat            FILE    "gui/themes/shaders.dat"
 

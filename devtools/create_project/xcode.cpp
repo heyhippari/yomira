@@ -1033,9 +1033,7 @@ XcodeProvider::ValueList& XcodeProvider::getResourceFiles(const BuildSetup &setu
 	static ValueList files;
 	if (files.empty()) {
 		files.push_back("gui/themes/scummclassic.zip");
-		files.push_back("gui/themes/scummmodern.zip");
-		files.push_back("gui/themes/scummremastered.zip");
-		files.push_back("gui/themes/residualvm.zip");
+		files.push_back("gui/themes/yomira.zip");
 		files.push_back("gui/themes/gui-icons.dat");
 		files.push_back("gui/themes/shaders.dat");
 		files.push_back("gui/themes/translations.dat");

@@ -84,8 +84,14 @@ GuiManager::GuiManager() : CommandSender(nullptr), _redrawStatus(kRedrawDisabled
 	initIconsSet();
 	_iconsSetChanged = false;
 
-	ConfMan.registerDefault("gui_theme", "scummremastered");
+	ConfMan.registerDefault("gui_theme", "yomira");
 	Common::String themefile(ConfMan.get("gui_theme"));
+
+	// Yomira no longer ships these ScummVM themes
+	if (themefile.hasPrefix("scummmodern") || themefile.hasPrefix("scummremastered") || themefile.hasPrefix("residualvm")) {
+		themefile = "yomira";
+		ConfMan.set("gui_theme", themefile);
+	}
 
 	ConfMan.registerDefault("gui_renderer", ThemeEngine::findModeConfigName(ThemeEngine::_defaultRendererMode));
 	ThemeEngine::GraphicsMode gfxMode = (ThemeEngine::GraphicsMode)ThemeEngine::findMode(ConfMan.get("gui_renderer"));

@@ -2248,7 +2248,7 @@ void ThemeEngine::listUsableThemes(const Common::FSNode &node, Common::List<Them
 
 Common::Path ThemeEngine::getThemeFile(const Common::String &id) {
 	// FIXME: Actually "default" rather sounds like it should use
-	// our default theme which would mean "scummremastered" instead
+	// our default theme which would mean "yomira" instead
 	// of the builtin one.
 	if (id.equalsIgnoreCase("default"))
 		return Common::Path();

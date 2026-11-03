@@ -26,6 +26,12 @@ For changes made before Yomira was forked from ScummVM, see:
    - Removed the engines inherited from ScummVM. Use ScummVM for those games.
    - Added automated development and stable release builds for Linux,
      Windows and macOS. The macOS build is a universal app bundle.
+   - Added the Yomira GUI theme and made it the default. It replaces the
+     ScummVM Modern, Modern Remastered and ResidualVM themes, which are no
+     longer included. Configurations that used them switch to Yomira.
+   - The GUI now uses Noto Sans JP in every language, so Japanese game titles
+     display correctly in the launcher. Characters that Noto Sans JP lacks are
+     drawn with Liberation Sans.
    - Start and OK buttons are highlighted in themes that support it.
 
  Delta:
