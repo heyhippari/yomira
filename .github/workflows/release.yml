@@ -148,9 +148,101 @@ jobs:
           name: release-windows
           path: scummvm-*.zip
 
+  macos-build:
+    name: macOS ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.kind != 'none'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    env:
+      # Homebrew bottles target the runner's OS, so the bundle cannot run on anything older.
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Install packages
+        run: |
+          brew install a52dec dylibbundler faad2 flac fluid-synth freetype fribidi giflib jpeg mad libmikmod libmpeg2 libogg libpng libvorbis libvpx sdl2 sdl2_net theora
+      - name: Call configure
+        run: |
+          ./configure --enable-release --enable-all-engines
+      - name: Build scummvm
+        run: |
+          make -j4
+      - name: Create bundle
+        run: |
+          make bundle-dynamic
+          if otool -L ScummVM.app/Contents/MacOS/scummvm ScummVM.app/Contents/Frameworks/*.dylib | grep -E '^\s+(/opt/homebrew|/usr/local)/'; then
+            echo "Bundle still references Homebrew libraries" >&2
+            exit 1
+          fi
+          tar -cf scummvm-macos-${{ matrix.arch }}.tar ScummVM.app
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: scummvm-macos-${{ matrix.arch }}.tar
+
+  macos:
+    name: macOS universal
+    needs: [prepare, macos-build]
+    runs-on: macos-15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Download bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: bundles
+          merge-multiple: true
+      - name: Merge bundles
+        run: |
+          for arch in arm64 x86_64; do
+            mkdir -p "bundles/$arch"
+            tar -C "bundles/$arch" -xf "bundles/scummvm-macos-$arch.tar"
+          done
+          diff <(cd bundles/arm64 && find ScummVM.app | sort) <(cd bundles/x86_64 && find ScummVM.app | sort)
+          cp -RP bundles/arm64/ScummVM.app ScummVM.app
+          (cd bundles/arm64 && find ScummVM.app -type f) | while read -r f; do
+            if file -b "$f" | grep -q Mach-O; then
+              lipo -create "bundles/arm64/$f" "bundles/x86_64/$f" -output "$f"
+            fi
+          done
+          codesign -s - --force --deep ScummVM.app
+          codesign --verify --deep --strict ScummVM.app
+          lipo -archs ScummVM.app/Contents/MacOS/scummvm
+      - name: Package
+        run: |
+          # Only needed for the variables used by the disk image target.
+          ./configure --backend=null --disable-all-engines
+          make osxsnap-pack
+          mv ScummVM-snapshot.dmg "scummvm-${{ needs.prepare.outputs.version }}-macos-universal.dmg"
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: scummvm-*.dmg
+
   publish:
     name: Publish
-    needs: [prepare, linux, windows]
+    needs: [prepare, linux, windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write

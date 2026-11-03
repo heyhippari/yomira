@@ -135,6 +135,7 @@ scummvm.docktileplugin: ScummVMDockTilePlugin
 endif
 
 bundle_name = ScummVM.app
+bundle_binary = scummvm-static
 
 bundle-pack:
 	mkdir -p $(bundle_name)/Contents/MacOS
@@ -208,7 +209,7 @@ ifneq ($(DIST_FILES_SHADERS),)
 	chmod 755 $(bundle_name)/Contents/Resources/shaders
 	chmod 644 $(bundle_name)/Contents/Resources/shaders/*
 endif
-	cp scummvm-static $(bundle_name)/Contents/MacOS/scummvm
+	cp $(bundle_binary) $(bundle_name)/Contents/MacOS/scummvm
 	chmod 755 $(bundle_name)/Contents/MacOS/scummvm
 	$(STRIP) $(bundle_name)/Contents/MacOS/scummvm
 ifdef USE_DOCKTILEPLUGIN
@@ -224,6 +225,24 @@ bundle: scummvm-static plugins scummvm.docktileplugin bundle-pack
 else
 bundle: scummvm-static plugins bundle-pack
 endif
+
+# Bundle the dynamically linked binary with the libraries it uses, for
+# library sets without static archives such as Homebrew's
+bundle-dynamic: bundle_binary = $(EXECUTABLE)
+ifdef USE_DOCKTILEPLUGIN
+bundle-dynamic: $(EXECUTABLE) plugins scummvm.docktileplugin bundle-pack
+else
+bundle-dynamic: $(EXECUTABLE) plugins bundle-pack
+endif
+	dylibbundler -od -b -x $(bundle_name)/Contents/MacOS/scummvm -d $(bundle_name)/Contents/Frameworks/ -p @executable_path/../Frameworks/
+	# sdl2-compat loads SDL3 at runtime from next to itself, which dylibbundler cannot see
+	if grep -q libSDL3 $(bundle_name)/Contents/Frameworks/libSDL2-*.dylib; then \
+		sdl3=`pkg-config --variable=libdir sdl3`/libSDL3.0.dylib && \
+		cp "$$sdl3" $(bundle_name)/Contents/Frameworks/libSDL3.dylib && \
+		chmod 644 $(bundle_name)/Contents/Frameworks/libSDL3.dylib && \
+		install_name_tool -id @executable_path/../Frameworks/libSDL3.dylib $(bundle_name)/Contents/Frameworks/libSDL3.dylib; \
+	fi
+	codesign -s - --deep --force $(bundle_name)
 
 ios7bundle: scummvm-static-ios
 	mkdir -p $(bundle_name)
@@ -626,7 +645,10 @@ scummvm-static-ios: $(DETECT_OBJS) $(OBJS)
 
 # Special target to create a snapshot disk image for macOS
 # TODO: Replace AUTHORS by Credits.rtf
-osxsnap: bundle
+osxsnap: bundle osxsnap-pack
+
+# Create the disk image from an existing $(bundle_name)
+osxsnap-pack:
 	mkdir ScummVM-snapshot
 	cp $(DIST_FILES_DOCS) ./ScummVM-snapshot/
 	mv ./ScummVM-snapshot/COPYING ./ScummVM-snapshot/License\ \(GPL\)
@@ -726,5 +748,5 @@ release-checks:
 
 # Mark special targets as phony
 .PHONY: install-data install install-strip uninstall dist-generic
-.PHONY: bundle-pack bundle iphonebundle ios7bundle tvosbundle iphone osxsnap publish-appcast
+.PHONY: bundle-pack bundle bundle-dynamic iphonebundle ios7bundle tvosbundle iphone osxsnap osxsnap-pack publish-appcast
 .PHONY: appimage ideprojects release-checks
