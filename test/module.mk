@@ -47,7 +47,7 @@ endif
 
 ifeq ($(ENABLE_SYSTEM98), STATIC_PLUGIN)
 	TESTS += $(srcdir)/test/engines/system98/*.h
-	TEST_LIBS := engines/system98/mmd.o engines/system98/image.o engines/system98/resource.o $(TEST_LIBS)
+	TEST_LIBS := engines/system98/mmd.o engines/system98/pmd.o engines/system98/image.o engines/system98/resource.o $(TEST_LIBS)
 endif
 
 ifeq ($(ENABLE_DELTA), STATIC_PLUGIN)

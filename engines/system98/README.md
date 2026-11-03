@@ -4,9 +4,9 @@ Partial implementation of Four-Nine's System-98 visual novel engine. Startup
 now reaches Mugen Yasoukyoku's interactive main menu, including its Options
 screen, and the new-game transition to its initial background. Pi graphics,
 patterned transitions, palette fades, basic Japanese text, startup script
-instructions, and MIDI music and effects are implemented. Full gameplay,
-game save/load, and PMD/FM playback remain unsupported. Launching displays a
-warning about this limited support.
+instructions, P.M.D. FM music and effects, and MIDI music and effects are
+implemented. Full gameplay and game save/load remain unsupported. Launching
+displays a warning about this limited support.
 
 ## Initial Release
 
@@ -90,6 +90,7 @@ not exposed as nonfunctional mappings.
 The startup register/configuration files use ScummVM's SaveFileManager
 and do not modify original game files. These files are not full game saves.
 Music mode 0 is silent; resident PMD/MMD programs are not executed.
+`PMD.COM`, `PMDB2.COM` and `SE.EFC` are read as data for FM playback.
 
 Japanese text prefers `FONT.ROM`, `FONT.BMP`, or ScummVM's `SJIS.FNT` in the
 search path. As a fallback, supply `NotoSansCJK-Regular.ttc`,
@@ -129,26 +130,49 @@ free-moving pointer is hidden, retaining the script-driven selection graphics.
 
 ## Audio
 
-The engine plays the game's original M.M.D. MIDI arrangements (`g*.m`) through
-ScummVM's configured MIDI driver. New configurations default to MIDI mode 3;
-saved game configuration can override this. Mode 0 remains silent. PMD music
-in `b*.m` and `n*.m` and FM effects in `SE.EFC` are not implemented, so FM
-driver modes 1 and 2 report unavailable rather than pretending to play.
+The game offers four music settings, chosen on its first-run prompt and Options
+screen and stored in register 0x400: 0 no music, 1 mono FM (`n*.m` through
+`PMD.COM` on a PC-9801-26K), 2 stereo FM (`b*.m` through `PMDB2.COM` on a
+PC-9801-86), and 3 GS MIDI (`g*.m` through `MMD.COM`). The script chooses the
+file set from the mode. New configurations default to stereo FM, mode 2; a
+saved configuration can select any other mode.
 
-M.M.D. sequences are decoded into Standard MIDI Files for ScummVM's existing
-MIDI parser. In MIDI mode, music requests for the FM arrangements select the
-corresponding `g*.m` track. The five length-prefixed M.M.D. effects in `SE.MSE`
-use a separate parser and MIDI channel state, allowing effects over music.
-Playback supports looping music, stop, fade-out, pause/resume, music/effect
-volume and mute, and script music-status/measure queries. No DOS driver is run.
+FM modes play the P.M.D. songs and effects through ScummVM's FM-TOWNS/PC-98
+OPN/OPNA emulation (`PC98AudioCore`), emulating a 26K board in mode 1 and an 86
+board in mode 2. `pmd.cpp` is a sequencer for compiled P.M.D. 4.8 data written
+for this engine; no DOS driver code is run. Timer B drives music and Timer A,
+at its longest period, drives effects and fades, as in the original driver.
+FM effects come from `SE.EFC` and play on FM channel 3. SSG effects and the SSG
+drums used by the K/R rhythm parts come from the effect table in the selected
+driver file. In mode 2 the rhythm parts also trigger the OPNA rhythm source.
+The FM, SSG, and rhythm volume adjustments match the options `SYS98.EXE`
+passes to each driver (`/DF20`; `/DF10 /DS0 /DR16`).
+
+In MIDI mode, M.M.D. sequences are decoded into Standard MIDI Files for
+ScummVM's existing MIDI parser. The five length-prefixed M.M.D. effects in
+`SE.MSE` use a separate parser and MIDI channel state, allowing effects over
+music. No DOS driver is run.
+
+Both paths support looping music, stop, fade-out, pause/resume, music/effect
+volume and mute, and script music-status/measure queries. In FM modes, effects
+on FM channel 3 and SSG channel C follow ScummVM's effects volume while they
+play.
 
 All 12 MIDI arrangements and all five effects from the complete extraction
 passed conversion and ScummVM's SMF loader. Decoder tests cover note timing,
 compressed commands, finite loops, malformed data, and effect-bank bounds;
 run `./test/runner System98MmdTestSuite` after building `test/runner`.
-Runtime playback was audibly confirmed by the user. A separate attempted
+MIDI runtime playback was audibly confirmed by the user. A separate attempted
 loopback capture was silent, so it is not evidence of playback failure or a
 verified recording of fade/effect output.
+
+All 24 FM songs (both board variants) run through the sequencer and loop; each
+`n`/`b` pair reaches its loop point on the same tick. `SE.EFC` effects 1 to 4 and
+the 11 drum effects run to completion with both drivers. A headless capture
+of the title screen recorded `b01.m` in mode 2 and `n01.m` in mode 1, with
+spectral peaks on equal-tempered pitches and no clipping in stereo mode.
+The emulated 26K mixes mono near full scale; a few samples clipped in that
+capture. Run `./test/runner System98PmdTestSuite` for the sequencer tests.
 
 ## Architecture
 
@@ -163,7 +187,10 @@ Source files are in `engines/system98/`:
 - `graphics.cpp`: palette and fades, display pages, the text overlay and glyph
   mask, text boxes, and window drawing.
 - `image.cpp`, `image.h`: stripped-header Pi image decoding.
-- `audio.cpp`, `audio.h`: MIDI player for music and effects, with fades,
+- `pmd.cpp`, `pmd.h`: P.M.D. song, FM effect and SSG effect sequencer, writing
+  OPN/OPNA registers through a small chip interface.
+- `audio.cpp`, `audio.h`: the `PC98AudioCore` FM wrapper, and the MIDI player
+  for music and effects, with fades,
   pause, and volume.
 - `mmd.cpp`, `mmd.h`: M.M.D.-to-SMF conversion and effect extraction.
 - `dialogs.cpp`, `dialogs.h`: the name dialog that replaces `NAMCHG.EXE`.
@@ -285,8 +312,8 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x17 | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x18 | MOVI | reg, value | Sets a register to a 16-bit value. The 32-bit form for IDs 0x400 and above is absent. | Partial |
 | 0x19 | MOVR | dst reg, src reg | Copies one register to another. 16-bit registers only. | Partial |
-| 0x1A | BGMPLAY | file name | In MIDI mode 3, plays the music file. b and n names use the matching g file. Silent in mode 0. | Partial |
-| 0x1B | BGMFADE | none | Fades out the music. Fade length comes from register 0x403 here. | Partial |
+| 0x1A | BGMPLAY | file name | Plays the music file with the current driver: P.M.D. in modes 1 and 2, M.M.D. in mode 3. Silent in mode 0. | Implemented |
+| 0x1B | BGMFADE | none | Fades out the music. P.M.D. uses the low byte of register 0x403 as its fade speed; MIDI mode derives a fade length from it. | Implemented |
 | 0x1C | BGMSTOP | none | Stops the music. | Implemented |
 | 0x1D | BGMMODE | reg | Stores the current music mode. | Implemented |
 | 0x1E | WAITKEY | reg | Waits for a key or click. Stores 1 instead of the key code. | Partial |
@@ -330,9 +357,9 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x4B | REGFLD | buffer, file name | Loads a register buffer from a save file, or from a scene resource if none exists. Buffer ranges differ. | Partial |
 | 0x4C | CMD4C | two words | Stores two values. Reference purpose unknown. | Not implemented |
 | 0x4D | BGMMEAS | reg | Stores the current music measure. | Implemented |
-| 0x4E | SFXSSG | effect number | In MIDI mode 3, plays an effect from SE.MSE by number. No separate SSG playback. | Partial |
-| 0x4F | SFXFM | effect number | Same handler as 0x4E here. No separate FM playback. | Partial |
-| 0x50 | BGMSTAT | reg | Stores 1 if music is playing, otherwise 0. | Implemented |
+| 0x4E | SFXSSG | effect number | FM modes play the driver's built-in SSG effect. MIDI mode 3 plays an SE.MSE effect. | Implemented |
+| 0x4F | SFXFM | effect number | FM modes play an SE.EFC effect. MIDI mode 3 plays an SE.MSE effect. | Implemented |
+| 0x50 | BGMSTAT | reg | FM modes store P.M.D.'s status word: the song's status byte, then its loop count (0xFF when stopped). MIDI mode stores 1 while music plays, otherwise 0. | Implemented |
 | 0x51 | ANDI | reg, value | Bitwise AND of a register with a value. | Implemented |
 | 0x52 | ORI | reg, value | Bitwise OR of a register with a value. | Implemented |
 | 0x53 | STRCAT | dst string, src string | Appends a string, including its terminator. | Implemented |
@@ -393,7 +420,7 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | --- | --- | --- | --- | --- |
 | 0x8F | Mugen extension | bank, file name | Loads a scene into bank 1, the secondary 0x4000-byte bank. Bank 0 reloads the main scene. | Implemented |
 | 0x90 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
-| 0x91 | Mugen extension | mode reg, result reg | Music mode request. Modes 0 and 3 succeed; other modes store 0xFFFD. | Partial |
+| 0x91 | Mugen extension | mode reg, result reg | Music mode request for modes 0 to 3. An unavailable mode stores 0xFFFD. | Implemented |
 | 0x92 | Mugen extension | none | Runs `NAMCHG.EXE` to change the protagonist's name. Replaced by a ScummVM name dialog. | Partial |
 | 0x93 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
 | 0x94 | Mugen extension | none consumed | No-op here. The executable's operand count is unknown. | Partial (no-op) |
@@ -474,6 +501,56 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
   48 ticks per quarter note, one tempo track, and 18 note tracks.
 - `SE.MSE` begins with a 16-bit effect count. Each effect is a 16-bit length
   followed by M.M.D. data.
+
+### P.M.D. Data and Driver Behavior
+
+These findings come from capstone disassembly of the supplied `PMD.COM` (P.M.D.
+4.8b for OPN/OPNA, 23060 bytes) and `PMDB2.COM` (P.M.D. 4.8b for OPNA with
+rhythm/ADPCM, 28300 bytes), the unpacked `SYS98.EXE`, and the game's data.
+REA could not open these 16-bit DOS images with its configured providers.
+Addresses are `.COM` load addresses (file offset + 0x100) in `PMD.COM` unless
+noted.
+
+- Driver selection (`SYS98.EXE` 0x159c): mode 1 loads `PMD.COM /M8 /V1 /DF20
+  /K`, mode 2 `PMDB2.COM /M8 /V1 /DF10 /DS0 /DR16 /K`, mode 3 `MMD.COM /M16 /K`;
+  `ESET.COM SE.EFC` loads the FM effects. Register 0x400 holds the mode and
+  0x401 the previous one. The shipped 16-byte register file stores 0xFFFF in
+  register 0x400, which makes `open.s` show its first-run music prompt.
+- Script sound opcodes call INT 60h: 0x1A loads and starts (functions 1, 6,
+  0), 0x1B fades (function 2, AL = low byte of register 0x403), 0x1C stops
+  (1), 0x4D reads the measure counter (5), 0x50 the status word (0x0A), 0x4E
+  starts an SSG effect (3), and 0x4F an FM effect (0x0C).
+- A `.M` file has a format byte, then 16-bit offsets relative to file offset 1
+  for FM1 to FM6, SSG1 to SSG3, ADPCM, the K rhythm part, the R pattern table,
+  and, when the first offset is 0x1A, a table of 26-byte voices. `n*.m` uses
+  FM1 to FM3 and SSG; `b*.m` uses all six FM channels. `PMD.COM` maps header
+  slots 4 to 6 to FM3 extension parts, which `n*.m` leaves empty. Only `b13.m`
+  and `n13.m` have rhythm parts; no song uses ADPCM.
+- Command dispatch tables for FM, SSG and rhythm parts are at 0x0ab8, 0x0b50
+  and 0x0be8, covering commands 0xFF down to 0xB4. Loop counters live in the
+  song data. Notes are `octave << 4 | key`, 0x0F is a rest, and 0x0C repeats
+  the previous note. The frequency tables are at 0x2d25 (FM) and 0x2d3d (SSG).
+- Timer A, set to 0 (its longest period), runs at 0x2c1d: every eighth tick
+  steps the fade, then SSG and FM effects run. Timer B runs music at 0x2bd6:
+  SSG parts, the K part, then FM parts, followed by the measure counter
+  (default 96 ticks per measure).
+- FM volume (0x1a41) adds `127 - volume` to carrier TLs after scaling the
+  volume by the `/DF` setting and half the fade level. SSG volume (0x1b79)
+  scales by the fade level and adds a software envelope (0x20e2). New parts start
+  at FM volume 108, SSG volume 8, with SSG output gated until the first note.
+- FM effects (0x2a17, 0x0342) use `SE.EFC` entries 0 to 126 as offsets from
+  the file start, take voices from the table at entry 127, play on FM channel
+  3, and mask the music's FM3 part until its next note after the effect. The
+  game's effect 0 is empty.
+- SSG effects (0x0173, 0x021d) use a table of 3-byte entries (priority,
+  offset) found at 0x2d65 in `PMD.COM` and 0x36fd in `PMDB2.COM`. Each frame
+  holds a duration, tone, noise, mixer bits, channel C volume, envelope, and
+  tone/noise sweeps. Entries 0 to 10 are drums with priority 1, so music notes
+  on SSG3 interrupt them. The engine finds the table through its lookup code.
+- K/R rhythm (0x09b5): R patterns hold 14-bit rhythm masks. `PMD.COM` plays
+  the lowest set bit as an SSG drum. `PMDB2.COM` (0x1147) also keys the OPNA
+  rhythm source for every set bit using an 11-entry instrument table, unless
+  `/N` is given, and skips SSG drums while fading.
 
 ## Startup Research
 
@@ -652,7 +729,7 @@ scene's script-driven menu setup.
 
 Opcode 0x91 calls 0x1159c with a mode register and result register. The original
 launches DOS sound drivers only when needed. This implementation supports
-silent mode 0 and MIDI mode 3, and reports failure for unavailable FM drivers.
+silent mode 0, FM modes 1 and 2, and MIDI mode 3.
 Evidence: `ev_6a7ea3e4fd9254c3a8b21d71d91b48cbbccef272be40916ab8e8326f4a1c0ad2`.
 
 The executable's configuration defaults have music mode 0. Evidence:
@@ -724,8 +801,14 @@ System-98 in general.
   of opcode 0x36 is not established. The window-style reading covers only the
   Options path.
 - Support is limited to the verified startup path described above. Full
-  gameplay, later dialogue and scene paths, and PMD and FM playback are
-  unsupported. Later scenes may reach unsupported instructions.
+  gameplay and later dialogue and scene paths are unsupported. Later scenes
+  may reach unsupported instructions.
+- The P.M.D. sequencer implements the commands the game's songs and effects
+  use, plus related volume, loop, tempo, and effect commands. Portamento is
+  approximated by its destination note; FM3 extension parts, PPSDRV, ADPCM,
+  hardware LFO, the second software LFO, and extended SSG envelopes are not
+  implemented, and the game data does not use them. FM playback has not been
+  compared with a PC-98 emulator recording.
 - Noto fallback glyphs are approximate. A PC-98 font ROM is preferred for
   original glyph shapes.
 

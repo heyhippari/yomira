@@ -20,6 +20,7 @@
  */
 
 #include "audio/midiparser.h"
+#include "audio/mixer.h"
 #include "common/config-manager.h"
 #include "system98/audio.h"
 #include "system98/mmd.h"
@@ -191,6 +192,139 @@ void Sound::onTimer() {
 		_effectParser->onTimer();
 		_sendingEffect = false;
 	}
+}
+
+FmSound::FmSound(Audio::Mixer *mixer) : _mixer(mixer), _core(nullptr), _player(nullptr), _opna(false),
+	_paused(false), _effectChannels(0) {
+}
+
+FmSound::~FmSound() {
+	shutdown();
+}
+
+bool FmSound::init(bool opna, const Common::Array<byte> &driver, const Common::Array<byte> &effects) {
+	if (_core && _opna == opna)
+		return true;
+	shutdown();
+	_opna = opna;
+	_player = new PmdPlayer(*this, opna);
+	if (!_player->loadSsgEffects(driver))
+		warning("System98: %s has no recognizable SSG effect table", opna ? "PMDB2.COM" : "PMD.COM");
+	if (!_player->loadFmEffects(effects))
+		warning("System98: SE.EFC is missing or invalid");
+	_core = new PC98AudioCore(_mixer, this, opna ? PC98AudioPluginDriver::kType86 : PC98AudioPluginDriver::kType26);
+	if (!_core->init()) {
+		shutdown();
+		return false;
+	}
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_effectChannels = -1;
+	updateEffectChannels();
+	_player->reset();
+	syncSettings();
+	return true;
+}
+
+void FmSound::shutdown() {
+	// Deleting the core stops its timer callbacks before the player goes away
+	delete _core;
+	_core = nullptr;
+	delete _player;
+	_player = nullptr;
+}
+
+bool FmSound::playMusic(const Common::Array<byte> &data) {
+	if (!_core)
+		return false;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	return _player->playMusic(data);
+}
+
+void FmSound::stop() {
+	if (!_core)
+		return;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_player->stopMusic();
+}
+
+void FmSound::fadeOut(uint8 speed) {
+	if (!_core)
+		return;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_player->fadeOut(speed);
+}
+
+void FmSound::playFmEffect(uint8 effect) {
+	if (!_core)
+		return;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_player->playFmEffect(effect);
+	updateEffectChannels();
+}
+
+void FmSound::playSsgEffect(uint8 effect) {
+	if (!_core)
+		return;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_player->playSsgEffect(effect);
+	updateEffectChannels();
+}
+
+void FmSound::syncSettings() {
+	if (!_core)
+		return;
+	const bool mute = ConfMan.getBool("mute");
+	const int music = mute || ConfMan.getBool("music_mute") ? 0 : CLIP(ConfMan.getInt("music_volume"), 0, 255);
+	const int effects = mute || ConfMan.getBool("sfx_mute") ? 0 : CLIP(ConfMan.getInt("sfx_volume"), 0, 255);
+	_core->setMusicVolume(music);
+	_core->setSoundEffectVolume(effects);
+}
+
+void FmSound::setPaused(bool paused) {
+	if (!_core)
+		return;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	_paused = paused;
+}
+
+uint16 FmSound::measure() {
+	if (!_core)
+		return 0;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	return _player->measure();
+}
+
+uint16 FmSound::status() {
+	if (!_core)
+		return 0xff;
+	PC98AudioCore::MutexLock lock = _core->stackLockMutex();
+	return _player->status();
+}
+
+void FmSound::timerCallbackA() {
+	if (!_player || _paused)
+		return;
+	_player->timerA();
+	updateEffectChannels();
+}
+
+void FmSound::timerCallbackB() {
+	if (_player && !_paused)
+		_player->timerB();
+}
+
+void FmSound::writeRegister(uint8 port, uint8 reg, uint8 value) {
+	if (_core)
+		_core->writeReg(port, reg, value);
+}
+
+// Effects borrow FM channel 3 and SSG channel C, which then follow the effect volume
+void FmSound::updateEffectChannels() {
+	const int channels = (_player->fmEffectPlaying() ? 1 << 2 : 0) | (_player->ssgEffectPlaying() ? 1 << 8 : 0);
+	if (channels == _effectChannels)
+		return;
+	_effectChannels = channels;
+	_core->setSoundEffectChanMask(channels);
 }
 
 } // namespace System98

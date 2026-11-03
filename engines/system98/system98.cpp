@@ -35,7 +35,7 @@
 namespace System98 {
 
 System98Engine::System98Engine(OSystem *system) : Engine(system),
-	_sound(nullptr),
+	_sound(nullptr), _fm(nullptr),
 	_sjisFont(nullptr), _fallbackFont(nullptr), _mouseBounds(0, 0, 626, 386), _mouse(320, 200),
 	_menuJump(0), _menuBank(0), _menuEnabled(false), _coordinateMenu(false), _menuStyle(0), _mouseActionRegister(0), _activeBank(0),
 	_scriptValid(true), _keyPressed(false), _skipMode(false), _skipRequested(false), _textActionsHeld(0), _textMouseHeld(false), _frameEpoch(0),
@@ -51,10 +51,12 @@ System98Engine::System98Engine(OSystem *system) : Engine(system),
 	memset(_idleCharacters, 0, sizeof(_idleCharacters));
 	memset(_idleDelays, 0, sizeof(_idleDelays));
 	memset(_menuRegisters, 0, sizeof(_menuRegisters));
-	_registers[0x400] = 3;
+	// Default to the PC-9801-86 stereo FM music the original offers alongside 26K FM and GS MIDI
+	_registers[0x400] = 2;
 }
 
 System98Engine::~System98Engine() {
+	delete _fm;
 	delete _sound;
 	delete _sjisFont;
 	delete _fallbackFont;
@@ -72,11 +74,13 @@ bool System98Engine::hasFeature(EngineFeature feature) const {
 void System98Engine::syncSoundSettings() {
 	Engine::syncSoundSettings();
 	if (_sound) _sound->syncSettings();
+	if (_fm) _fm->syncSettings();
 }
 
 void System98Engine::pauseEngineIntern(bool paused) {
 	Engine::pauseEngineIntern(paused);
 	if (_sound) _sound->setPaused(paused);
+	if (_fm) _fm->setPaused(paused);
 }
 
 Common::Error System98Engine::initialize() {
@@ -87,8 +91,7 @@ Common::Error System98Engine::initialize() {
 	if (!_resources.load("SE.MSE", _soundEffects) || _soundEffects.empty() || _soundEffects.size() > 0x800)
 		return Common::Error(Common::kReadingFailed, "SE.MSE is missing or exceeds the startup sound-effect buffer.");
 	_sound = new Sound();
-	if (!_sound->init())
-		warning("System98: MIDI audio device could not be initialized");
+	_fm = new FmSound(_mixer);
 	if (!loadScene("run.s", 0))
 		return Common::Error(Common::kReadingFailed, "run.s is missing or has an invalid scene size.");
 	if (READ_LE_UINT16(_scene.data() + _scriptOffset) > 0x97)

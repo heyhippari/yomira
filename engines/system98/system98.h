@@ -46,6 +46,7 @@ enum System98Action {
 };
 
 class Sound;
+class FmSound;
 
 class System98Engine : public Engine {
 public:
@@ -59,6 +60,7 @@ private:
 	void pauseEngineIntern(bool paused) override;
 	Common::Error initialize();
 	bool loadScene(const Common::String &name, uint bank);
+	bool selectMusicMode(uint mode);
 	// A script offset's bit 14 and above select the secondary bank; the low 14 bits address within it
 	static const uint kSceneBankSize = 0x4000;
 	static uint sceneBankOf(uint offset) { return offset >= kSceneBankSize; }
@@ -104,6 +106,7 @@ private:
 	};
 	Resources _resources;
 	Sound *_sound;
+	FmSound *_fm;
 	Common::Array<byte> _scene;
 	Common::Array<byte> _secondaryScene;
 	Common::String _sceneName;

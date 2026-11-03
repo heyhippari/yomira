@@ -7,6 +7,7 @@ MODULE_OBJS := \
 	image.o \
 	metaengine.o \
 	mmd.o \
+	pmd.o \
 	resource.o \
 	script.o \
 	system98.o

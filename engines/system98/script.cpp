@@ -52,6 +52,26 @@ bool System98Engine::loadScene(const Common::String &name, uint bank) {
 	return true;
 }
 
+// Modes 1 and 2 load PMD.COM (26K) or PMDB2.COM (86) with SE.EFC; mode 3 is GS MIDI
+bool System98Engine::selectMusicMode(uint mode) {
+	if (mode > 3)
+		return false;
+	_sound->stop();
+	_sound->stopEffect();
+	if (mode != 1 && mode != 2)
+		_fm->shutdown();
+	if (mode == 3)
+		return _sound->init();
+	if (mode == 0)
+		return true;
+	Common::Array<byte> driver, effects;
+	if (!_resources.load(mode == 2 ? "PMDB2.COM" : "PMD.COM", driver))
+		warning("System98: %s is missing; SSG drums and effects are unavailable", mode == 2 ? "PMDB2.COM" : "PMD.COM");
+	_resources.load("SE.EFC", effects);
+	_fm->stop();
+	return _fm->init(mode == 2, driver, effects);
+}
+
 Common::String System98Engine::saveFileName(const Common::String &name) const {
 	Common::String result = _targetName + ".s98-";
 	for (uint index = 0; index < name.size(); ++index)
@@ -300,9 +320,12 @@ bool System98Engine::execute() {
 	case 0x19: arguments(2); reg(args[0]) = reg(args[1]); break;
 	case 0x1a: {
 		Common::String name = sceneString(fetchWord(), true);
-		if (_musicMode == 3) {
-			if (!name.empty() && (name[0] == 'b' || name[0] == 'B' || name[0] == 'n' || name[0] == 'N')) name.setChar('g', 0);
-			Common::Array<byte> data;
+		Common::Array<byte> data;
+		if (_musicMode == 1 || _musicMode == 2) {
+			if (!_resources.load(name, data) || !_fm->playMusic(data))
+				warning("System98: cannot play P.M.D. music %s", name.c_str());
+			else debug(1, "System98: FM music %s", name.c_str());
+		} else if (_musicMode == 3) {
 			if (!_resources.load(name, data) || !_sound->playMusic(data))
 				warning("System98: cannot play M.M.D. music %s", name.c_str());
 			else debug(1, "System98: MIDI music %s", name.c_str());
@@ -310,10 +333,13 @@ bool System98Engine::execute() {
 		break;
 	}
 	case 0x1b:
-		if (_sound) _sound->fadeOut(MAX<uint>(1, reg(0x403)) * 60);
+		// P.M.D. takes the low byte of register 0x403 as its fade speed
+		if (_musicMode == 3) _sound->fadeOut(MAX<uint>(1, reg(0x403)) * 60);
+		else _fm->fadeOut(reg(0x403) & 0xff);
 		break;
 	case 0x1c:
-		if (_sound) _sound->stop();
+		_sound->stop();
+		_fm->stop();
 		break;
 	case 0x1d: reg(fetchWord()) = _musicMode; break;
 	case 0x1e:
@@ -413,13 +439,23 @@ bool System98Engine::execute() {
 		}
 		break;
 	}
-	case 0x4d: reg(fetchWord()) = _sound && _musicMode ? _sound->measure() : 0; break;
+	case 0x4d: reg(fetchWord()) = _musicMode == 3 ? _sound->measure() : (_musicMode ? _fm->measure() : 0); break;
 	case 0x4e: case 0x4f:
 		arguments(1);
-		if (_sound && _musicMode == 3 && !_sound->playEffect(_soundEffects, args[0] & 255))
-			warning("System98: cannot play MIDI effect %u", args[0] & 255);
+		if (_musicMode == 3) {
+			if (!_sound->playEffect(_soundEffects, args[0] & 255))
+				warning("System98: cannot play MIDI effect %u", args[0] & 255);
+		} else if (_musicMode && opcode == 0x4e) {
+			_fm->playSsgEffect(args[0] & 255);
+		} else if (_musicMode) {
+			_fm->playFmEffect(args[0] & 255);
+		}
 		break;
-	case 0x50: reg(fetchWord()) = _sound && _musicMode && _sound->playing() ? 1 : 0; break;
+	case 0x50:
+		// P.M.D. reports its status byte and loop count, which is 0xff once music stops
+		if (_musicMode == 3) reg(fetchWord()) = _sound->playing() ? 1 : 0;
+		else reg(fetchWord()) = _musicMode ? _fm->status() : 0;
+		break;
 	case 0x51: arguments(2); reg(args[0]) &= args[1]; break;
 	case 0x52: arguments(2); reg(args[0]) |= args[1]; break;
 	case 0x53:
@@ -517,14 +553,12 @@ bool System98Engine::execute() {
 		arguments(2);
 		{
 			const uint mode = reg(args[0]);
-			if (mode == 0 || (mode == 3 && _sound && _sound->init())) {
+			if (selectMusicMode(mode)) {
 				reg(args[1]) = _musicMode;
 				_musicMode = mode;
-				_sound->stop();
-				_sound->stopEffect();
 			} else {
 				reg(args[1]) = 0xfffd;
-				warning("System98: music driver mode %u is unavailable; select MIDI", mode);
+				warning("System98: music driver mode %u is unavailable", mode);
 			}
 		}
 		break;
