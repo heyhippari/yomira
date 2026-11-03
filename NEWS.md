@@ -33,6 +33,8 @@ For changes made before Yomira was forked from ScummVM, see:
      display correctly in the launcher. Characters that Noto Sans JP lacks are
      drawn with Liberation Sans.
    - Start and OK buttons are highlighted in themes that support it.
+   - Replaced the application icons and the startup splash screen with the
+     Yomira logo.
 
  Delta:
    - New engine for Route Two Ltd. games.

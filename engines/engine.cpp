@@ -305,17 +305,17 @@ void splashScreen() {
 	int16 scaledW = (int16)(overlayWidth / scaleFactor);
 	int16 scaledH = (int16)(overlayHeight / scaleFactor);
 
-	// Fill with orange
+	// Fill with the logo background
 	Graphics::Surface screen;
 	screen.create(scaledW, scaledH, g_system->getOverlayFormat());
-	screen.fillRect(Common::Rect(screen.w, screen.h), screen.format.ARGBToColor(0xff, 0xcc, 0x66, 0x00));
+	screen.fillRect(Common::Rect(screen.w, screen.h), screen.format.ARGBToColor(0xff, 0x1e, 0x20, 0x30));
 
 	// Print version information
 	const Graphics::Font *font = FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
 	int w = font->getStringWidth(gScummVMFullVersion);
 	int x = screen.w - w - 5;
 	int y = screen.h - font->getFontHeight() - 5;
-	font->drawString(&screen, gScummVMFullVersion, x, y, w, screen.format.ARGBToColor(0xff, 0, 0, 0));
+	font->drawString(&screen, gScummVMFullVersion, x, y, w, screen.format.ARGBToColor(0xff, 0x9a, 0x9d, 0xb5));
 
 	// Scale if needed and copy to overlay
 	if (screen.w != overlayWidth) {
