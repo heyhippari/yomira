@@ -38,7 +38,7 @@ System98Engine::System98Engine(OSystem *system) : Engine(system),
 	_sound(nullptr), _fm(nullptr),
 	_sjisFont(nullptr), _fallbackFont(nullptr), _mouseBounds(0, 0, 626, 386), _mouse(320, 200),
 	_menuJump(0), _menuBank(0), _menuEnabled(false), _coordinateMenu(false), _menuStyle(0), _mouseActionRegister(0), _activeBank(0),
-	_scriptValid(true), _keyPressed(false), _skipMode(false), _skipRequested(false), _textActionsHeld(0), _textMouseHeld(false), _frameEpoch(0),
+	_scriptValid(true), _keyPressed(false), _skipMode(false), _skipRequested(false), _textActionsHeld(0), _mouseButtonsHeld(0), _inputPressed(0), _frameEpoch(0),
 	_scriptOffset(0), _stackSize(0), _paletteLock(0), _frameCounter(0), _characterDelay(0),
 	_musicMode(0), _displayPage(0), _compareResult(0), _textColor(15), _scrollWords(0), _scrollLines(0) {
 	memset(_palette, 0, sizeof(_palette));

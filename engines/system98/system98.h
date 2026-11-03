@@ -84,11 +84,13 @@ private:
 	bool waitForTextAdvance();
 	bool waitTextDelay(uint frames, bool &fastText);
 	void pollInput();
+	byte heldInput() const { return _textActionsHeld | _mouseButtonsHeld; }
 	void printText(uint box, uint offset);
 	void drawCharacter(uint16 character, int x, int y, byte color, bool graphics = false);
 	void openTextBox(uint box, const Common::Rect &frame, uint style);
 	void clearTextBox(uint box, bool close);
 	void drawTextBox(uint box);
+	void fillTextCells(const Common::Rect &cells, bool block, byte color);
 	void updateMenu(const Common::Event &event);
 	struct TextBox {
 		Common::Rect rect;
@@ -136,8 +138,10 @@ private:
 	bool _keyPressed;
 	bool _skipMode;
 	bool _skipRequested;
+	// Input bits as the executable keeps them: 1 is cancel or the right button, 2 is accept or the left button
 	byte _textActionsHeld;
-	bool _textMouseHeld;
+	byte _mouseButtonsHeld;
+	byte _inputPressed;
 	uint32 _frameEpoch;
 	Common::Array<byte> _patterns[4];
 	uint16 _idleCharacters[8];

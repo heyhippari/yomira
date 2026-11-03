@@ -201,9 +201,10 @@ void System98Engine::pollInput() {
 				_skipRequested = true;
 		}
 		if (textAction) {
-			const byte actionMask = event.customType == kActionAdvance ? 1 : 2;
+			const byte actionMask = event.customType == kActionAdvance ? 2 : 1;
 			if (engineAction) {
 				_textActionsHeld |= actionMask;
+				_inputPressed |= actionMask;
 				_keyPressed = true;
 			} else {
 				_textActionsHeld &= ~actionMask;
@@ -227,11 +228,13 @@ void System98Engine::pollInput() {
 		}
 		if (event.type == Common::EVENT_MOUSEMOVE || event.type == Common::EVENT_LBUTTONDOWN || event.type == Common::EVENT_RBUTTONDOWN)
 			_mouse = Common::Point(CLIP<int>(event.mouse.x, _mouseBounds.left, _mouseBounds.right - 1), CLIP<int>(event.mouse.y, _mouseBounds.top, _mouseBounds.bottom - 1));
+		const byte buttonMask = event.type == Common::EVENT_LBUTTONDOWN || event.type == Common::EVENT_LBUTTONUP ? 2 : 1;
 		if (event.type == Common::EVENT_LBUTTONDOWN || event.type == Common::EVENT_RBUTTONDOWN) {
-			_textMouseHeld = true;
+			_mouseButtonsHeld |= buttonMask;
+			_inputPressed |= buttonMask;
 			_keyPressed = true;
 		} else if (event.type == Common::EVENT_LBUTTONUP || event.type == Common::EVENT_RBUTTONUP) {
-			_textMouseHeld = false;
+			_mouseButtonsHeld &= ~buttonMask;
 		}
 		updateMenu(event);
 		if (_menuEnabled && !_coordinateMenu && (event.type == Common::EVENT_MOUSEMOVE || engineAction))
@@ -342,13 +345,19 @@ bool System98Engine::execute() {
 		_fm->stop();
 		break;
 	case 0x1d: reg(fetchWord()) = _musicMode; break;
-	case 0x1e:
+	case 0x1e: {
+		// Waits for input, then for one of its bits to be released; stores the pressed bits and the later state
 		arguments(1);
-		_keyPressed = false;
-		while (!_keyPressed && !shouldQuit())
-			waitFrames(1);
-		reg(args[0]) = 1;
+		_inputPressed = 0;
+		byte pressed = 0;
+		while (!pressed && waitFrames(1))
+			pressed = _inputPressed | heldInput();
+		while (pressed && (heldInput() & pressed) == pressed)
+			if (!waitFrames(1))
+				break;
+		reg(args[0]) = pressed | heldInput() << 8;
 		break;
+	}
 	case 0x1f: {
 		const Common::String name = sceneString(fetchWord(), true);
 		_scriptValid = loadScene(name, 0);
@@ -360,6 +369,12 @@ bool System98Engine::execute() {
 	case 0x25: arguments(2); reg(args[0]) -= args[1]; break;
 	case 0x27: arguments(2); reg(args[0]) += reg(args[1]); break;
 	case 0x28: arguments(2); reg(args[0]) -= reg(args[1]); break;
+	case 0x26: case 0x3c:
+		// Text VRAM fill in 8x16 cells: spaces, or full blocks with attribute 0xe1 (0x26) or 0x01 (0x3c)
+		arguments(5);
+		fillTextCells(Common::Rect(MIN<uint>(args[0], 80), MIN<uint>(args[1], 25), MIN<uint>(args[0] + args[2], 80), MIN<uint>(args[1] + args[3], 25)),
+			args[4] != 0, opcode == 0x26 ? 7 : 0);
+		break;
 	case 0x2d:
 		arguments(2);
 		if (args[0] > args[1] || args[1] >= ARRAYSIZE(_registers)) { _scriptValid = false; break; }
@@ -548,6 +563,11 @@ bool System98Engine::execute() {
 	case 0x8f:
 		arguments(2);
 		_scriptValid = loadScene(sceneString(args[1], true), args[0]);
+		break;
+	case 0x90:
+		// Discards the newest return address without returning
+		if (!_stackSize) { _scriptValid = false; break; }
+		--_stackSize;
 		break;
 	case 0x91:
 		arguments(2);

@@ -316,7 +316,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x1B | BGMFADE | none | Fades out the music. P.M.D. uses the low byte of register 0x403 as its fade speed; MIDI mode derives a fade length from it. | Implemented |
 | 0x1C | BGMSTOP | none | Stops the music. | Implemented |
 | 0x1D | BGMMODE | reg | Stores the current music mode. | Implemented |
-| 0x1E | WAITKEY | reg | Waits for a key or click. Stores 1 instead of the key code. | Partial |
+| 0x1E | WAITKEY | reg | Waits for input, then for one pressed bit to be released. Stores the pressed bits in the low byte and the state at release in the high byte. | Implemented |
 | 0x1F | LDSCENE | file name | Loads a scene into bank 0 and restarts at 0x100. | Implemented |
 | 0x20 | GV02 | none | Writes a fixed pattern to graphics memory. | Not implemented |
 | 0x21 | WAIT | reg | Waits the number of frames in the register. | Implemented |
@@ -324,7 +324,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x23 | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x24 | ADDI | reg, value | Adds a value. 16-bit registers only. | Partial |
 | 0x25 | SUBI | reg, value | Subtracts a value. 16-bit registers only. | Partial |
-| 0x26 | TXCLR1 | five words | Clears a text buffer area. | Not implemented |
+| 0x26 | TXCLR1 | x, y, width, height, flag | Fills 8x16 text cells with spaces, or with white full blocks when the flag is set. | Implemented |
 | 0x27 | ADDR | dst reg, src reg | Adds one register to another. 16-bit registers only. | Partial |
 | 0x28 | SUBR | dst reg, src reg | Subtracts one register from another. 16-bit registers only. | Partial |
 | 0x29 | XYREAD | dst reg, x reg, y reg | Reads a value from the XY buffer. | Not implemented |
@@ -344,7 +344,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x39 | ORR | dst reg, src reg | Bitwise OR of two registers. | Implemented |
 | 0x3A | BLIT1R | eight reg IDs | Register-indirect form of 0x2F. | Implemented |
 | 0x3B | BLIT1RL | eight reg IDs | Long-width variant of 0x3A. | Not implemented |
-| 0x3C | TXCLR2 | five words | Clears a text buffer area. | Not implemented |
+| 0x3C | TXCLR2 | x, y, width, height, flag | Like 0x26, but the full blocks are black. | Implemented |
 | 0x3D | MULR | dst reg, src reg | Multiplies two registers. 16-bit registers only. | Partial |
 | 0x3E | DIVR | dst reg, src reg | Divides two registers. 16-bit registers only. A zero divisor fails the run. | Partial |
 | 0x3F | CMD3F | x reg, y reg | Warps the pointer to two register coordinates. Reference purpose unknown. | Partial |
@@ -419,14 +419,67 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | ID | Name | Operands | Summary | Status |
 | --- | --- | --- | --- | --- |
 | 0x8F | Mugen extension | bank, file name | Loads a scene into bank 1, the secondary 0x4000-byte bank. Bank 0 reloads the main scene. | Implemented |
-| 0x90 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
+| 0x90 | Mugen extension | none | Drops the newest return-stack entry without jumping (0x14222). An empty stack fails the run. | Implemented |
 | 0x91 | Mugen extension | mode reg, result reg | Music mode request for modes 0 to 3. An unavailable mode stores 0xFFFD. | Implemented |
 | 0x92 | Mugen extension | none | Runs `NAMCHG.EXE` to change the protagonist's name. Replaced by a ScummVM name dialog. | Partial |
-| 0x93 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
-| 0x94 | Mugen extension | none consumed | No-op here. The executable's operand count is unknown. | Partial (no-op) |
+| 0x93 | Mugen extension | reg | Stores the sign-extended input-state byte (DS:0x4119) that WAITKEY polls (0x149e8). | Not implemented |
+| 0x94 | Mugen extension | none | Dispatches straight back to the interpreter loop (0x113b6). | Implemented |
 | 0x95 | Mugen extension | eight words | Patterned blit from page 1 to page 0 in stages, using a captured pattern slot and a per-stage delay. | Implemented |
 | 0x96 | Mugen extension | slot, byte columns | Captures eight rows of page 1 intensity bits as a pattern. | Implemented |
-| 0x97 | Mugen extension | unknown | Dispatch recorded by REA. No behavior in this build. | Unknown (Mugen) |
+| 0x97 | Mugen extension | none | Runs `ENDING.EXE` with the command line `くりあ` ("clear") through the exec helper at 0x1175e (0x15076). | Not implemented |
+
+#### Opcode coverage in Mugen's scripts
+
+The dispatch table at 0x113b8 sends these IDs to the invalid-opcode exit at
+0x13d09: 0x01, 0x17, 0x23, 0x2b, 0x2c, 0x30, 0x31, 0x37, 0x44-0x49, 0x5c, 0x5d,
+0x61, 0x65-0x67, 0x6c, 0x6d, 0x6f-0x71, 0x7c-0x7e, 0x84-0x8c, and 0x8e. The
+portrait commands 0x86-0x8b are therefore absent. Opcodes 0x29 and 0x2a share
+0x4a's register-file save handler (0x13fc1) instead of the reference's XY
+buffer commands.
+
+Operand counts for every valid handler come from the native handlers. A
+control-flow trace with these counts decoded all 613 scenes (archives plus the
+three loose `.S` overrides) from 0x100, and `Mug_Sub.s` from every bank-1 call
+target. It followed jumps, calls, menu targets, frame jumps, and JTBL tables
+(zero entries are unused slots) without reaching an invalid word. A linear
+sweep of the unreached bytes left two short code-like runs (`1_61.s:076a`,
+`8_32.s:0748`), both using implemented opcodes only.
+
+The scripts reach 72 opcodes. Three were missing; 0x97 still is:
+
+| ID | Sites | Use |
+| --- | --- | --- |
+| 0x3c | 12 in `c_01.s`-`c_08.s` | `TXCLR2 0, 0, 80, 25, 0` right after 0x97: fills the whole 80x25 text VRAM with spaces, attribute 0xe1. |
+| 0x90 | 1, `Mug_Sub.s:56ff` | Drops the caller's return entry, then 0x1f loads a scene. |
+| 0x97 | 12 in `c_01.s`-`c_08.s` | Runs the ending credits program, then returns to `open.s`. |
+
+`ENDING.EXE` is a separate 9553-byte Borland C program that reads
+`ENDING.FNT` and `ENDING.GLB`; it has not been analyzed.
+
+0x3c (0x14867) and 0x26 (0x1485b) both call 0x12d00 with five words: x, y,
+width, and height in 80x25 text cells, then a flag. A zero flag writes
+character 0x20 with attribute 0xe1. A nonzero flag writes character 0x87, the
+full block, with attribute 0x01 (black) for 0x3c or 0xe1 (white) for 0x26.
+ScummVM applies this to the hardware-text pixels of its text overlay. Clearing
+leaves graphics-colored overlay pixels, such as text-box frames, in place,
+since the original keeps those in graphics VRAM. The flagged form is not used
+by the game.
+
+Valid opcodes no script reaches: 0x06, 0x09, 0x10, 0x11, 0x16, 0x1d, 0x20,
+0x26, 0x28, 0x29, 0x2a, 0x2e, 0x32, 0x34, 0x35, 0x39, 0x3a, 0x3b, 0x3d, 0x4c,
+0x4d, 0x4e, 0x50, 0x51, 0x56-0x58, 0x5b, 0x5f, 0x68, 0x69, 0x6b, 0x73, 0x75,
+0x79, 0x7a, 0x7f, 0x81-0x83, 0x8d, and 0x93. Some are implemented anyway.
+
+The input byte at DS:0x4119 is rebuilt by 0x11db2 from the mouse port (0x7fd9)
+and the BIOS key-state map at 0:0x52a. Bit 0 is cancel: the right button, Esc,
+Z, keypad /, or keypad 0. Bit 1 is accept: the left button, Return, X, or Space.
+These match the menu action values 1 and 2. WAITKEY (0x149cc) waits for a
+nonzero byte, keeps it as the pressed bits, and waits until one of them is
+released. ScummVM also remembers presses released within one event batch, so
+a quick click is not lost. All 79 traced uses write register 0, and none is
+followed by a compare. Opcode 0x93 reads the same byte. Reached text
+control bytes are 01h, 02h, 03h, 04h, 0Dh, and 0Fh with subcodes 00h-03h; all
+are handled.
 
 ### Text
 

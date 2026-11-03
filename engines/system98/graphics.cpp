@@ -182,6 +182,23 @@ void System98Engine::drawTextBox(uint box) {
 		_scriptValid = false;
 }
 
+// Cells are 8x16 within 80x25; graphics-colored overlay pixels belong to the graphics planes, so clearing keeps them
+void System98Engine::fillTextCells(const Common::Rect &cells, bool block, byte color) {
+	const Common::Rect rect(cells.left * 8, cells.top * 16, cells.right * 8, cells.bottom * 16);
+	for (int y = rect.top; y < rect.bottom; ++y)
+		for (int x = rect.left; x < rect.right; ++x) {
+			byte &pixel = *static_cast<byte *>(_text.getBasePtr(x, y));
+			if (block) {
+				pixel = color;
+				_glyphMask[y * 640 + x] = 1;
+			} else if (pixel != 255 && !(pixel & 0x80)) {
+				pixel = 255;
+				_glyphMask[y * 640 + x] = 0;
+			}
+		}
+	present();
+}
+
 void System98Engine::clearTextBox(uint box, bool close) {
 	TextBox &textBox = _textBoxes[box];
 	if (!textBox.active)
@@ -263,7 +280,7 @@ bool System98Engine::waitForTextAdvance() {
 			pressed = true;
 			_keyPressed = false;
 		}
-		if (pressed && !_textActionsHeld && !_textMouseHeld)
+		if (pressed && !_textActionsHeld && !_mouseButtonsHeld)
 			return true;
 		_system->delayMillis(5);
 	}
