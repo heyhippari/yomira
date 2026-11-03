@@ -353,8 +353,8 @@ engine are noted where relevant.
   executable dispatches further; see Version Differences.
 - Compare instructions store 0 for equal, 1 for less, and 2 for greater.
   Conditional jumps (0x0D to 0x12) test that stored value.
-- Registers are 16-bit in this build. The reference describes a 32-bit form for
-  IDs of 0x400 and above, which this build does not implement.
+- Registers are 16-bit, as in the Mugen executable. The reference describes a
+  32-bit form for IDs of 0x400 and above, which Mugen does not use.
 
 #### Opcode reference
 
@@ -387,10 +387,10 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x03 | TBOPEN | box ID, x/16, y/16, w/16, h/16, style | Opens one of 16 text boxes. IDs 0x10 and above fail. | Implemented |
 | 0x04 | TBCLOSE | box ID | Closes a text box and restores the overlay it covered. | Implemented |
 | 0x05 | TBCLEAR | box ID | Clears a text box's contents. | Implemented |
-| 0x06 | PALAPL | none | Applies the target palette and redraws. | Implemented |
-| 0x07 | PALBW | direction, frames per step | Fades from black (0) or white (nonzero) to the loaded image palette. The reference describes a black/white fade instead. | Partial |
-| 0x08 | PALFADE | direction, frames per step | Fades the current palette to black (0) or white (nonzero). | Implemented |
-| 0x09 | PALLCKT | colour ID (0-15) | Toggles a palette lock bit. Only 0x07 and 0x08 fades honor locks. | Partial |
+| 0x06 | PALAPL | none | Copies the image palette to the displayed one and redraws. The native handler (0x14690) copies 0x30 words, twice the palette, overwriting the return-stack pointer; no script reaches it. | Implemented |
+| 0x07 | PALBW | direction, frames per step | Sets unlocked colors to black (0) or white (nonzero), then steps each 4-bit component by one toward the image palette, waiting before each upload, until all arrive (0x146aa). | Implemented |
+| 0x08 | PALFADE | direction, frames per step | Steps unlocked colors of the displayed palette by one per step to black (0) or white (nonzero), as 0x07 does (0x14781). | Implemented |
+| 0x09 | PALLCKT | colour ID (0-15) | Toggles a palette lock bit; 0x07 and 0x08 leave locked colors alone (0x1480e). | Implemented |
 | 0x0A | JP | offset | Jumps to an offset. | Implemented |
 | 0x0B | CMPR | reg, reg | Compares two registers. Stores 0 for equal, 1 for less, 2 for greater. | Implemented |
 | 0x0C | CMPI | reg, value | Compares a register with a value, using the same result codes. | Implemented |
@@ -400,8 +400,8 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x15 | PRINT | box ID, text offset | Prints scene text in a text box. | Implemented |
 | 0x16 | PRINTXY | x, y, text offset | Prints text at a screen position. | Not implemented |
 | 0x17 | - | - | Undefined in v3.10. | Undefined (v3.10) |
-| 0x18 | MOVI | reg, value | Sets a register to a 16-bit value. The 32-bit form for IDs 0x400 and above is absent. | Partial |
-| 0x19 | MOVR | dst reg, src reg | Copies one register to another. 16-bit registers only. | Partial |
+| 0x18 | MOVI | reg, value | Sets a register to a 16-bit value, for any ID (0x13f72). | Implemented |
+| 0x19 | MOVR | dst reg, src reg | Copies one register to another. | Implemented |
 | 0x1A | BGMPLAY | file name | Plays the music file with the current driver: P.M.D. in modes 1 and 2, M.M.D. in mode 3. Silent in mode 0. | Implemented |
 | 0x1B | BGMFADE | none | Fades out the music. P.M.D. uses the low byte of register 0x403 as its fade speed; MIDI mode derives a fade length from it. | Implemented |
 | 0x1C | BGMSTOP | none | Stops the music. | Implemented |
@@ -412,39 +412,39 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x21 | WAIT | reg | Waits the number of frames in the register. | Implemented |
 | 0x22 | CHRDLY | reg | Sets the delay between printed characters. | Implemented |
 | 0x23 | - | - | Undefined in v3.10. | Undefined (v3.10) |
-| 0x24 | ADDI | reg, value | Adds a value. 16-bit registers only. | Partial |
-| 0x25 | SUBI | reg, value | Subtracts a value. 16-bit registers only. | Partial |
+| 0x24 | ADDI | reg, value | Adds a value, wrapping at 16 bits. | Implemented |
+| 0x25 | SUBI | reg, value | Subtracts a value. On a borrow, stores the magnitude and sets register 0 to 1 (0x1408d). | Implemented |
 | 0x26 | TXCLR1 | x, y, width, height, flag | Fills 8x16 text cells with spaces, or with white full blocks when the flag is set. | Implemented |
-| 0x27 | ADDR | dst reg, src reg | Adds one register to another. 16-bit registers only. | Partial |
-| 0x28 | SUBR | dst reg, src reg | Subtracts one register from another. 16-bit registers only. | Partial |
-| 0x29 | XYREAD | dst reg, x reg, y reg | Reads a value from the XY buffer. | Not implemented |
-| 0x2A | XYWRT | src reg, x reg, y reg | Writes a value to the XY buffer. | Not implemented |
+| 0x27 | ADDR | dst reg, src reg | Adds one register to another, wrapping at 16 bits. | Implemented |
+| 0x28 | SUBR | dst reg, src reg | Register form of 0x25, with the same borrow handling (0x14075). | Implemented |
+| 0x29 | XYREAD | two words | Dispatched to the 0x4a handler in Mugen (0x13fc1). | Implemented |
+| 0x2A | XYWRT | two words | Dispatched to the 0x4a handler in Mugen (0x13fc1). | Implemented |
 | 0x2B-0x2C | - | - | Undefined in v3.10 (v1.xx register file save and load). | Undefined (v3.10) |
 | 0x2D | REGCLR | first reg, last reg | Zeroes an inclusive register range. | Implemented |
 | 0x2E | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x2F | BLIT1I | eight words | Opaque rectangle copy between pages. | Implemented |
 | 0x30-0x31 | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x32 | PRINTR | box ID, reg | Prints a register as text. | Not implemented |
-| 0x33 | GPDGET | reg | Sets the display page from the register's low bit. No port I/O. | Partial |
-| 0x34 | GPDSET | reg | Stores the current display page. | Partial |
+| 0x33 | GPDGET | reg | Shows the display page in the register's low bit (port A4h, 0x14395). | Implemented |
+| 0x34 | GPDSET | reg | Stores the current display page. | Implemented |
 | 0x35 | TXFILL | six words | Fills a text buffer area. | Not implemented |
-| 0x36 | GFX36 | none | Copies page 1 rows into the window-style set used by Options. Reference meaning is unclear. | Partial |
+| 0x36 | GFX36 | none | Copies eight 48x48 nine-tile window styles from the top of page 1 (0x1422a). | Implemented |
 | 0x37 | XYFLOAD | file name | Loads the XY buffer from a file. | Not implemented |
 | 0x38 | ANDR | dst reg, src reg | Bitwise AND of two registers. | Implemented |
 | 0x39 | ORR | dst reg, src reg | Bitwise OR of two registers. | Implemented |
 | 0x3A | BLIT1R | eight reg IDs | Register-indirect form of 0x2F. | Implemented |
 | 0x3B | BLIT1RL | eight reg IDs | Long-width variant of 0x3A. | Not implemented |
 | 0x3C | TXCLR2 | x, y, width, height, flag | Like 0x26, but the full blocks are black. | Implemented |
-| 0x3D | MULR | dst reg, src reg | Multiplies two registers. 16-bit registers only. | Partial |
-| 0x3E | DIVR | dst reg, src reg | Divides two registers. 16-bit registers only. A zero divisor fails the run. | Partial |
-| 0x3F | CMD3F | x reg, y reg | Warps the pointer to two register coordinates. Reference purpose unknown. | Partial |
-| 0x40 | MENUSEL | id reg, action reg, menu offset, jump offset | Runs a region menu. Writes the selected ID and action, then jumps. | Implemented |
-| 0x41 | CMD41 | x reg, y reg, action reg, jump offset | Coordinate menu. Stores pointer position and action, then jumps. Reference purpose unknown. | Partial |
-| 0x42 | CMD42 | flag | Enables or disables the menu. Enabling waits one frame. Reference purpose unknown. | Partial |
-| 0x43 | CMD43 | x reg, y reg | Stores the pointer position in two registers. Reference purpose unknown. | Partial |
+| 0x3D | MULR | dst reg, src reg | Multiplies two registers, keeping the low 16 bits. | Implemented |
+| 0x3E | DIVR | dst reg, src reg | Stores the quotient in the first register and the remainder in the second. A zero divisor sets both to 0 (0x140ba). | Implemented |
+| 0x3F | CMD3F | x reg, y reg | Moves the pointer to two register coordinates (0x14b28). | Implemented |
+| 0x40 | MENUSEL | id reg, action reg, menu offset, jump offset | Runs a region menu. Any input selects; see Menus (0x149f4, 0x11c51). | Implemented |
+| 0x41 | CMD41 | x reg, y reg, action reg, jump offset | Coordinate menu. Stores the pointer position and action, then jumps (0x14a3a). | Implemented |
+| 0x42 | CMD42 | flag | Enables or disables the last menu 0x40 or 0x41 set up; does nothing before one. ScummVM also yields a frame when enabling (0x14a77). | Implemented |
+| 0x43 | CMD43 | x reg, y reg | Stores the pointer position in two registers (0x14b01). | Implemented |
 | 0x44-0x49 | - | - | Undefined in v3.10 (v1.xx dummy and GFX commands). | Undefined (v3.10) |
-| 0x4A | REGFSAV | buffer, file name | Saves a register buffer to a ScummVM save file. Buffer ranges differ from the reference. | Partial |
-| 0x4B | REGFLD | buffer, file name | Loads a register buffer from a save file, or from a scene resource if none exists. Buffer ranges differ. | Partial |
+| 0x4A | REGFSAV | buffer, file name | Saves registers to a ScummVM save file: buffer byte 0 is registers 0-511, 1 is 512-1023, anything else 1024-1031. ScummVM appends the DOS time and date for 0x60 (0x13fc1). | Implemented |
+| 0x4B | REGFLD | buffer, file name | Loads at most the buffer's registers from a save file, or from the game file of that name (0x1400f). | Implemented |
 | 0x4C | CMD4C | two words | Stores two values. Reference purpose unknown. | Not implemented |
 | 0x4D | BGMMEAS | reg | Stores the current music measure. | Implemented |
 | 0x4E | SFXSSG | effect number | FM modes play the driver's built-in SSG effect. MIDI mode 3 plays an SE.MSE effect. | Implemented |
@@ -464,7 +464,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x5C-0x5D | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x5E | CMD5E | page, x/8, y, w/8, h | Clears a rectangle on a page to colour 0. | Implemented |
 | 0x5F | STRTIME | string | Writes the current date and time into a string. | Not implemented |
-| 0x60 | FILETM | reg, string, file name | Stores 1 if a save file exists, otherwise 0. Clears the string. No date. | Partial |
+| 0x60 | FILETM | reg, string, file name | Stores 1 and the save's date as NEC half-width `YYYY-MM-DD hh:mm:ss` if the file exists; otherwise 0 and an empty string (0x13e95). | Implemented |
 | 0x61 | XYFSAVE | file name | Saves the XY buffer to a file. | Not implemented |
 | 0x62 | CMD62 | word reg, line reg | Sets the graphics display start (GDC SCROLL). Shown as a wrapping offset of the display page. | Implemented |
 | 0x63 | BLIT2I | eight words | Like 0x2F, but zero source pixels keep the destination. | Implemented |
@@ -473,7 +473,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x67 | GFX67 | four words | GFX command. | Not implemented |
 | 0x68 | GFX68 | two regs | GFX command. | Not implemented |
 | 0x69 | GFX69 | two regs, dst reg | Bit-mask GFX command. | Not implemented |
-| 0x6A | CMD6A | four values | Sets inclusive pointer bounds. Reference purpose unknown. | Partial |
+| 0x6A | CMD6A | four values | Sets inclusive pointer bounds, capped at (624, 384) and sorted per axis. The pointer is clamped when it next moves (0x14a89). | Implemented |
 | 0x6B | CMD6B | four regs | GFX command. | Not implemented |
 | 0x6C-0x6D | - | - | Undefined in v3.10. | Undefined (v3.10) |
 | 0x6E | STRLEN | reg, string | Stores the string length, excluding the terminator. | Implemented |
@@ -482,9 +482,9 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x73 | FRMGTR | reg | Stores the script frame counter. | Implemented |
 | 0x74 | FRMJPI | value, offset | Jumps when the frame counter is below the value. Also waits one frame when taken. | Implemented |
 | 0x75 | FONTCHR | JIS code, file offset | Loads a custom font glyph. | Not implemented |
-| 0x76 | IDLECHR | eight words | Stores idle character IDs. No idle animation uses them. | Partial |
-| 0x77 | IDLEDLY | eight words | Stores idle delays. No idle animation uses them. | Partial |
-| 0x78 | IDLEXY | x, y | Consumes two operands with no effect. | Partial |
+| 0x76 | IDLECHR | eight words | Sets the JIS codes of the text-wait marker (0x1492b). | Implemented |
+| 0x77 | IDLEDLY | eight words | Sets each marker frame's duration in vertical syncs (0x14930). | Implemented |
+| 0x78 | IDLEXY | x, y | Offsets the marker from its box position, in text cells (0x14946). | Implemented |
 | 0x79 | CMD79 | offset | Copies a data block to the end of the script. | Not implemented |
 | 0x7A | FRMSTR | reg | Sets the frame counter from a register. | Implemented |
 | 0x7B | FRMJPR | reg, offset | Register form of 0x74. Also waits one frame when taken. | Implemented |
@@ -570,6 +570,15 @@ followed by a compare. Opcode 0x93 reads the same byte. Reached text
 control bytes are 01h, 02h, 03h, 04h, 0Dh, and 0Fh with subcodes 00h-03h; all
 are handled.
 
+Every handler previously marked partial was then compared instruction by
+instruction with its native handler. Only 0x92, which replaces `NAMCHG.EXE`
+with a ScummVM dialog, remains partial. The ScummVM differences that remain are
+deliberate: no floppy prompts or file-not-found exits, the skip action, and a
+frame of yield when 0x42 enables a menu. A headless run from `run.s` reached the
+first-run prompt, the title menu, and `0_00.s`, showing the page-turn marker in
+the box frames and saving the configuration with its date. Fades, hiding the
+text, and FILETM dates were checked against the disassembly only.
+
 ### Text
 
 - Text is Shift-JIS and NUL-terminated. It can include NEC-specific JIS
@@ -584,11 +593,13 @@ are handled.
 | 03h | Set the text color for all later text | Handled |
 | 04h | Insert string register | Handled |
 | 05h | Insert integer register | Handled |
-| 06h-08h, 0Ah-0Ch, 0Eh | One operand byte, nothing drawn | Operand skipped |
+| 06h-08h, 0Ah-0Ch | One operand byte, which switches the 0x79 palette animation | Operand skipped |
+| 0Eh | One operand byte, nothing drawn | Operand skipped |
 | 09h | Advance 64 pixels | Handled |
 | 0Dh | Return to the box's left text edge and advance one row | Handled |
 | 0Fh 00h xx | Set menu highlight style | Handled |
-| 0Fh 01h-03h | Text-delay and display flags | Ignored |
+| 0Fh 01h | Toggle whether the skip key may drop character delays | Handled |
+| 0Fh 02h, 03h | Allow or forbid hiding the text during waits | Handled |
 
 - Bytes from 10h up are characters. Lead bytes 81h to 9Fh and E0h to FFh start
   two-byte characters, drawn 16 pixels wide except Shift-JIS 8540h to 869Eh
@@ -599,6 +610,24 @@ are handled.
   zero). Script text is hard-wrapped at 64 bytes (32 full-width characters);
   closing punctuation may hang past that as a 33rd character, and lines are
   not clipped to the box.
+- After each character the printer (0x12e9a) waits the 0x22 delay in vertical
+  syncs, except after a full-width space. Holding cancel cuts each delay short.
+  The skip key drops it unless 0Fh 01h has toggled that off; ScummVM's skip
+  action stands in for that key. A click while text prints is not remembered.
+- Waits 01h and 02h (0x12f50) react to held input. Accept continues after it
+  is released. Cancel does nothing unless 0Fh 02h allowed hiding: then it turns
+  the text plane off and shows graphics page 1 until the next press (0x12fc3).
+  ScummVM's skip action also continues, unless 0Fh 01h is in effect.
+- During a wait the vertical-sync handler (0x122ec) cycles a marker of up to
+  eight JIS codes from 0x76, each shown for its 0x77 frame count. A zero code
+  restarts the cycle. It sits in hardware text at the box's bottom-right inner
+  column and last inner row, moved by the 0x78 offset in text cells;
+  `run.s`/`open.s` use JIS 7648h-764Dh and (0, -1), which puts it in the bottom
+  frame row. Without a box it sits at text cell (72, 22). The executable's
+  default table is JIS 7721h-7728h at four frames each. The marker cell is
+  blanked after the wait.
+- Text boxes are drawn into graphics page 0, so ScummVM shows their frames
+  and graphics-colored glyphs only while page 0 is displayed.
 
 ### Menus
 
@@ -607,10 +636,13 @@ are handled.
   menu: it writes the pointer X and Y to two registers and the action to a third.
 - Menu data is a list of 10-byte records: a 16-bit ID, then the left, top,
   right, and bottom coordinates as 16-bit values. Right and bottom are exclusive.
-  An ID of 0 ends the list.
-- The action value is 2 for a left click or the advance action, and 1 for a
-  right click or the cancel action. A selection writes the ID and action to
-  the two registers and then jumps to the supplied offset.
+  Only the ID's low byte counts: a zero byte ends the list, and the selected ID
+  is that byte sign-extended (0x11e59, 0x11c51).
+- The action value is the input byte: 2 for a left click or the advance action,
+  1 for a right click or the cancel action. Any input selects, with ID 0
+  outside every region. A selection writes the ID and action to the two
+  registers, waits for the input to change, and then jumps to the supplied
+  offset.
 
 ### Images (Stripped Pi)
 

@@ -31,7 +31,9 @@
 namespace System98 {
 
 void System98Engine::present() {
-	const byte *background = static_cast<const byte *>(_pages[_displayPage].getPixels());
+	// Hiding the text shows page 1 without the text plane; text-box graphics belong to page 0
+	const uint page = _textHidden ? 1 : _displayPage;
+	const byte *background = static_cast<const byte *>(_pages[page].getPixels());
 	const byte *text = static_cast<const byte *>(_text.getPixels());
 	for (int y = 0; y < 400; ++y) {
 		// Graphics VRAM is read linearly from each area's start, wrapping at 0x4000 words per plane
@@ -40,15 +42,15 @@ void System98Engine::present() {
 		for (int x = 0; x < 640; ++x) {
 			const uint source = (start + x) % (0x4000 * 16);
 			const byte hardwareText = text[y * 640 + x];
-			if (hardwareText != 255 && !(hardwareText & 0x80))
+			if (hardwareText != 255 && !(hardwareText & 0x80) && !_textHidden)
 				destination[x] = 16 + hardwareText;
 			else if (source >= 640 * 400)
 				destination[x] = 0;
 			else
-				destination[x] = text[source] != 255 && (text[source] & 0x80) ? text[source] & 15 : background[source];
+				destination[x] = !page && text[source] != 255 && (text[source] & 0x80) ? text[source] & 15 : background[source];
 		}
 	}
-	if (_menuEnabled && !_coordinateMenu && _menuStyle < 8 && _windowStyles.getPixels()) {
+	if (!page && _menuEnabled && !_coordinateMenu && _menuStyle < 8 && _windowStyles.getPixels()) {
 		for (const MenuItem &item : _menu) {
 			if (!item.rect.contains(_mouse))
 				continue;
@@ -127,25 +129,33 @@ bool System98Engine::patternedBlit(const Common::Rect &sourceRect, const Common:
 	return true;
 }
 
-void System98Engine::fadePalette(bool out, uint delay, bool monochrome) {
-	byte start[48], end[48];
-	memcpy(start, _palette, sizeof(start));
-	memcpy(end, _targetPalette, sizeof(end));
-	if (monochrome) {
-		memset(start, out ? 255 : 0, sizeof(start));
-	} else {
-		memset(end, out ? 255 : 0, sizeof(end));
+// 0x07 starts unlocked colors at black or white and steps them to the image palette; 0x08 steps them to black
+// or white. Each step moves every 4-bit component by one and waits before showing it, until all have arrived.
+void System98Engine::fadePalette(bool white, uint delay, bool toImage) {
+	byte level[48], target[48];
+	for (uint index = 0; index < 48; ++index) {
+		const bool locked = _paletteLock & (1 << (index / 3));
+		level[index] = _palette[index] / 17;
+		target[index] = locked ? level[index] : toImage ? _targetPalette[index] / 17 : white ? 15 : 0;
+		if (toImage && !locked)
+			level[index] = white ? 15 : 0;
 	}
-	for (int step = 0; step <= 15 && !shouldQuit(); ++step) {
-		for (uint color = 0; color < 16; ++color)
-			if (!(_paletteLock & (1 << color)))
-				for (uint component = 0; component < 3; ++component) {
-					const uint index = color * 3 + component;
-					_palette[index] = (start[index] * (15 - step) + end[index] * step) / 15;
-				}
+	bool done;
+	do {
+		done = true;
+		for (uint index = 0; index < 48; ++index) {
+			if (level[index] < target[index])
+				++level[index];
+			else if (level[index] > target[index])
+				--level[index];
+			done &= level[index] == target[index];
+		}
+		if (!waitFrames(delay))
+			return;
+		for (uint index = 0; index < 48; ++index)
+			_palette[index] = level[index] * 17;
 		present();
-		waitFrames(delay);
-	}
+	} while (!done);
 }
 
 void System98Engine::openTextBox(uint box, const Common::Rect &frame, uint style) {
@@ -265,45 +275,120 @@ void System98Engine::drawCharacter(uint16 character, int x, int y, byte color, b
 	glyph.free();
 }
 
-bool System98Engine::waitForTextAdvance() {
-	_keyPressed = false;
-	bool pressed = false;
-	present();
-	while (!shouldQuit()) {
-		pollInput();
-		if (_skipRequested || _skipMode) {
-			_keyPressed = false;
-			_skipRequested = false;
-			return true;
-		}
-		if (_keyPressed) {
-			pressed = true;
-			_keyPressed = false;
-		}
-		if (pressed && !_textActionsHeld && !_mouseButtonsHeld)
-			return true;
-		_system->delayMillis(5);
-	}
-	return false;
+// JIS row and column to the Shift-JIS lead and trail bytes, packed as drawCharacter expects
+static uint16 jisToShiftJis(uint16 code) {
+	const uint row = code >> 8, column = code & 0xff;
+	const uint lead = ((row + 1) >> 1) + (row < 0x5f ? 0x70 : 0xb0);
+	const uint trail = row & 1 ? column + (column >= 0x60 ? 0x20 : 0x1f) : column + 0x7e;
+	return lead | trail << 8;
 }
 
-bool System98Engine::waitTextDelay(uint frames, bool &fastText) {
-	if (!frames || fastText)
+// The vertical-sync handler steps the marker once per frame while a text wait runs
+void System98Engine::stepIdleCharacter(uint box) {
+	const uint32 frame = uint64(_system->getMillis()) * 564 / 10000;
+	if (!_idleVisible) {
+		_idlePosition = box < ARRAYSIZE(_textBoxes) && _textBoxes[box].active ?
+			Common::Point(_textBoxes[box].frame.right - 32 - _idleOffset[0] * 8, _textBoxes[box].frame.bottom - 32 - _idleOffset[1] * 16) :
+			Common::Point(576, 352);
+		for (int row = 0; row < 16; ++row)
+			for (int column = 0; column < 16; ++column) {
+				const int x = CLIP<int>(_idlePosition.x + column, 0, 639), y = CLIP<int>(_idlePosition.y + row, 0, 399);
+				_idleBacking[0][row * 16 + column] = *static_cast<const byte *>(_text.getBasePtr(x, y));
+				_idleBacking[1][row * 16 + column] = _glyphMask[y * 640 + x];
+			}
+		_idleFrame = frame;
+	}
+	const byte shown = _idleIndex;
+	for (; _idleFrame < frame; ++_idleFrame)
+		if (!--_idleCounter) {
+			_idleIndex = (_idleIndex + 1) & 7;
+			if (!_idleCharacters[_idleIndex])
+				_idleIndex = 0;
+			_idleCounter = _idleDelays[_idleIndex];
+		}
+	if (_idleVisible && shown == _idleIndex)
+		return;
+	removeIdleCharacter();
+	drawCharacter(jisToShiftJis(_idleCharacters[_idleIndex]), _idlePosition.x, _idlePosition.y, 7);
+	_idleVisible = true;
+	present();
+}
+
+void System98Engine::removeIdleCharacter() {
+	if (!_idleVisible)
+		return;
+	for (int row = 0; row < 16; ++row)
+		for (int column = 0; column < 16; ++column) {
+			const int x = _idlePosition.x + column, y = _idlePosition.y + row;
+			if (x >= 0 && x < 640 && y >= 0 && y < 400) {
+				*static_cast<byte *>(_text.getBasePtr(x, y)) = _idleBacking[0][row * 16 + column];
+				_glyphMask[y * 640 + x] = _idleBacking[1][row * 16 + column];
+			}
+		}
+	_idleVisible = false;
+}
+
+// Turns the text plane off and shows page 1 from one press until the next
+bool System98Engine::showHiddenText() {
+	_textHidden = true;
+	present();
+	while ((heldInput() & 3) && waitFrames(1)) {
+	}
+	_inputPressed = 0;
+	while (!((heldInput() | _inputPressed) & 3) && waitFrames(1)) {
+	}
+	_textHidden = false;
+	present();
+	while ((heldInput() & 3) && waitFrames(1)) {
+	}
+	_inputPressed = 0;
+	return !shouldQuit();
+}
+
+// Accept continues; cancel shows the hidden-text view when 0Fh 02h allowed it, and otherwise does nothing.
+// ScummVM's skip action also continues unless 0Fh 01h made delays mandatory.
+bool System98Engine::waitForTextAdvance(uint box) {
+	present();
+	_inputPressed = 0;
+	while (true) {
+		pollInput();
+		if (shouldQuit())
+			return false;
+		if ((_skipMode || _skipRequested) && !_textDelayForced) {
+			_skipRequested = false;
+			break;
+		}
+		const byte input = heldInput() | _inputPressed;
+		_inputPressed = 0;
+		if (input & 1) {
+			if (_textHideEnabled && !showHiddenText())
+				return false;
+		} else if (input & 2) {
+			break;
+		}
+		stepIdleCharacter(box);
+		_system->delayMillis(5);
+	}
+	while ((heldInput() & 3) && waitFrames(1)) {
+	}
+	removeIdleCharacter();
+	present();
+	return !shouldQuit();
+}
+
+// The skip key drops character delays unless 0Fh 01h made them mandatory; holding cancel cuts each one short
+bool System98Engine::waitTextDelay(uint frames) {
+	if (!frames || (_skipMode && !_textDelayForced))
 		return !shouldQuit();
 	// The glyph just drawn must be visible while the delay runs
 	present();
-	const uint32 start = _system->getMillis();
-	const uint32 duration = frames * 10000 / 564;
-	while (!shouldQuit() && _system->getMillis() - start < duration) {
-		pollInput();
-		if (_keyPressed || _skipRequested || _skipMode) {
-			_keyPressed = false;
-			fastText = true;
-			return true;
-		}
-		_system->delayMillis(1);
+	for (uint frame = 0; frame < frames; ++frame) {
+		if (!waitFrames(1))
+			return false;
+		if (heldInput() & 1)
+			break;
 	}
-	return !shouldQuit();
+	return true;
 }
 
 void System98Engine::printText(uint box, uint offset) {
@@ -311,8 +396,6 @@ void System98Engine::printText(uint box, uint offset) {
 		_scriptValid = false;
 		return;
 	}
-	_keyPressed = false;
-	bool fastText = _skipMode || _skipRequested;
 	TextBox &textBox = _textBoxes[box];
 	const Common::Array<byte> &data = sceneBank(sceneBankOf(offset));
 	uint position = sceneBankOffset(offset);
@@ -323,9 +406,13 @@ void System98Engine::printText(uint box, uint offset) {
 			break;
 		if (value == 0x0f) {
 			if (position >= data.size()) { _scriptValid = false; return; }
-			if (!data[position++]) {
+			const byte control = data[position++];
+			if (!control) {
 				if (position >= data.size()) { _scriptValid = false; return; }
 				_menuStyle = data[position++];
+			} else if (control <= 3) {
+				text += char(value);
+				text += char(control);
 			}
 		} else if (value == 4) {
 			if (position >= data.size() || data[position] >= ARRAYSIZE(_strings)) { _scriptValid = false; return; }
@@ -348,10 +435,15 @@ void System98Engine::printText(uint box, uint offset) {
 	}
 	for (uint index = 0; index < text.size() && !shouldQuit(); ++index) {
 		const byte value = text[index];
-		if (value == 1 || value == 2) {
-			if (!waitForTextAdvance())
+		if (value == 0x0f) {
+			const byte control = text[++index];
+			if (control == 1)
+				_textDelayForced = !_textDelayForced;
+			else
+				_textHideEnabled = control == 2;
+		} else if (value == 1 || value == 2) {
+			if (!waitForTextAdvance(box))
 				return;
-			fastText = _skipMode;
 			if (value == 1)
 				clearTextBox(box, false);
 		} else if (value == 3) {
@@ -377,7 +469,8 @@ void System98Engine::printText(uint box, uint offset) {
 			}
 			drawCharacter(character, textBox.x, textBox.y, _textColor, textBox.style != 0);
 			textBox.x += width;
-			if (!waitTextDelay(_characterDelay, fastText))
+			// Full-width spaces print without a delay
+			if (character != 0x4081 && !waitTextDelay(_characterDelay))
 				return;
 		}
 	}

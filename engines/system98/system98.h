@@ -80,10 +80,13 @@ private:
 	bool loadImage(const Common::String &name, int x, int y, uint page, bool palette, bool transparent);
 	void copyPage(uint source, const Common::Rect &rect, uint destination, int x, int y, bool transparent);
 	bool patternedBlit(const Common::Rect &sourceRect, const Common::Point &position, uint pattern, uint delay);
-	void fadePalette(bool out, uint delay, bool monochrome);
+	void fadePalette(bool white, uint delay, bool toImage);
 	bool waitFrames(uint frames);
-	bool waitForTextAdvance();
-	bool waitTextDelay(uint frames, bool &fastText);
+	bool waitForTextAdvance(uint box);
+	bool waitTextDelay(uint frames);
+	bool showHiddenText();
+	void stepIdleCharacter(uint box);
+	void removeIdleCharacter();
 	void pollInput();
 	byte heldInput() const { return _textActionsHeld | _mouseButtonsHeld; }
 	void printText(uint box, uint offset);
@@ -145,8 +148,22 @@ private:
 	byte _inputPressed;
 	uint32 _frameEpoch;
 	Common::Array<byte> _patterns[4];
+	// The text-wait marker: JIS codes and frame counts set by opcodes 0x76 and 0x77, offset by 0x78
 	uint16 _idleCharacters[8];
 	uint16 _idleDelays[8];
+	int16 _idleOffset[2];
+	byte _idleIndex;
+	uint16 _idleCounter;
+	uint32 _idleFrame;
+	Common::Point _idlePosition;
+	byte _idleBacking[2][16 * 16];
+	bool _idleVisible;
+	// Text control 0Fh 01h makes the skip key leave character delays alone; 0Fh 02h and 03h allow hiding the text
+	bool _textDelayForced;
+	bool _textHideEnabled;
+	bool _textHidden;
+	bool _menuConfigured;
+	byte _menuReleaseState;
 	byte _targetPalette[16 * 3];
 	byte _palette[16 * 3];
 	uint16 _registers[1040];

@@ -170,16 +170,18 @@ void System98Engine::updateMenu(const Common::Event &event) {
 	const bool accept = engineAction && event.customType == kActionAdvance;
 	const bool cancel = engineAction && event.customType == kActionCancel;
 	const uint16 action = event.type == Common::EVENT_LBUTTONDOWN || accept ? 2 : event.type == Common::EVENT_RBUTTONDOWN || cancel ? 1 : 0;
-	if ((!selected && !_coordinateMenu) || !action)
+	// Any input selects, outside every region too; the ID is a sign-extended byte
+	if (!action)
 		return;
 	if (_coordinateMenu) {
 		reg(_menuRegisters[0]) = _mouse.x;
 		reg(_menuRegisters[1]) = _mouse.y;
 		reg(_mouseActionRegister) = action;
 	} else {
-		reg(_menuRegisters[0]) = selected;
+		reg(_menuRegisters[0]) = int8(selected);
 		reg(_menuRegisters[1]) = action;
 	}
+	_menuReleaseState = action;
 	_activeBank = _menuBank;
 	_scriptOffset = _menuJump;
 	_menuEnabled = false;
@@ -260,6 +262,10 @@ bool System98Engine::waitFrames(uint frames) {
 }
 
 bool System98Engine::execute() {
+	// After a menu selection the original waits for the input to change before jumping
+	while (_menuReleaseState && heldInput() == _menuReleaseState && waitFrames(1)) {
+	}
+	_menuReleaseState = 0;
 	const uint16 position = _scriptOffset;
 	const uint16 opcode = fetchWord();
 	debug(2, "System98: %s:%04x opcode %02x", sceneBankName(_activeBank).c_str(), position, opcode);
@@ -367,9 +373,20 @@ bool System98Engine::execute() {
 	case 0x21: waitFrames(reg(fetchWord())); break;
 	case 0x22: _characterDelay = reg(fetchWord()); break;
 	case 0x24: arguments(2); reg(args[0]) += args[1]; break;
-	case 0x25: arguments(2); reg(args[0]) -= args[1]; break;
+	case 0x25: case 0x28: {
+		// A borrow leaves the magnitude and sets register 0 to 1
+		arguments(2);
+		const uint16 value = opcode == 0x25 ? args[1] : reg(args[1]);
+		uint16 &target = reg(args[0]);
+		const bool borrow = target < value;
+		target -= value;
+		if (borrow) {
+			reg(0) = 1;
+			target = -target;
+		}
+		break;
+	}
 	case 0x27: arguments(2); reg(args[0]) += reg(args[1]); break;
-	case 0x28: arguments(2); reg(args[0]) -= reg(args[1]); break;
 	case 0x26: case 0x3c:
 		// Text VRAM fill in 8x16 cells: spaces, or full blocks with attribute 0xe1 (0x26) or 0x01 (0x3c)
 		arguments(5);
@@ -398,23 +415,31 @@ bool System98Engine::execute() {
 	case 0x38: arguments(2); reg(args[0]) &= reg(args[1]); break;
 	case 0x39: arguments(2); reg(args[0]) |= reg(args[1]); break;
 	case 0x3d: arguments(2); reg(args[0]) *= reg(args[1]); break;
-	case 0x3e:
+	case 0x3e: {
+		// The remainder goes to the divisor register; dividing by zero clears both
 		arguments(2);
-		if (!reg(args[1])) { _scriptValid = false; break; }
-		reg(args[0]) /= reg(args[1]);
+		uint16 &dividend = reg(args[0]), &divisor = reg(args[1]);
+		const uint16 left = dividend, right = divisor;
+		dividend = divisor = right;
+		if (right) {
+			dividend = left / right;
+			divisor = left % right;
+		}
 		break;
+	}
 	case 0x3f:
 		arguments(2); _mouse = Common::Point(reg(args[0]), reg(args[1])); _system->warpMouse(_mouse.x, _mouse.y); break;
 	case 0x40: {
 		arguments(4);
 		_menu.clear();
-		for (uint offset = args[2]; sceneBankOffset(offset) + 10U <= sceneBank(_activeBank).size() && sceneWord(offset); offset += 10) {
+		// The list ends at an entry whose ID byte is zero
+		for (uint offset = args[2]; sceneBankOffset(offset) + 10U <= sceneBank(_activeBank).size() && (sceneWord(offset) & 0xff); offset += 10) {
 			MenuItem item;
-			item.id = sceneWord(offset);
+			item.id = sceneWord(offset) & 0xff;
 			item.rect = Common::Rect(sceneWord(offset + 2), sceneWord(offset + 4), sceneWord(offset + 6), sceneWord(offset + 8));
 			_menu.push_back(item);
 		}
-		_menuRegisters[0] = args[0]; _menuRegisters[1] = args[1]; _menuJump = args[3]; _menuBank = _activeBank; _menuEnabled = true; _coordinateMenu = false;
+		_menuRegisters[0] = args[0]; _menuRegisters[1] = args[1]; _menuJump = args[3]; _menuBank = _activeBank; _menuEnabled = true; _coordinateMenu = false; _menuConfigured = true;
 		debug(1, "System98: menu %u regions at %s:%04x", _menu.size(), sceneBankName(_activeBank).c_str(), position);
 		present();
 		break;
@@ -422,36 +447,49 @@ bool System98Engine::execute() {
 	case 0x41:
 		arguments(4);
 		_menuRegisters[0] = args[0]; _menuRegisters[1] = args[1]; _mouseActionRegister = args[2];
-		_menuJump = args[3]; _menuBank = _activeBank; _menuEnabled = true; _coordinateMenu = true;
+		_menuJump = args[3]; _menuBank = _activeBank; _menuEnabled = true; _coordinateMenu = true; _menuConfigured = true;
 		debug(1, "System98: coordinate menu at %s:%04x", _sceneName.c_str(), position);
 		break;
 	case 0x42:
-		_menuEnabled = fetchWord() != 0;
+		// Only a menu that 0x40 or 0x41 set up can be switched; enabling also yields a frame here
+		arguments(1);
+		if (!_menuConfigured) break;
+		_menuEnabled = (args[0] & 0xff) != 0;
 		if (_menuEnabled) waitFrames(1);
 		break;
 	case 0x43: arguments(2); reg(args[0]) = _mouse.x; reg(args[1]) = _mouse.y; break;
-	case 0x4a: case 0x4b: {
+	case 0x29: case 0x2a: case 0x4a: case 0x4b: {
+		// Buffer byte 0 and 1 select the two 512-register halves; any other value the 8 configuration registers
 		arguments(2);
-		if (args[0] > 2) { _scriptValid = false; break; }
-		const uint begin = args[0] == 2 ? 1024 : args[0] * 512;
-		const uint count = args[0] == 2 ? 8 : 512;
-		if (opcode == 0x4a) {
+		const byte buffer = args[0] & 0xff;
+		const uint begin = buffer > 1 ? 1024 : buffer * 512;
+		const uint count = buffer > 1 ? 8 : 512;
+		// Mugen dispatches 0x29 and 0x2a to the 0x4a handler
+		if (opcode != 0x4b) {
 			Common::OutSaveFile *file = _system->getSavefileManager()->openForSaving(saveFileName(sceneString(args[1], true)));
 			if (!file) { _scriptValid = false; break; }
 			for (uint index = 0; index < count; ++index) file->writeUint16LE(reg(begin + index));
+			// Save files carry no timestamp, so the DOS time and date FILETM reports follow the registers
+			TimeDate time;
+			_system->getTimeAndDate(time);
+			file->writeUint16LE(time.tm_hour << 11 | time.tm_min << 5 | time.tm_sec / 2);
+			file->writeUint16LE(MAX(time.tm_year - 80, 0) << 9 | (time.tm_mon + 1) << 5 | time.tm_mday);
 			file->finalize();
 			_scriptValid = !file->err();
 			delete file;
 		} else {
+			// Shorter files fill only the registers they cover; the original reads at most the buffer size
 			Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveFileName(sceneString(args[1], true)));
 			Common::Array<byte> data;
 			if (file) {
-				if (file->size() == count * 2)
-					for (uint index = 0; index < count; ++index) reg(begin + index) = file->readUint16LE();
+				data.resize(MIN<int64>(file->size(), count * 2));
+				data.resize(file->read(data.data(), data.size()));
 				delete file;
-			} else if (_resources.load(sceneString(args[1], true), data) && data.size() == count * 2) {
-				for (uint index = 0; index < count; ++index) reg(begin + index) = READ_LE_UINT16(data.data() + index * 2);
+			} else {
+				_resources.load(sceneString(args[1], true), data);
 			}
+			for (uint index = 0; index < count && (index + 1) * 2 <= data.size(); ++index)
+				reg(begin + index) = READ_LE_UINT16(data.data() + index * 2);
 		}
 		break;
 	}
@@ -514,9 +552,36 @@ bool System98Engine::execute() {
 	case 0x60: {
 		arguments(3);
 		if (args[1] >= ARRAYSIZE(_strings)) { _scriptValid = false; break; }
+		// Found files get their date as NEC half-width "YYYY-MM-DD hh:mm:ss", stored after the registers by 0x4a
 		Common::InSaveFile *file = _system->getSavefileManager()->openForLoading(saveFileName(sceneString(args[2], true)));
 		reg(args[0]) = file ? 1 : 0;
 		_strings[args[1]][0] = 0;
+		Common::Array<byte> data;
+		if (file) {
+			data.resize(file->size() > 0 && file->size() <= 0x1000 ? file->size() : 0);
+			data.resize(file->read(data.data(), data.size()));
+		}
+		if (data.size() == 512 * 2 + 4 || data.size() == 8 * 2 + 4) {
+			const uint16 time = READ_LE_UINT16(data.data() + data.size() - 4), date = READ_LE_UINT16(data.data() + data.size() - 2);
+			const uint values[] = {(1980U + (date >> 9)) / 100, (1980U + (date >> 9)) % 100, (date >> 5) & 15U, date & 31U, uint(time >> 11), (time >> 5) & 63U, (time & 31U) * 2};
+			// Separators before each pair: none within the year, then 854Ch "-", a space, and 8559h ":"
+			static const byte separators[] = {0, 0, 0x4c, 0x4c, ' ', 0x59, 0x59};
+			byte *text = _strings[args[1]];
+			uint length = 0;
+			for (uint index = 0; index < ARRAYSIZE(values); ++index) {
+				if (separators[index] == ' ') {
+					text[length++] = ' ';
+				} else if (separators[index]) {
+					text[length++] = 0x85;
+					text[length++] = separators[index];
+				}
+				text[length++] = 0x85;
+				text[length++] = 0x4f + values[index] / 10 % 10;
+				text[length++] = 0x85;
+				text[length++] = 0x4f + values[index] % 10;
+			}
+			text[length] = 0;
+		}
 		delete file;
 		break;
 	}
@@ -534,18 +599,21 @@ bool System98Engine::execute() {
 		reg(args[0]) = getStringLength(_strings[args[1]], sizeof(_strings[args[1]]));
 		break;
 	case 0x6a:
+	{
+		// Each edge is capped at (624, 384) and each pair sorted; the pointer is only clamped when it next moves
 		arguments(4);
-		_mouseBounds = Common::Rect(args[0], args[1], args[2] + 1, args[3] + 1);
-		_mouse.x = CLIP<int>(_mouse.x, _mouseBounds.left, _mouseBounds.right - 1);
-		_mouse.y = CLIP<int>(_mouse.y, _mouseBounds.top, _mouseBounds.bottom - 1);
-		_system->warpMouse(_mouse.x, _mouse.y);
+		uint16 edges[4];
+		for (uint index = 0; index < 4; ++index)
+			edges[index] = MIN<uint16>(args[index], index & 1 ? 0x180 : 0x270);
+		_mouseBounds = Common::Rect(MIN(edges[0], edges[2]), MIN(edges[1], edges[3]), MAX(edges[0], edges[2]) + 1, MAX(edges[1], edges[3]) + 1);
 		break;
+	}
 	case 0x72: _frameEpoch = _system->getMillis() - fetchWord() * 10000 / 564; break;
 	case 0x73: reg(fetchWord()) = _frameCounter; break;
 	case 0x74: arguments(2); if (_frameCounter < args[0]) { _scriptOffset = args[1]; waitFrames(1); } break;
 	case 0x76: for (uint index = 0; index < 8; ++index) _idleCharacters[index] = fetchWord(); break;
 	case 0x77: for (uint index = 0; index < 8; ++index) _idleDelays[index] = fetchWord(); break;
-	case 0x78: arguments(2); break;
+	case 0x78: arguments(2); _idleOffset[0] = args[0]; _idleOffset[1] = args[1]; break;
 	case 0x7a: _frameEpoch = _system->getMillis() - reg(fetchWord()) * 10000 / 564; break;
 	case 0x7b: arguments(2); if (_frameCounter < reg(args[0])) { _scriptOffset = args[1]; waitFrames(1); } break;
 	case 0x80: {

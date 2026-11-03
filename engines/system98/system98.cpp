@@ -48,8 +48,19 @@ System98Engine::System98Engine(OSystem *system) : Engine(system),
 	memset(_returnStack, 0, sizeof(_returnStack));
 	memset(_returnBanks, 0, sizeof(_returnBanks));
 	memset(_targetPalette, 0, sizeof(_targetPalette));
-	memset(_idleCharacters, 0, sizeof(_idleCharacters));
-	memset(_idleDelays, 0, sizeof(_idleDelays));
+	// SYS98.EXE's initial marker table cycles JIS 7721h to 7728h every four frames
+	for (uint index = 0; index < 8; ++index) {
+		_idleCharacters[index] = 0x7721 + index;
+		_idleDelays[index] = 4;
+	}
+	_idleOffset[0] = _idleOffset[1] = 0;
+	_idleIndex = 0;
+	_idleCounter = 4;
+	_idleFrame = 0;
+	_idleVisible = false;
+	_textDelayForced = _textHideEnabled = _textHidden = false;
+	_menuConfigured = false;
+	_menuReleaseState = 0;
 	memset(_menuRegisters, 0, sizeof(_menuRegisters));
 	// Default to the PC-9801-86 stereo FM music the original offers alongside 26K FM and GS MIDI
 	_registers[0x400] = 2;
