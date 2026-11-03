@@ -181,6 +181,8 @@ public:
 
 	Common::Rect getBoundingBox(uint32 chr) const override;
 
+	bool hasChar(uint32 chr) const override;
+
 	void drawChar(Surface *dst, uint32 chr, int x, int y, uint32 color) const override;
 	void drawChar(ManagedSurface *dst, uint32 chr, int x, int y, uint32 color) const override;
 	void drawAlphaChar(Surface *dst, uint32 chr, int x, int y, uint32 color) const override;
@@ -617,6 +619,11 @@ Common::Rect TTFFont::getBoundingBox(uint32 chr) const {
 		const Graphics::Surface &image = glyphEntry->_value.image;
 		return Common::Rect(xOffset, yOffset, xOffset + image.w, yOffset + image.h);
 	}
+}
+
+bool TTFFont::hasChar(uint32 chr) const {
+	assureCached(chr);
+	return _glyphs.contains(chr);
 }
 
 namespace {

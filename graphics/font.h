@@ -168,6 +168,15 @@ public:
 	virtual Common::Rect getBoundingBox(uint32 chr) const;
 
 	/**
+	 * Return whether the font has a glyph for a specific character.
+	 *
+	 * The default implementation returns true.
+	 *
+	 * @param chr  The character to query.
+	 */
+	virtual bool hasChar(uint32 chr) const { return true; }
+
+	/**
 	 * Return the bounding box of a string drawn with drawString.
 	 *
 	 * @param str     The drawn string.
