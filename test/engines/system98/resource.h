@@ -160,4 +160,37 @@ public:
 		TS_ASSERT_EQUALS(System98::appendString(unterminated, source, sizeof(unterminated)), 3);
 		TS_ASSERT_EQUALS(unterminated[3], 0);
 	}
+
+	void test_lzss_archive_decodes_each_entry() {
+		const byte archive[] = {
+			2, 0,
+			10, 0, 3, 0, 0, 0, 0x07, 'A', 'B', 'C', 0, 0,
+			10, 0, 6, 0, 0, 0, 0x01, 'A', 0x12, 0x00, 0, 0
+		};
+		Common::Array<byte> data(archive, sizeof(archive));
+		Common::Array<Common::Array<byte> > entries;
+		TS_ASSERT(System98::decodeLzssArchive(data, entries));
+		TS_ASSERT_EQUALS(entries.size(), 2U);
+		TS_ASSERT_EQUALS(entries[0].size(), 3U);
+		TS_ASSERT_SAME_DATA(entries[0].data(), "ABC", 3);
+		TS_ASSERT_EQUALS(entries[1].size(), 6U);
+		TS_ASSERT_SAME_DATA(entries[1].data(), "AAAAAA", 6);
+	}
+
+	void test_lzss_archive_rejects_truncated_or_mismatched_entries() {
+		const byte archive[] = {1, 0, 10, 0, 3, 0, 0, 0, 0x07, 'A', 'B', 'C', 0, 0};
+		Common::Array<Common::Array<byte> > entries;
+		for (uint size = 0; size < sizeof(archive); ++size) {
+			Common::Array<byte> data(archive, size);
+			TS_ASSERT(!System98::decodeLzssArchive(data, entries));
+		}
+		byte mismatched[sizeof(archive)];
+		memcpy(mismatched, archive, sizeof(archive));
+		mismatched[4] = 4;
+		Common::Array<byte> data(mismatched, sizeof(mismatched));
+		TS_ASSERT(!System98::decodeLzssArchive(data, entries));
+		const byte shortLength[] = {1, 0, 3, 0, 0, 0, 0};
+		data = Common::Array<byte>(shortLength, sizeof(shortLength));
+		TS_ASSERT(!System98::decodeLzssArchive(data, entries));
+	}
 };

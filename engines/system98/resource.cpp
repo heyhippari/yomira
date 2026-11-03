@@ -69,6 +69,28 @@ bool Resources::decompress(Common::ReadStream &stream, Common::Array<byte> &data
 	return false;
 }
 
+bool decodeLzssArchive(const Common::Array<byte> &data, Common::Array<Common::Array<byte> > &entries) {
+	entries.clear();
+	if (data.size() < 2)
+		return false;
+	const uint count = READ_LE_UINT16(data.data());
+	uint position = 2;
+	entries.resize(count);
+	for (uint index = 0; index < count; ++index) {
+		if (position + 2 > data.size())
+			return false;
+		const uint length = READ_LE_UINT16(data.data() + position);
+		position += 2;
+		if (length < 4 || position + length > data.size())
+			return false;
+		Common::MemoryReadStream stream(data.data() + position + 4, length - 4);
+		if (!Resources::decompress(stream, entries[index], READ_LE_UINT32(data.data() + position)))
+			return false;
+		position += length;
+	}
+	return true;
+}
+
 bool decodeStringFile(const Common::Array<byte> &data, byte strings[2][80]) {
 	byte decoded[2][80];
 	memset(decoded, 0, sizeof(decoded));

@@ -57,6 +57,7 @@ public:
 	void syncSoundSettings() override;
 
 private:
+	friend class Ending;
 	void pauseEngineIntern(bool paused) override;
 	Common::Error initialize();
 	bool loadScene(const Common::String &name, uint bank);

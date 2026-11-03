@@ -26,6 +26,7 @@
 #include "system98/system98.h"
 #include "system98/audio.h"
 #include "system98/dialogs.h"
+#include "system98/ending.h"
 #include "system98/image.h"
 
 namespace System98 {
@@ -602,6 +603,12 @@ bool System98Engine::execute() {
 		if (args[0] >= ARRAYSIZE(_patterns) || !_scriptValid) { _scriptValid = false; break; }
 		_scriptValid = captureBlitPattern(_pages[1], args[1], _patterns[args[0]]);
 		break;
+	case 0x97: {
+		// Runs ENDING.EXE, the staff roll; scripts then clear text VRAM and return to the title
+		Ending ending(*this);
+		ending.play();
+		break;
+	}
 	default:
 		warning("System98: unimplemented opcode %02x at %s:%04x", opcode, sceneBankName(_activeBank).c_str(), position);
 		_scriptValid = false;

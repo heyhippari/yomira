@@ -50,6 +50,8 @@ private:
 	bool loadCatalog(char disk);
 };
 
+// ENDING.GLB and ENDING.FNT: a LE16 count, then per entry a LE16 length covering a LE32 decoded size and LZSS data
+bool decodeLzssArchive(const Common::Array<byte> &data, Common::Array<Common::Array<byte> > &entries);
 bool decodeStringFile(const Common::Array<byte> &data, byte strings[2][80]);
 uint getStringLength(const byte *string, uint capacity);
 uint appendString(byte *destination, const byte *source, uint capacity);

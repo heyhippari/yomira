@@ -4,8 +4,8 @@ Partial implementation of Four-Nine's System-98 visual novel engine. Startup
 now reaches Mugen Yasoukyoku's interactive main menu, including its Options
 screen, and the new-game transition to its initial background. Pi graphics,
 patterned transitions, palette fades, basic Japanese text, startup script
-instructions, P.M.D. FM music and effects, and MIDI music and effects are
-implemented. Full gameplay and game save/load remain unsupported. Launching
+instructions, P.M.D. FM music and effects, MIDI music and effects, and the
+`ENDING.EXE` staff roll are implemented. Full gameplay and game save/load remain unsupported. Launching
 displays a warning about this limited support.
 
 ## Initial Release
@@ -128,6 +128,95 @@ the supplied PC-98 emulator capture. Noto fallback glyphs remain approximate;
 a PC-98 font ROM is preferred for original glyph shapes. The placeholder
 free-moving pointer is hidden, retaining the script-driven selection graphics.
 
+## Staff Roll
+
+Every ending scene (`c_01.s` to `c_08.s`) fades the music, waits, then runs
+opcode 0x97 and returns to `open.s`. The original runs `ENDING.EXE くりあ`; the
+program refuses to start without that argument. ScummVM reimplements the
+program in `ending.cpp`, reading `ENDING.GLB` and `ENDING.FNT` as data. A
+linear disassembly finds only INT 18h and INT 21h calls, so the program makes
+no sound-driver calls; music is left to the scripts. If either file is
+missing, the staff roll is skipped with a warning.
+
+`ENDING.EXE` (9553 bytes, SHA-256
+`7ea977e3ee5e17700ae7acab0264abf8bf2012684518c4fa2198e997dffc5587`) is a
+Turbo C++ program packed with LZEXE 0.91, whose header signature has been
+cleared. The unpacked image was rebuilt as a plain MZ executable (SHA-256
+`bae1a757bc2744b6b4ab0ed1e90019b1cd982f876ad1315825f1eaf9f5987418`) and
+decompiled with REA/Ghidra. Addresses below are Ghidra linear addresses with
+load segment 0x1000; the data segment is 0x12ef. Evidence:
+`ev_d66f2ceb5555353d212bb9d046c248fecf7a9cb268d1ef8eb026c9f1b5960ac2` (main),
+`ev_94ddfc27faea7b669348bf677c998c2500b748ece6f8536fe0ac1a5efb81d8eb`,
+`ev_c9a124691d64f9875728a7f3e94e76d499fe73eb834b28d928ac370486d2b490`,
+`ev_1cf2070f75ca81c3d005d0ebb5be3918a8b1393d3ca0cc63e4062e75cec38495`.
+
+### Data
+
+- Both files start with a LE16 entry count. Each entry is a LE16 length, then
+  that many bytes: a LE32 decoded size and System-98 LZSS data (0x1046a,
+  0x1053f; same window and flags as the archives).
+- `ENDING.GLB` (205023 bytes) holds 13 planar pictures. Each stores its B, R,
+  G, and I planes one after another, each `width` bytes by `height` rows.
+  Entries 0 to 10 are 304 rows tall, the scrolling pictures. Entry 11 is a
+  38x96-byte title card and entry 12 an 8x40-byte "Fin." mark.
+- `ENDING.FNT` (7948 bytes) holds 10 text blocks of 16x16 glyphs, 32 bytes
+  each, two bytes per row with the left half first. Glyphs are uploaded as
+  user-defined characters from JIS 7621h (0x1033c, 0x1042c) and laid out left
+  to right, top to bottom (0x10390).
+- Every decoded size matches the dimensions in the program's tables exactly.
+
+### Sequence
+
+`main` (0x11227) loads both files (0x10ff5), then installs a vertical-sync
+handler at 0x10bea. Each tick, a divider that starts at 0x80ff and gains 0x100
+per tick applies the posted scroll line on every second tick, after an initial
+128 ticks. The handler also steps palette fades and counts down timers. Palette
+words are `G << 8 | R << 4 | B`. A fade has 15 steps. A falling component
+drops by one per step; a rising one starts only when its distance to the
+target equals the steps left (0x10d3d).
+
+Each of 10 sections (picture and text block `n`) runs as follows:
+
+1. Text VRAM is blanked. Row 0 shows a glyph whose top four lines are black,
+   hiding the line where the scroll wraps (0x10604).
+2. The text block appears as black-attribute glyphs at its table position
+   (0x11192). The palette is still black.
+3. The display fades in over 10 ticks per step to a sepia palette in which
+   color 11 is cream (0xdec).
+4. One picture line is drawn per scroll line (0x1086d, 0x10c6c). For the first
+   304 lines, the whole VRAM row is filled with color 11 before the picture row
+   is copied at its byte column. Lines 400 and later are cleared to color 0.
+   The GDC scroll (0x1027d) brings each new row in at the bottom. The black text
+   is therefore only visible against the cream band.
+5. After 560 lines, the display fades to black over 11 ticks per step while
+   the remaining 144 of 704 lines scroll.
+
+In the finale, picture 10 scrolls 368 lines over black, with no cream fill or
+text. It is then copied to page 1 at row 32, and from there back to page 0
+with the scroll reset to 0. The title card and "Fin." are staged on page 1
+below row 304. After 58 and 87 ticks respectively, each dissolves into page 0
+at (176, 136) and (456, 344) (0x1099e). A dissolve has 14 stages of 8 ticks,
+using an 8-byte mask per stage selected by `row & 7` (DS:0x1b7e). The program
+then waits 580 ticks and for the Return key, fades to black over 9 ticks per
+step, and blanks text VRAM, clears graphics page 0, and resets the scroll.
+
+At 56.4 Hz the sequence lasts 15892 ticks, about 4 minutes 42 seconds, before the Return
+prompt. ScummVM accepts its accept action or the left button for Return. The
+skip action runs ticks without waiting.
+
+ScummVM draws into the same display pages and text overlay as the
+interpreter. It keeps the decoded data in memory instead of decompressing into
+page 1 VRAM as the original does. Its drawing takes no time between ticks. In
+the original, the handler could apply the last posted scroll line around the
+reset to 0; ScummVM always resets the scroll after one tick.
+
+A headless run from `c_01.s:0302`, without tick delays and with an injected
+accept, played the whole staff roll and returned to `open.s`. The section 1
+screenshot matched a Python prototype of the format. Screenshots of section 6,
+the final picture, and the finale showed the expected layout, with the title
+card aligned to the final picture behind it. No comparison with an emulator
+recording has been made, and real-time playback has not been watched.
+
 ## Audio
 
 The game offers four music settings, chosen on its first-run prompt and Options
@@ -194,6 +283,7 @@ Source files are in `engines/system98/`:
   pause, and volume.
 - `mmd.cpp`, `mmd.h`: M.M.D.-to-SMF conversion and effect extraction.
 - `dialogs.cpp`, `dialogs.h`: the name dialog that replaces `NAMCHG.EXE`.
+- `ending.cpp`, `ending.h`: the staff roll that replaces `ENDING.EXE`.
 - `detection.cpp`, `metaengine.cpp`: game detection and engine registration.
 
 Runtime state:
@@ -426,7 +516,7 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | 0x94 | Mugen extension | none | Dispatches straight back to the interpreter loop (0x113b6). | Implemented |
 | 0x95 | Mugen extension | eight words | Patterned blit from page 1 to page 0 in stages, using a captured pattern slot and a per-stage delay. | Implemented |
 | 0x96 | Mugen extension | slot, byte columns | Captures eight rows of page 1 intensity bits as a pattern. | Implemented |
-| 0x97 | Mugen extension | none | Runs `ENDING.EXE` with the command line `くりあ` ("clear") through the exec helper at 0x1175e (0x15076). | Not implemented |
+| 0x97 | Mugen extension | none | Runs `ENDING.EXE` with the command line `くりあ` ("clear") through the exec helper at 0x1175e (0x15076). Reimplemented; see Staff Roll. | Implemented |
 
 #### Opcode coverage in Mugen's scripts
 
@@ -445,7 +535,7 @@ target. It followed jumps, calls, menu targets, frame jumps, and JTBL tables
 sweep of the unreached bytes left two short code-like runs (`1_61.s:076a`,
 `8_32.s:0748`), both using implemented opcodes only.
 
-The scripts reach 72 opcodes. Three were missing; 0x97 still is:
+The scripts reach 72 opcodes. Three were missing and are now implemented:
 
 | ID | Sites | Use |
 | --- | --- | --- |
@@ -453,8 +543,7 @@ The scripts reach 72 opcodes. Three were missing; 0x97 still is:
 | 0x90 | 1, `Mug_Sub.s:56ff` | Drops the caller's return entry, then 0x1f loads a scene. |
 | 0x97 | 12 in `c_01.s`-`c_08.s` | Runs the ending credits program, then returns to `open.s`. |
 
-`ENDING.EXE` is a separate 9553-byte Borland C program that reads
-`ENDING.FNT` and `ENDING.GLB`; it has not been analyzed.
+`ENDING.EXE` is a separate program; see Staff Roll.
 
 0x3c (0x14867) and 0x26 (0x1485b) both call 0x12d00 with five words: x, y,
 width, and height in 80x25 text cells, then a flag. A zero flag writes
