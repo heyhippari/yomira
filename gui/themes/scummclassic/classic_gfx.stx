@@ -819,6 +819,30 @@
 		/>
 	</drawdata>
 
+	<drawdata id = 'button_primary_idle' cache = 'false'>
+		<text	font = 'text_button'
+				text_color = 'color_button'
+				vertical_align = 'center'
+				horizontal_align = 'center'
+		/>
+		<drawstep	func = 'bevelsq'
+					bevel = '2'
+					fill = 'none'
+		/>
+	</drawdata>
+
+	<drawdata id = 'button_primary_hover' cache = 'false'>
+		<text	font = 'text_button'
+				text_color = 'color_button_hover'
+				vertical_align = 'center'
+				horizontal_align = 'center'
+		/>
+		<drawstep	func = 'bevelsq'
+					bevel = '2'
+					fill = 'none'
+		/>
+	</drawdata>
+
 	<drawdata id = 'button_disabled' cache = 'false'>
 		<text	font = 'text_button'
 				text_color = 'color_button_disabled'

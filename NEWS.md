@@ -26,6 +26,7 @@ For changes made before Yomira was forked from ScummVM, see:
    - Removed the engines inherited from ScummVM. Use ScummVM for those games.
    - Added automated development and stable release builds for Linux,
      Windows and macOS. The macOS build is a universal app bundle.
+   - Start and OK buttons are highlighted in themes that support it.
 
  Delta:
    - New engine for Route Two Ltd. games.

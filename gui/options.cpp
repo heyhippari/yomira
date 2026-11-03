@@ -2419,7 +2419,8 @@ void GlobalOptionsDialog::build() {
 	// Add OK & Cancel buttons
 	new ButtonWidget(this, "GlobalOptions.Cancel", _("Cancel"), _("Discard changes and close the dialog"), kCloseCmd);
 	new ButtonWidget(this, "GlobalOptions.Apply", _("Apply"), _("Apply changes without closing the dialog"), kApplyCmd);
-	new ButtonWidget(this, "GlobalOptions.Ok", _("OK"), _("Apply changes and close the dialog"), kOKCmd);
+	ButtonWidget *okButton = new ButtonWidget(this, "GlobalOptions.Ok", _("OK"), _("Apply changes and close the dialog"), kOKCmd);
+	okButton->setFlags(WIDGET_PRIMARY);
 
 #ifdef USE_FLUIDSYNTH
 	_fluidSynthSettingsDialog = new FluidSynthSettingsDialog();

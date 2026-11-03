@@ -1166,6 +1166,7 @@ void LauncherSimple::build() {
 
 	_startButton =
 		new ButtonWidget(this, "Launcher.StartButton", _("~S~tart"), _("Start selected game"), kStartCmd);
+	_startButton->setFlags(WIDGET_PRIMARY);
 
 	DropdownButtonWidget *loadButton =
 	        new DropdownButtonWidget(this, "Launcher.LoadGameButton", _("~L~oad..."), _("Load saved game for selected game"), kLoadGameCmd);

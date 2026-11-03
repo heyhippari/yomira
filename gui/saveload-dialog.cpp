@@ -1241,7 +1241,8 @@ SavenameDialog::SavenameDialog()
 	_title = new StaticTextWidget(this, "SavenameDialog.DescriptionText", Common::String());
 
 	new ButtonWidget(this, "SavenameDialog.Cancel", _("Cancel"), Common::U32String(), kCloseCmd);
-	new ButtonWidget(this, "SavenameDialog.Ok", _("OK"), Common::U32String(), kOKCmd);
+	ButtonWidget *okButton = new ButtonWidget(this, "SavenameDialog.Ok", _("OK"), Common::U32String(), kOKCmd);
+	okButton->setFlags(WIDGET_PRIMARY);
 
 	_description = new EditTextWidget(this, "SavenameDialog.Description", Common::U32String(), Common::U32String(), 0, kOKCmd);
 

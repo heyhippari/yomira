@@ -64,7 +64,8 @@ EditRecordDialog::EditRecordDialog(const Common::U32String &author, const Common
 	_notesEdit->setEditString(notes);
 	_nameEdit->setEditString(name);
 	new GUI::ButtonWidget(this, "EditRecordDialog.Cancel", _("Cancel"), Common::U32String(), kCloseCmd);
-	new GUI::ButtonWidget(this, "EditRecordDialog.OK", _("OK"), Common::U32String(), kOKCmd);
+	GUI::ButtonWidget *okButton = new GUI::ButtonWidget(this, "EditRecordDialog.OK", _("OK"), Common::U32String(), kOKCmd);
+	okButton->setFlags(GUI::WIDGET_PRIMARY);
 }
 
 void EditRecordDialog::handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) {

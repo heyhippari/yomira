@@ -80,6 +80,9 @@ enum DrawData {
 	kDDButtonDisabled,
 	kDDButtonPressed,
 
+	kDDButtonPrimaryIdle,
+	kDDButtonPrimaryHover,
+
 	kDDDropDownButtonIdle,
 	kDDDropDownButtonHoverLeft,
 	kDDDropDownButtonHoverRight,

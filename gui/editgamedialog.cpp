@@ -379,7 +379,8 @@ EditGameDialog::EditGameDialog(const Common::String &domain)
 
 	// Add OK & Cancel buttons
 	new ButtonWidget(this, "GameOptions.Cancel", _("Cancel"), Common::U32String(), kCloseCmd);
-	new ButtonWidget(this, "GameOptions.Ok", _("OK"), Common::U32String(), kOKCmd);
+	ButtonWidget *okButton = new ButtonWidget(this, "GameOptions.Ok", _("OK"), Common::U32String(), kOKCmd);
+	okButton->setFlags(WIDGET_PRIMARY);
 }
 
 void EditGameDialog::addGameControls(GuiObject *boss, const Common::String &prefix, const Common::String &description) {

@@ -151,7 +151,8 @@ FluidSynthSettingsDialog::FluidSynthSettingsDialog()
 	new ButtonWidget(this, "FluidSynthSettings.ResetSettings", _("Reset"), _("Reset all FluidSynth settings to their default values."), kResetSettingsCmd);
 
 	new ButtonWidget(this, "FluidSynthSettings.Cancel", _("Cancel"), Common::U32String(), kCloseCmd);
-	new ButtonWidget(this, "FluidSynthSettings.Ok", _("OK"), Common::U32String(), kOKCmd);
+	ButtonWidget *okButton = new ButtonWidget(this, "FluidSynthSettings.Ok", _("OK"), Common::U32String(), kOKCmd);
+	okButton->setFlags(WIDGET_PRIMARY);
 }
 
 FluidSynthSettingsDialog::~FluidSynthSettingsDialog() {

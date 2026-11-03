@@ -51,6 +51,7 @@ enum {
 	 * mouse events in place of their children */
 	WIDGET_HOOK_DRAG        = 1 <<  7,
 	WIDGET_DYN_TOOLTIP      = 1 <<  8, // Widgets updates tooltip by coordinates
+	WIDGET_PRIMARY          = 1 <<  9, // Buttons drawn with the theme's primary style
 };
 
 enum {

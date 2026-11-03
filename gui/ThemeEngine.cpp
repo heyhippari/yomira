@@ -136,6 +136,9 @@ static const DrawDataInfo kDrawDataDefaults[] = {
 	{kDDButtonDisabled,             "button_disabled",  kDrawLayerForeground,   kDDButtonIdle},
 	{kDDButtonPressed,              "button_pressed",   kDrawLayerForeground,   kDDButtonIdle},
 
+	{kDDButtonPrimaryIdle,          "button_primary_idle",  kDrawLayerBackground,   kDDNone},
+	{kDDButtonPrimaryHover,         "button_primary_hover", kDrawLayerForeground,   kDDButtonPrimaryIdle},
+
 	{kDDDropDownButtonIdle,         "dropdown_button_idle",          kDrawLayerBackground, kDDNone},
 	{kDDDropDownButtonHoverLeft,    "dropdown_button_hover_left",    kDrawLayerForeground, kDDDropDownButtonIdle},
 	{kDDDropDownButtonHoverRight,   "dropdown_button_hover_right",   kDrawLayerForeground, kDDDropDownButtonIdle},
@@ -1050,11 +1053,12 @@ void ThemeEngine::drawButton(const Common::Rect &r, const Common::U32String &str
 		return;
 
 	DrawData dd = kDDButtonIdle;
+	bool primary = hints & WIDGET_PRIMARY;
 
 	if (state == kStateEnabled)
-		dd = kDDButtonIdle;
+		dd = primary ? kDDButtonPrimaryIdle : kDDButtonIdle;
 	else if (state == kStateHighlight)
-		dd = kDDButtonHover;
+		dd = primary ? kDDButtonPrimaryHover : kDDButtonHover;
 	else if (state == kStateDisabled)
 		dd = kDDButtonDisabled;
 	else if (state == kStatePressed)
