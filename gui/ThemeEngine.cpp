@@ -35,6 +35,7 @@
 #include "graphics/svg.h"
 #include "graphics/VectorRenderer.h"
 #include "graphics/fonts/bdf.h"
+#include "graphics/fonts/fallbackfont.h"
 #include "graphics/fonts/ttf.h"
 
 #include "image/bmp.h"
@@ -515,7 +516,7 @@ bool ThemeEngine::addTextData(const Common::String &drawDataId, TextData textId,
 	return true;
 }
 
-bool ThemeEngine::addFont(TextData textId, const Common::String &language, const Common::String &file, const Common::String &scalableFile, const int pointsize) {
+bool ThemeEngine::addFont(TextData textId, const Common::String &language, const Common::String &file, const Common::String &scalableFile, const Common::String &fallbackFile, const int pointsize) {
 	if (textId == -1)
 		return false;
 
@@ -540,7 +541,7 @@ bool ThemeEngine::addFont(TextData textId, const Common::String &language, const
 	if (file == "default") {
 		_texts[textId]->_fontPtr = _font;
 	} else {
-		_texts[textId]->_fontPtr = loadFont(file, scalableFile, pointsize, textId == kTextDataDefault);
+		_texts[textId]->_fontPtr = loadFont(file, scalableFile, fallbackFile, pointsize, textId == kTextDataDefault);
 
 		if (!_texts[textId]->_fontPtr) {
 			warning("Couldn't load font '%s'/'%s'", file.c_str(), scalableFile.empty()? "(none)" : scalableFile.c_str());
@@ -617,7 +618,7 @@ bool ThemeEngine::loadExtraFont(FontStyle style, Common::Language lang) {
 	if (entry == _langExtraFonts.end())
 		return false;
 	TextData td = fontStyleToData(style);
-	return addFont(kTextDataExtraLang, Common::String(), entry->file(td), entry->sclFile(td), entry->fntSize(td));
+	return addFont(kTextDataExtraLang, Common::String(), entry->file(td), entry->sclFile(td), Common::String(), entry->fntSize(td));
 }
 
 bool ThemeEngine::addTextColor(TextColor colorId, int r, int g, int b) {
@@ -1881,7 +1882,7 @@ const Graphics::Font *ThemeEngine::loadFont(const Common::String &filename, Comm
 	return nullptr;
 }
 
-const Graphics::Font *ThemeEngine::loadFont(const Common::String &filename, const Common::String &scalableFilename, const int pointsize, const bool makeLocalizedFont) {
+const Graphics::Font *ThemeEngine::loadFont(const Common::String &filename, const Common::String &scalableFilename, const Common::String &fallbackFilename, const int pointsize, const bool makeLocalizedFont) {
 	Common::String fontName;
 
 	const Graphics::Font *font = nullptr;
@@ -1889,6 +1890,21 @@ const Graphics::Font *ThemeEngine::loadFont(const Common::String &filename, cons
 	// Prefer scalable fonts over non-scalable fonts
 	if (!scalableFilename.empty())
 		font = loadScalableFont(scalableFilename, pointsize, fontName);
+
+	// Draw the characters the scalable font lacks with the fallback font
+	if (font && !fallbackFilename.empty()) {
+		Common::String fallbackName;
+		const Graphics::Font *fallback = loadScalableFont(fallbackFilename, pointsize, fallbackName);
+
+		if (fallback) {
+			FontMan.assignFontToName(fontName, font);
+			FontMan.assignFontToName(fallbackName, fallback);
+
+			fontName += "+" + fallbackName;
+			const Graphics::Font *combined = FontMan.getFontByName(fontName);
+			font = combined ? combined : new Graphics::FallbackFont(font, fallback);
+		}
+	}
 
 	// We can use non-scalable fonts, but only for English
 	bool allowNonScalable = true;

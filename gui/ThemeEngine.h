@@ -578,9 +578,10 @@ public:
 	 * @param language          Wildcard for the language(s) to use.
 	 * @param file              Filename of the non-scalable font version.
 	 * @param scalableFile      Filename of the scalable version. (Optional)
+	 * @param fallbackFile      Scalable font for the characters missing from scalableFile. (Optional)
 	 * @param pointsize         Point size for the scalable font. (Optional)
 	 */
-	bool addFont(TextData textId, const Common::String &language, const Common::String &file, const Common::String &scalableFile, const int pointsize);
+	bool addFont(TextData textId, const Common::String &language, const Common::String &file, const Common::String &scalableFile, const Common::String &fallbackFile, const int pointsize);
 
 	/**
 	 * Store language specific font names for ingame GUI dialogs which might require
@@ -729,7 +730,7 @@ protected:
 	const Graphics::Font *loadScalableFont(const Common::String &filename, const int pointsize, Common::String &name);
 	const Graphics::Font *loadFont(const Common::String &filename, Common::String &name);
 	Common::String genCacheFilename(const Common::String &filename) const;
-	const Graphics::Font *loadFont(const Common::String &filename, const Common::String &scalableFilename, const int pointsize, const bool makeLocalizedFont);
+	const Graphics::Font *loadFont(const Common::String &filename, const Common::String &scalableFilename, const Common::String &fallbackFilename, const int pointsize, const bool makeLocalizedFont);
 
 	/**
 	 * Dirty Screen handling function.

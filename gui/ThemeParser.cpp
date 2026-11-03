@@ -309,10 +309,16 @@ bool ThemeParser::parserCallback_language(ParserNode *node) {
 		scalableFile = getParentNode(node)->values["scalable_file"];
 	}
 
+	Common::String fallbackFile;
+	if (node->values.contains("fallback_file")) {
+		fallbackFile = node->values["fallback_file"];
+	} else if (getParentNode(node)->values.contains("fallback_file")) {
+		fallbackFile = getParentNode(node)->values["fallback_file"];
+	}
 
 	_theme->storeFontNames(textDataId, node->values["id"], file, scalableFile, pointsize);
 
-	if (!_theme->addFont(textDataId, node->values["id"], file, scalableFile, pointsize))
+	if (!_theme->addFont(textDataId, node->values["id"], file, scalableFile, fallbackFile, pointsize))
 		return parserError("Error loading localized Font in theme engine.");
 
 	return true;
