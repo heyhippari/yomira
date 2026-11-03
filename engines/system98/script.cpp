@@ -204,10 +204,9 @@ bool System98Engine::execute() {
 	switch (opcode) {
 	case 0: return false;
 	case 2:
+		// Planes 0 and 1 are the VRAM pages; higher planes decode into the software page
 		arguments(6);
-		if (args[3] < 2)
-			_drawPage = args[3];
-		_scriptValid = loadImage(sceneString(args[4], true), args[0] * 8, args[1], _drawPage, args[2] != 0, args[5] != 0);
+		_scriptValid = loadImage(sceneString(args[4], true), args[0] * 8, args[1], MIN<uint>(args[3], 2), args[2] != 0, args[5] != 0);
 		break;
 	case 3:
 		arguments(6);
@@ -242,6 +241,15 @@ bool System98Engine::execute() {
 	case 0x13: {
 		const uint16 index = reg(fetchWord());
 		_scriptOffset = sceneWord(_scriptOffset + index * 2);
+		break;
+	}
+	case 0x14: {
+		// PALCSET writes one 4-bit RGB entry to both the image and the displayed palette
+		arguments(4);
+		const uint index = reg(args[0]) & 15;
+		for (uint component = 0; component < 3; ++component)
+			_palette[index * 3 + component] = _targetPalette[index * 3 + component] = (reg(args[1 + component]) & 15) * 17;
+		present();
 		break;
 	}
 	case 0x15: arguments(2); printText(args[0], args[1]); break;
@@ -417,6 +425,14 @@ bool System98Engine::execute() {
 		delete file;
 		break;
 	}
+	case 0x62:
+		// GDC SCROLL: area 1 starts at the given line and word for 400 - lines rows, area 2 at line 0
+		arguments(2);
+		if (reg(args[1]) > 400) { _scriptValid = false; break; }
+		_scrollWords = reg(args[0]);
+		_scrollLines = reg(args[1]);
+		present();
+		break;
 	case 0x6e:
 		arguments(2);
 		if (args[1] >= ARRAYSIZE(_strings)) { _scriptValid = false; break; }
@@ -488,7 +504,6 @@ bool System98Engine::execute() {
 		arguments(2);
 		if (args[0] >= ARRAYSIZE(_patterns) || !_scriptValid) { _scriptValid = false; break; }
 		_scriptValid = captureBlitPattern(_pages[1], args[1], _patterns[args[0]]);
-		_drawPage = 0;
 		break;
 	default:
 		warning("System98: unimplemented opcode %02x at %s:%04x", opcode, sceneBankName(_activeBank).c_str(), position);

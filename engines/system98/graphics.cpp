@@ -31,12 +31,22 @@
 namespace System98 {
 
 void System98Engine::present() {
+	const byte *background = static_cast<const byte *>(_pages[_displayPage].getPixels());
+	const byte *text = static_cast<const byte *>(_text.getPixels());
 	for (int y = 0; y < 400; ++y) {
-		const byte *background = static_cast<const byte *>(_pages[_displayPage].getBasePtr(0, y));
-		const byte *text = static_cast<const byte *>(_text.getBasePtr(0, y));
+		// Graphics VRAM is read linearly from each area's start, wrapping at 0x4000 words per plane
+		const uint start = y < 400 - _scrollLines ? (_scrollLines + y) * 640 + _scrollWords * 16 : (y - (400 - _scrollLines)) * 640;
 		byte *destination = static_cast<byte *>(_screen.getBasePtr(0, y));
-		for (int x = 0; x < 640; ++x)
-			destination[x] = text[x] == 255 ? background[x] : text[x] & 0x80 ? text[x] & 15 : 16 + text[x];
+		for (int x = 0; x < 640; ++x) {
+			const uint source = (start + x) % (0x4000 * 16);
+			const byte hardwareText = text[y * 640 + x];
+			if (hardwareText != 255 && !(hardwareText & 0x80))
+				destination[x] = 16 + hardwareText;
+			else if (source >= 640 * 400)
+				destination[x] = 0;
+			else
+				destination[x] = text[source] != 255 && (text[source] & 0x80) ? text[source] & 15 : background[source];
+		}
 	}
 	if (_menuEnabled && !_coordinateMenu && _menuStyle < 8 && _windowStyles.getPixels()) {
 		for (const MenuItem &item : _menu) {
@@ -114,7 +124,6 @@ bool System98Engine::patternedBlit(const Common::Rect &sourceRect, const Common:
 		if (!waitFrames(delay))
 			break;
 	}
-	_drawPage = 0;
 	return true;
 }
 
@@ -312,6 +321,10 @@ void System98Engine::printText(uint box, uint offset) {
 			if (position >= data.size()) { _scriptValid = false; return; }
 			text += char(value);
 			text += char(data[position++] | 0x80);
+		} else if ((value >= 6 && value <= 8) || (value >= 0x0a && value <= 0x0c) || value == 0x0e) {
+			// The native printer consumes one operand byte for these and draws nothing
+			if (position >= data.size()) { _scriptValid = false; return; }
+			++position;
 		} else {
 			text += char(value);
 		}
@@ -326,25 +339,26 @@ void System98Engine::printText(uint box, uint offset) {
 				clearTextBox(box, false);
 		} else if (value == 3) {
 			if (++index < text.size())
-				textBox.color = text[index] & 15;
+				_textColor = text[index] & 15;
+		} else if (value == 9) {
+			textBox.x += 64;
 		} else if (value == 13) {
 			textBox.x = textBox.rect.left;
 			textBox.y += reg(0x402) ? reg(0x402) : 16;
-		} else if (value >= 0x20) {
+		} else if (value >= 0x10) {
+			// Scripts break lines themselves; the native printer never wraps or clips to the box
 			uint16 character = value;
 			int width = 8;
 			if ((value >= 0x81 && value <= 0x9f) || value >= 0xe0) {
 				if (++index >= text.size())
 					break;
-				character |= byte(text[index]) << 8;
-				width = 16;
+				const byte trail = text[index];
+				character |= trail << 8;
+				// JIS rows 0x29 to 0x2b (Shift-JIS 8540h to 869Eh) are NEC half-width characters
+				if (value != 0x85 && (value != 0x86 || trail > 0x9e))
+					width = 16;
 			}
-			if (textBox.x + width > textBox.rect.right) {
-				textBox.x = textBox.rect.left;
-				textBox.y += reg(0x402) ? reg(0x402) : 16;
-			}
-			if (textBox.y + 16 <= textBox.rect.bottom)
-				drawCharacter(character, textBox.x, textBox.y, textBox.color, textBox.style != 0);
+			drawCharacter(character, textBox.x, textBox.y, _textColor, textBox.style != 0);
 			textBox.x += width;
 			if (!waitTextDelay(_characterDelay, fastText))
 				return;

@@ -265,7 +265,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | --- | --- | --- | --- | --- |
 | 0x00 | DOSEXIT | none | Ends the run without an error. | Implemented |
 | 0x01 | - | - | Undefined in v3.10 (v1.xx text box command). | Undefined (v3.10) |
-| 0x02 | IMGLOAD | x/8, y, palette flag, plane, file name, transparent flag | Loads an image. Planes 0 and 1 select the draw page; other values keep it. | Implemented |
+| 0x02 | IMGLOAD | x/8, y, palette flag, plane, file name, transparent flag | Loads an image. Planes 0 and 1 are the VRAM pages; 2 and above decode into the software page (page 2). | Implemented |
 | 0x03 | TBOPEN | box ID, x/16, y/16, w/16, h/16, style | Opens one of 16 text boxes. IDs 0x10 and above fail. | Implemented |
 | 0x04 | TBCLOSE | box ID | Closes a text box and restores the overlay it covered. | Implemented |
 | 0x05 | TBCLEAR | box ID | Clears a text box's contents. | Implemented |
@@ -278,7 +278,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x0C | CMPI | reg, value | Compares a register with a value, using the same result codes. | Implemented |
 | 0x0D-0x12 | JEQ, JLT, JGT, JGE, JLE, JNE | offset | Conditional jumps on the stored compare result. | Implemented |
 | 0x13 | JTBL | reg, table | Jumps to the table entry the register selects. The table follows the operand. | Implemented |
-| 0x14 | PALCSET | four regs | Sets one palette colour from registers. | Not implemented |
+| 0x14 | PALCSET | index, red, green, blue regs | Sets one 4-bit palette colour in both the image and displayed palettes, then redraws. | Implemented |
 | 0x15 | PRINT | box ID, text offset | Prints scene text in a text box. | Implemented |
 | 0x16 | PRINTXY | x, y, text offset | Prints text at a screen position. | Not implemented |
 | 0x17 | - | - | Undefined in v3.10. | Undefined (v3.10) |
@@ -348,7 +348,7 @@ operands. Opcode 0x00 is the only ID that ends a run without an error.
 | 0x5F | STRTIME | string | Writes the current date and time into a string. | Not implemented |
 | 0x60 | FILETM | reg, string, file name | Stores 1 if a save file exists, otherwise 0. Clears the string. No date. | Partial |
 | 0x61 | XYFSAVE | file name | Saves the XY buffer to a file. | Not implemented |
-| 0x62 | CMD62 | two regs | Scroll-register command. Reference marks details as TODO. | Not implemented |
+| 0x62 | CMD62 | word reg, line reg | Sets the graphics display start (GDC SCROLL). Shown as a wrapping offset of the display page. | Implemented |
 | 0x63 | BLIT2I | eight words | Like 0x2F, but zero source pixels keep the destination. | Implemented |
 | 0x64 | BLIT2R | eight reg IDs | Register-indirect form of 0x63. | Implemented |
 | 0x65-0x66 | - | - | Undefined in v3.10. | Undefined (v3.10) |
@@ -396,7 +396,7 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | 0x92-0x93 | Mugen extension | unknown | Dispatched by the executable. Semantics unknown. | Unknown (Mugen) |
 | 0x94 | Mugen extension | none consumed | No-op here. The executable's operand count is unknown. | Partial (no-op) |
 | 0x95 | Mugen extension | eight words | Patterned blit from page 1 to page 0 in stages, using a captured pattern slot and a per-stage delay. | Implemented |
-| 0x96 | Mugen extension | slot, byte columns | Captures eight rows of page 1 intensity bits as a pattern. Resets the draw page to 0. | Implemented |
+| 0x96 | Mugen extension | slot, byte columns | Captures eight rows of page 1 intensity bits as a pattern. | Implemented |
 | 0x97 | Mugen extension | unknown | Dispatch recorded by REA. No behavior in this build. | Unknown (Mugen) |
 
 ### Text
@@ -410,16 +410,24 @@ the Mugen Yasoukyoku executable and do not describe System-98 in general.
 | --- | --- | --- |
 | 00h | End of string | Ends the text |
 | 01h, 02h | Wait for a key; 01h also clears the box | Handled |
-| 03h | Set text color | Handled |
+| 03h | Set the text color for all later text | Handled |
 | 04h | Insert string register | Handled |
 | 05h | Insert integer register | Handled |
-| 0Dh | Line break | Handled |
+| 06h-08h, 0Ah-0Ch, 0Eh | One operand byte, nothing drawn | Operand skipped |
+| 09h | Advance 64 pixels | Handled |
+| 0Dh | Return to the box's left text edge and advance one row | Handled |
 | 0Fh 00h xx | Set menu highlight style | Handled |
+| 0Fh 01h-03h | Text-delay and display flags | Ignored |
 
-- Other control bytes (06h, 07h, 08h, 09h, 0Ah, 0Bh, 0Ch, 0Eh) are ignored.
-  Their operand bytes are not consumed.
-- Lead bytes 81h to 9Fh and E0h to FFh are drawn 16 pixels wide. Other
-  characters are drawn 8 pixels wide.
+- Bytes from 10h up are characters. Lead bytes 81h to 9Fh and E0h to FFh start
+  two-byte characters, drawn 16 pixels wide except Shift-JIS 8540h to 869Eh
+  (JIS rows 29h to 2Bh), which are 8 pixels wide. Other characters are 8 pixels
+  wide.
+- There is no automatic wrapping. Text starts one 16-pixel tile inside the
+  box's left and top edges, and rows are register 0x402 pixels apart (16 when
+  zero). Script text is hard-wrapped at 64 bytes (32 full-width characters);
+  closing punctuation may hang past that as a 33rd character, and lines are
+  not clipped to the box.
 
 ### Menus
 
@@ -554,6 +562,67 @@ filename, then copies rows until EOF; row handling at 0x14d79 recognizes CRLF
 and 0x1a. Evidence: `ev_c3c164131ce4308b774e5e9fae294cb934f5aafb93c7fd1dcea77b2446ac0780`,
 `ev_bccf6b98119000c8202a009c3b0dae1616cf3909be1d7afe979c2c148e2a97fcec`.
 
+Opcode 0x62 (dispatch 0x14484) reads a word offset `w` and a line `l` from two
+registers and sends graphics GDC command 0x70 (SCROLL) with two display areas.
+Area 1 starts at word `40 * l + w + 0x4000` for `400 - l` lines, and area 2 starts
+at word 0x4000 for `l` lines. The image-mode bit comes from port 0x31. Display
+rows read 40 consecutive words from each area's start, so a word offset shifts
+the picture left by 16 pixels per word, carrying into the next row. ScummVM
+models each plane as 0x4000 words. It reads the unused words past 16000 as
+color 0 and scrolls only graphics pixels: the page and graphics-colored overlay
+pixels. Hardware text and the menu highlight stay in place.
+`Mug_Sub.s:5885` uses it as a screen shake: it alternates offsets 0 and 1 word,
+two frames each, five times, then restores (0, 0). No other scene calls it.
+
+PRINT (0x1497e) selects the 24-byte box record and calls the printer at
+0x12d50. Box records store the text cursor one tile inside the frame: column
+`(x + 1) * 2` bytes and row `y + 1`. The glyph path (0x12dd2) only advances the
+column by the glyph width; it has no right-edge or bottom-edge check. The
+control-byte table at 0x12d90 handles 0Dh (0x13054) by resetting the column
+and incrementing the row, and 09h (0x13030) by adding 8 bytes. In the main
+dialogue box (`TBOPEN 3, 3, 19, 34, 6`), the 64-byte text area matches the
+scripts' hard wrap, so hanging punctuation reaches the frame edge rather than
+starting a new line.
+
+Text color is one engine-wide value, not a per-box one. Control byte 03h
+(0x12ff0) stores its operand at DS 0xc05:0x172, the only writer. The value
+starts at 15, and the glyph routine at 0x1101a loads it into the GRCG tile
+registers. Only `open.s` sets colors (2, 14, and 15). Gameplay command menus
+such as `0_00.s:0176` therefore draw their labels in color 15. Their highlight
+(style 5 in `WIN.G`) fills the row with color 7, the same brown that a per-box
+default of 7 gave the labels, which hid the selected entry.
+
+The menu hover handler (0x11e83) restores the previous row (0x11f27), saves the
+new one (0x11ede), and draws the style tiles at (left - 16, top - 16), 48
+pixels tall. The flag at 0x3ede selects the masked blitter at 0x12777, which
+keeps destination pixels wherever the glyph plane (0x4184) or a transparent tile
+pixel is set. The selected label therefore stays on top of the highlight.
+A headless ScummVM capture of `0_00.s:0176` showed color-15 label pixels inside
+the color-7 highlight after this change.
+
+Opcode 0x14 (`PALCSET`, 0x14652) reads four registers: index, red, green, and
+blue. Each is masked to 4 bits. It writes the hardware palette through ports
+0xa8 (index), 0xac (red), 0xaa (green), and 0xae (blue). It stores the color in
+both the loaded-image palette (0x3f6a) and the displayed palette (0x3f9a).
+Opcode 0x06 copies the first to the second, so a later fade or PALAPL keeps the
+change. `0_00.s:03e0` uses it to set color 15 to white.
+
+IMGLOAD (0x143ae) passes its x/8 and y to the decoder (0x13139, 0x13184),
+which positions the image only from these operands. The stripped Pi header has
+no offset. The plane operand selects one of four writers at 0x13586. Planes 0
+and 1 select a VRAM page through port 0xa6 and use the opaque or
+color-0-transparent writer. Planes 2 and above write the off-screen software
+page in the segments at 0x408a and 0x408c, using an opaque (0x1394c) or
+transparent (0x13b12) writer. The handler then writes 0 to port 0xa6.
+
+Gameplay scenes compose this way. `Mug_Sub.s` loads a 480x304 room (`011.G`)
+into page 2 and a transparent character (`43A.G`) into page 1 at (0, 0).
+`Mug_Sub.s:4c44` then uses opcode 0x95 to copy that area from page 1 to (112, 8)
+on page 0, and `4c5e` restores page 1 from page 2. Treating plane 2 as "keep
+the current page" drew rooms at the screen's top-left and left characters on
+black. A headless capture of `1_01.s` shows the room inside the viewport with
+the character over it.
+
 Opcode 0x6e (`STRLEN`) writes the bounded byte length of a string into a
 register. Opcode 0x53 (`STRCAT`) appends one string to another, keeping the
 destination NUL-terminated within its 80-byte slot. These support the first
@@ -614,9 +683,9 @@ System-98 in general.
   and 0x00 to 0x8C). Nothing here implements or tests those revisions.
 - DIANA, the related engine, reuses many command IDs but is not binary
   compatible. Nothing here implements or tests DIANA data.
-- The reference says v3.10 draws Shift-JIS 8541h to 869Eh at half width. This
-  build draws all two-byte characters at full width, so that range is not
-  verified for this executable.
+- The reference says v3.10 draws Shift-JIS 8541h to 869Eh at half width. The
+  Mugen glyph fetch at 0x1105e agrees: JIS codes 2921h to 2B7Eh return a
+  one-byte advance.
 
 ### Research Limits
 

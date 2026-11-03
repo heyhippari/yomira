@@ -94,7 +94,6 @@ private:
 		bool active = false;
 		int x = 0;
 		int y = 0;
-		byte color = 7;
 	};
 	struct MenuItem {
 		uint16 id;
@@ -127,7 +126,6 @@ private:
 	uint16 _menuStyle;
 	uint16 _mouseActionRegister;
 	byte _activeBank;
-	byte _drawPage;
 	bool _scriptValid;
 	bool _keyPressed;
 	bool _skipMode;
@@ -153,6 +151,11 @@ private:
 	byte _musicMode;
 	byte _displayPage;
 	byte _compareResult;
+	// Text control 03h sets one color for every box; the executable starts with 15
+	byte _textColor;
+	// Graphics GDC display start, in 16-pixel words and lines (opcode 0x62)
+	uint16 _scrollWords;
+	uint16 _scrollLines;
 };
 
 } // namespace System98
